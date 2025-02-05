@@ -11,14 +11,19 @@ fi
 echo "Creating virtual environment..."
 uv venv
 
-# Sync dependencies
+# Sync dependencies from pyproject.toml
 echo "Syncing dependencies from pyproject.toml..."
-uv pip sync
+if [ -f "pyproject.toml" ]; then
+    uv sync
+else
+    echo "Error: pyproject.toml not found!"
+    exit 1
+fi
 
 # Configure Git user
 echo "Configuring Git..."
-git config --global user.name "CooperBigFoot"
-git config --global user.email "nlazaro@student.ethz.ch"
+git config --global user.name "YourUsername"
+git config --global user.email "your.email@example.com"
 
 # Activate the virtual environment
 echo "Activating the virtual environment..."
