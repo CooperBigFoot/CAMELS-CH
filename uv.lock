@@ -109,6 +109,7 @@ dependencies = [
     { name = "pytorch-forecasting" },
     { name = "seaborn" },
     { name = "sktime" },
+    { name = "torch" },
 ]
 
 [package.metadata]
@@ -121,6 +122,7 @@ requires-dist = [
     { name = "pytorch-forecasting", specifier = ">=1.2.0" },
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "sktime", specifier = ">=0.35.0" },
+    { name = "torch", specifier = ">=2.5.1" },
 ]
 
 [[package]]
