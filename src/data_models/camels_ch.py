@@ -53,9 +53,13 @@ class CamelsCH:
     def __init__(self, config: CamelsCHConfig):
         self.config = config
         self.time_series = {}
-        self.static = {attr_type: {} for attr_type in StaticAttributeType}
+        self.static = {attr_type: pd.DataFrame() for attr_type in StaticAttributeType}
 
     def load_stations(self, gauge_ids: List[str]) -> None:
+
+        for gauge_id in gauge_ids:
+            self._check_gauge_id(gauge_id)
+
         self._load_timeseries(gauge_ids)
         self._load_static(gauge_ids)
 
@@ -88,7 +92,7 @@ class CamelsCH:
         }
 
         if not any(attr_map.values()):
-            return 
+            return
 
         for attr_type, enabled in attr_map.items():
             if enabled:
@@ -154,6 +158,13 @@ class CamelsCH:
             return pd.DataFrame()
 
         return pd.concat(dfs, ignore_index=True)
+
+    def _check_gauge_id(self, gauge_id: str) -> None:
+        """Check if gauge_id exists in the CAMELS-CH dataset"""
+        all_gauge_ids = set(get_all_gauge_ids(self.config))
+
+        if gauge_id not in all_gauge_ids:
+            raise ValueError(f"Gauge ID {gauge_id} not found in the dataset")
 
 
 if __name__ == "__main__":
