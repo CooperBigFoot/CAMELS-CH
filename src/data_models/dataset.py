@@ -1,10 +1,3 @@
-"""
-The logic in this code is fully based on the code by Sandro at: 
-    
-    https://github.com/sandrohuni/hybrid_discharge_models/blob/main/data_util/data_region.py. 
-
-I have only adapted it to use CamelsCH as the interface to the data."""
-
 from torch.utils.data import Dataset
 import torch
 import numpy as np
@@ -39,22 +32,23 @@ class HydroDataset(Dataset):
         self.output_length = output_length
         self.features = sorted(features)
         self.target = target
-        self.static_features = sorted(static_features)
+        self.static_features = sorted(static_features) if static_features else []
 
         # Sort time series data by gauge_id and date
         self.df_sorted = time_series_df.sort_values(["gauge_id", "date"])
 
-        # Verify that all gauge_ids in the time series exist in the static data
-        ts_gauge_ids = set(self.df_sorted["gauge_id"].unique())
-        static_gauge_ids = set(static_df["gauge_id"].unique())
-        missing = ts_gauge_ids - static_gauge_ids
-        assert not missing, f"Missing static data for gauge ids: {missing}"
+        if static_df is not None:
+            ts_gauge_ids = set(self.df_sorted["gauge_id"].unique())
+            static_gauge_ids = set(static_df["gauge_id"].unique())
+            missing = ts_gauge_ids - static_gauge_ids
+            assert not missing, f"Missing static data for gauge ids: {missing}"
 
-        # Create a lookup dictionary for static features (ensure float32 conversion later)
-        self.static_features_dict = {
-            row["gauge_id"]: row[static_features].values
-            for _, row in static_df.iterrows()
-        }
+            self.static_features_dict = {
+                row["gauge_id"]: row[self.static_features].values
+                for _, row in static_df.iterrows()
+            }
+        else:
+            self.static_features_dict = None
 
         # Precompute a dictionary mapping gauge_id to its time series data for faster indexing
         self.timeseries_dict = {
@@ -107,8 +101,16 @@ class HydroDataset(Dataset):
         X = catchment_data[self.features].values[: self.input_length]
         y = catchment_data[self.target].values[self.input_length :]
 
-        # Ensure static features are converted to a numeric numpy array
-        static = np.array(self.static_features_dict[gauge_id], dtype=np.float32)
+        # Handle missing static features
+        if self.static_features_dict is not None:
+            static = np.array(
+                self.static_features_dict.get(
+                    gauge_id, np.zeros(len(self.static_features))
+                ),
+                dtype=np.float32,
+            )
+        else:
+            static = np.zeros(len(self.static_features), dtype=np.float32)
 
         return {
             "X": torch.FloatTensor(X),

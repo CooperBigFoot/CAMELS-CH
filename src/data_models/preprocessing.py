@@ -196,5 +196,20 @@ def reverse_log_transform(
     return df_reversed
 
 
-if __name__ == "__main__":
-    pass
+def train_validate_split(
+    df: pd.DataFrame, train_ratio: float = 0.8
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Split a dataframe into training and validation sets.
+
+    Args:
+        df: Input dataframe
+        train_ratio: Fraction of data to use for training
+
+    Returns:
+        Tuple of training and validation dataframes
+    """
+    train_size = int(len(df) * train_ratio)
+    df_train = df[:train_size]
+    df_val = df[train_size:]
+    return df_train, df_val
