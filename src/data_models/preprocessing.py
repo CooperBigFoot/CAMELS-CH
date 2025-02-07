@@ -62,55 +62,49 @@ class ScalingParameters:
 
 
 def scale_time_series(
+    df_full: pd.DataFrame,
     df_train: pd.DataFrame,
-    df_test: pd.DataFrame,
     features: List[str],
     by_basin: bool = True,
-) -> Tuple[pd.DataFrame, pd.DataFrame, ScalingParameters]:
+) -> Tuple[pd.DataFrame, ScalingParameters]:
     """
     Scale features using z-score standardization. If by_basin is True, scale each feature
     separately for each basin (gauge_id); otherwise, scale globally.
 
     Args:
-        df_train: Training data
-        df_test: Test data
+        df_full: DataFrame with time series data for multiple basins
+        df_train: DataFrame with training data
         features: List of features to scale
-        by_basin: Whether to scale features by basin
+        by_basin: If True, scale features separately for each
 
     Returns:
         Tuple of scaled training and test dataframes, and ScalingParameters object
     """
-    df_train_scaled = df_train.copy()
-    df_test_scaled = df_test.copy()
+    df_scaled = df_full.copy()
     scalers = {feat: {} for feat in features}
 
     if by_basin:
-        gauge_ids = df_train["gauge_id"].unique().tolist()
-        for gauge_id in gauge_ids:
-            train_mask = df_train["gauge_id"] == gauge_id
-            test_mask = df_test["gauge_id"] == gauge_id
+        for gauge_id in df_full["gauge_id"].unique():
             for feat in features:
+                mask = df_full["gauge_id"] == gauge_id
+                train_mask = df_train["gauge_id"] == gauge_id
+
                 sc = StandardScaler()
-                df_train_scaled.loc[train_mask, feat] = sc.fit_transform(
-                    df_train.loc[train_mask, [feat]]
-                )
-                if test_mask.any():
-                    df_test_scaled.loc[test_mask, feat] = sc.transform(
-                        df_test.loc[test_mask, [feat]]
-                    )
+                sc.fit(df_train.loc[train_mask, [feat]])
+                df_scaled.loc[mask, feat] = sc.transform(df_full.loc[mask, [feat]])
                 scalers[feat][gauge_id] = sc
     else:
-        gauge_ids = ["global"]
         for feat in features:
             sc = StandardScaler()
-            df_train_scaled[feat] = sc.fit_transform(df_train[[feat]])
-            df_test_scaled[feat] = sc.transform(df_test[[feat]])
+            sc.fit(df_train[[feat]])
+            df_scaled[feat] = sc.transform(df_full[[feat]])
             scalers[feat]["global"] = sc
 
-    scaling_params = ScalingParameters(
-        scalers=scalers, feature_names=features, gauge_ids=gauge_ids
+    return df_scaled, ScalingParameters(
+        scalers=scalers,
+        feature_names=features,
+        gauge_ids=["global"] if not by_basin else df_full["gauge_id"].unique().tolist(),
     )
-    return df_train_scaled, df_test_scaled, scaling_params
 
 
 def inverse_scale_time_series(
@@ -196,20 +190,181 @@ def reverse_log_transform(
     return df_reversed
 
 
-def train_validate_split(
-    df: pd.DataFrame, train_ratio: float = 0.8
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Split a dataframe into training and validation sets.
+from typing import List, Dict, Tuple, Optional
+import pandas as pd
+import numpy as np
 
-    Args:
-        df: Input dataframe
-        train_ratio: Fraction of data to use for training
 
-    Returns:
-        Tuple of training and validation dataframes
-    """
-    train_size = int(len(df) * train_ratio)
-    df_train = df[:train_size]
-    df_val = df[train_size:]
-    return df_train, df_val
+def validate_input(df: pd.DataFrame, required_columns: List[str]) -> None:
+    """Validate input DataFrame has required columns."""
+    if "gauge_id" not in df.columns or "date" not in df.columns:
+        raise ValueError("DataFrame must contain 'gauge_id' and 'date' columns")
+
+    missing_cols = [col for col in required_columns if col not in df.columns]
+    if missing_cols:
+        raise ValueError(f"Required columns not found: {missing_cols}")
+
+
+def initialize_quality_report(df: pd.DataFrame) -> Dict:
+    """Initialize quality report structure."""
+    return {
+        "original_basins": len(df["gauge_id"].unique()),
+        "excluded_basins": {},
+        "imputable_gaps": {},
+        "date_gaps_filled": {},
+        "retained_basins": 0,
+    }
+
+
+def ensure_complete_date_range(
+    basin_data: pd.DataFrame, gauge_id: str, quality_report: Dict
+) -> pd.DataFrame:
+    """Ensure basin data has complete daily date range."""
+    min_date = basin_data["date"].min()
+    max_date = basin_data["date"].max()
+    complete_dates = pd.date_range(start=min_date, end=max_date, freq="D")
+
+    complete_df = pd.DataFrame({"date": complete_dates})
+    complete_df["gauge_id"] = gauge_id
+
+    basin_data = pd.merge(complete_df, basin_data, on=["date", "gauge_id"], how="left")
+
+    n_added_dates = len(complete_dates) - len(basin_data)
+    if n_added_dates > 0:
+        quality_report["date_gaps_filled"][gauge_id] = n_added_dates
+
+    return basin_data
+
+
+def check_years_of_data(
+    basin_data: pd.DataFrame, gauge_id: str, total_years: int, quality_report: Dict
+) -> bool:
+    """Check if basin has required years of data."""
+    total_days = (basin_data["date"].max() - basin_data["date"].min()).days
+    if total_days < total_years * 365.25:
+        quality_report["excluded_basins"][gauge_id] = "insufficient_years"
+        return False
+    return True
+
+
+def check_missing_percentage(
+    basin_data: pd.DataFrame,
+    gauge_id: str,
+    required_columns: List[str],
+    max_missing_pct: float,
+    quality_report: Dict,
+) -> bool:
+    """Check if missing data percentage exceeds threshold."""
+    missing_pcts = basin_data[required_columns].isna().mean()
+    if any(missing_pcts > max_missing_pct):
+        failed_cols = missing_pcts[missing_pcts > max_missing_pct].index.tolist()
+        quality_report["excluded_basins"][gauge_id] = f"high_missing_pct:{failed_cols}"
+        return False
+    return True
+
+
+def check_missing_gaps(
+    basin_data: pd.DataFrame,
+    gauge_id: str,
+    required_columns: List[str],
+    max_gap_length: int,
+    imputation_gap_size: int,
+    quality_report: Dict,
+) -> bool:
+    """Check consecutive missing value gaps."""
+    for col in required_columns:
+        gaps = basin_data[col].isna()
+        if not gaps.any():
+            continue
+
+        gap_starts = np.where(gaps.values[1:] & ~gaps.values[:-1])[0] + 1
+        gap_ends = np.where(~gaps.values[1:] & gaps.values[:-1])[0] + 1
+
+        if len(gap_starts) > 0:
+            if gap_starts[0] == 0:
+                gap_starts = np.concatenate([[0], gap_starts])
+            if gap_ends[-1] == len(gaps):
+                gap_ends = np.concatenate([gap_ends, [len(gaps)]])
+
+            gap_lengths = gap_ends - gap_starts
+
+            imputable_gaps = sum(gap_lengths <= imputation_gap_size)
+            if imputable_gaps > 0:
+                if gauge_id not in quality_report["imputable_gaps"]:
+                    quality_report["imputable_gaps"][gauge_id] = {}
+                quality_report["imputable_gaps"][gauge_id][col] = imputable_gaps
+
+            if any(gap_lengths > max_gap_length):
+                quality_report["excluded_basins"][gauge_id] = f"long_gaps:{col}"
+                return False
+    return True
+
+
+def check_basin_data(
+    basin_data: pd.DataFrame,
+    gauge_id: str,
+    required_columns: List[str],
+    max_missing_pct: float,
+    max_gap_length: int,
+    imputation_gap_size: int,
+    total_years: int,
+    quality_report: Dict,
+) -> Optional[pd.DataFrame]:
+    """Process single basin data through all quality checks."""
+    basin_data = ensure_complete_date_range(basin_data, gauge_id, quality_report)
+
+    if not check_years_of_data(basin_data, gauge_id, total_years, quality_report):
+        return None
+
+    if not check_missing_percentage(
+        basin_data, gauge_id, required_columns, max_missing_pct, quality_report
+    ):
+        return None
+
+    if not check_missing_gaps(
+        basin_data,
+        gauge_id,
+        required_columns,
+        max_gap_length,
+        imputation_gap_size,
+        quality_report,
+    ):
+        return None
+
+    return basin_data
+
+
+def check_data_quality(
+    df: pd.DataFrame,
+    required_columns: List[str],
+    max_missing_pct: float = 0.1,
+    max_gap_length: int = 30,
+    imputation_gap_size: int = 2,
+    total_years: int = 30,
+) -> Tuple[pd.DataFrame, Dict]:
+    """Main function to check data quality for all basins."""
+    validate_input(df, required_columns)
+    quality_report = initialize_quality_report(df)
+
+    filtered_basins = []
+    for gauge_id, basin_data in df.groupby("gauge_id"):
+        processed_data = check_basin_data(
+            basin_data,
+            gauge_id,
+            required_columns,
+            max_missing_pct,
+            max_gap_length,
+            imputation_gap_size,
+            total_years,
+            quality_report,
+        )
+        if processed_data is not None:
+            filtered_basins.append(processed_data)
+
+    if not filtered_basins:
+        return pd.DataFrame(), quality_report
+
+    filtered_df = pd.concat(filtered_basins, ignore_index=True)
+    quality_report["retained_basins"] = len(filtered_df["gauge_id"].unique())
+
+    return filtered_df, quality_report

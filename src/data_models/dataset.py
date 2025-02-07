@@ -17,7 +17,7 @@ class HydroDataset(Dataset):
         static_features: Optional[List[str]] = None,
     ) -> None:
         """
-        Create a PyTorch dataset for the CAMELS dataset.
+        Create a PyTorch dataset with precomputed numpy arrays for efficiency.
 
         Args:
             time_series_df: DataFrame containing the time series data.
@@ -44,48 +44,35 @@ class HydroDataset(Dataset):
             assert not missing, f"Missing static data for gauge ids: {missing}"
 
             self.static_features_dict = {
-                row["gauge_id"]: row[self.static_features].values
+                row["gauge_id"]: row[self.static_features].to_numpy(dtype=np.float32)
                 for _, row in static_df.iterrows()
             }
         else:
             self.static_features_dict = None
 
-        # Precompute a dictionary mapping gauge_id to its time series data for faster indexing
-        self.timeseries_dict = {
-            gauge_id: self.df_sorted[
-                self.df_sorted["gauge_id"] == gauge_id
-            ].reset_index(drop=True)
-            for gauge_id in self.df_sorted["gauge_id"].unique()
-        }
+        # Precompute numpy arrays for time series data per gauge_id
+        self.timeseries_data = {}
+        for gauge_id, group in self.df_sorted.groupby("gauge_id"):
+            features_array = group[self.features].to_numpy(dtype=np.float32)
+            target_array = group[self.target].to_numpy(dtype=np.float32)
+            self.timeseries_data[gauge_id] = (features_array, target_array)
 
-        # Create valid sequences from the precomputed timeseries data
-        self.sequences = self._create_sequences()
-        print(f"Created {len(self.sequences)} valid sequences.")
-
-    def _create_sequences(self) -> List[Dict[str, Union[str, int]]]:
-        """
-        Create sequences of input and output data for each gauge_id.
-        Only sequences with no NaN values in the target output window are kept.
-        """
-        sequences = []
+        # Precompute valid sequences
+        self.sequences = []
         total_length = self.input_length + self.output_length
-
-        for gauge_id, ts_df in self.timeseries_dict.items():
-            features_array = ts_df[self.features].values
-            target_array = ts_df[self.target].values
-
-            # Slide through the time series for valid windows
-            for i in range(len(ts_df) - total_length + 1):
-                target_window = target_array[i + self.input_length : i + total_length]
-                if not np.any(np.isnan(target_window)):
-                    sequences.append(
+        for gauge_id, (features_array, target_array) in self.timeseries_data.items():
+            n_steps = features_array.shape[0]
+            for i in range(n_steps - total_length + 1):
+                window_target = target_array[i + self.input_length : i + total_length]
+                if not np.any(np.isnan(window_target)):
+                    self.sequences.append(
                         {
                             "gauge_id": gauge_id,
                             "start_idx": i,
                             "end_idx": i + total_length,
                         }
                     )
-        return sequences
+        print(f"Created {len(self.sequences)} valid sequences.")
 
     def __len__(self) -> int:
         return len(self.sequences)
@@ -95,26 +82,21 @@ class HydroDataset(Dataset):
         gauge_id = seq["gauge_id"]
         start_idx = seq["start_idx"]
         end_idx = seq["end_idx"]
+        features_array, target_array = self.timeseries_data[gauge_id]
 
-        # Retrieve precomputed time series data for this gauge
-        catchment_data = self.timeseries_dict[gauge_id].iloc[start_idx:end_idx]
-        X = catchment_data[self.features].values[: self.input_length]
-        y = catchment_data[self.target].values[self.input_length :]
+        X = features_array[start_idx : start_idx + self.input_length]
+        y = target_array[start_idx + self.input_length : end_idx]
 
-        # Handle missing static features
         if self.static_features_dict is not None:
-            static = np.array(
-                self.static_features_dict.get(
-                    gauge_id, np.zeros(len(self.static_features))
-                ),
-                dtype=np.float32,
+            static = self.static_features_dict.get(
+                gauge_id, np.zeros(len(self.static_features), dtype=np.float32)
             )
         else:
             static = np.zeros(len(self.static_features), dtype=np.float32)
 
         return {
-            "X": torch.FloatTensor(X),
-            "y": torch.FloatTensor(y),
-            "static": torch.FloatTensor(static),
+            "X": torch.from_numpy(X),
+            "y": torch.from_numpy(y),
+            "static": torch.from_numpy(static),
             "gauge_id": gauge_id,
         }
