@@ -14,6 +14,7 @@ from src.data_models.preprocessing import (
     inverse_scale_time_series,
     reverse_log_transform,
     check_data_quality,
+    ScalingParameters,
 )
 from src.data_models.dataset import HydroDataset
 
@@ -211,13 +212,23 @@ class HydroDataModule(pl.LightningDataModule):
                 static_df=self.processed_static, attributes=self.static_features
             )
 
-        # Scale target using training data
-        self.processed_time_series, self.scalers["target"] = scale_time_series(
-            df_full=self.processed_time_series,
-            df_train=train_data,
-            features=[self.target],
-            by_basin=self.preprocessing_config["target"]["scale_method"] == "per_basin",
-        )
+        if self.target in self.features:
+            # This happens when running the models autoregressively
+            # Reuse the feature scaler for the target, but keep only the target column
+            full_scaler = self.scalers["features"]
+            self.scalers["target"] = ScalingParameters(
+                scalers={self.target: full_scaler.scalers[self.target]},
+                feature_names=[self.target],
+                gauge_ids=full_scaler.gauge_ids,
+            )
+        else:
+            self.processed_time_series, self.scalers["target"] = scale_time_series(
+                df_full=self.processed_time_series,
+                df_train=train_data,
+                features=[self.target],
+                by_basin=self.preprocessing_config["target"]["scale_method"]
+                == "per_basin",
+            )
 
         print("Data preprocessing completed with temporal splitting:")
         print(
@@ -404,38 +415,28 @@ class HydroDataModule(pl.LightningDataModule):
 
     def inverse_transform_predictions(
         self,
-        predictions: Union[torch.Tensor, np.ndarray, pd.DataFrame],
-        basin_ids: List[str] = None,
-    ):
-        """
-        Inverse transform predictions back to original scale.
+        predictions: np.ndarray,
+        basin_ids: np.ndarray,
+    ) -> np.ndarray:
+        # Build dataframe with target and gauge_id columns
+        df_pred = pd.DataFrame(
+            {self.target: predictions.flatten(), "gauge_id": basin_ids}
+        )
+        # Get target scaler parameters
+        target_scalers = self.scalers["target"]
 
-        Args:
-            predictions: Model predictions to inverse transform
-            basin_ids: List of basin IDs if using per-basin scaling. Must be provided if
-                    target scaling method is "per_basin"
-
-        Returns:
-            Inverse transformed predictions in the same format as input
-        """
-        # Convert to DataFrame if tensor or numpy array
-        if isinstance(predictions, (torch.Tensor, np.ndarray)):
-            predictions = pd.DataFrame(predictions, columns=[self.target])
-            if basin_ids is not None:
-                predictions["gauge_id"] = basin_ids
-
-        # 1. Inverse scale
-        predictions = inverse_scale_time_series(
-            df=predictions, scaling_params=self.scalers["target"]
+        # Inverse scale the target column
+        inv_scaled = inverse_scale_time_series(
+            df=df_pred, scaling_params=target_scalers
         )
 
-        # 2. Inverse log transform if it was applied
+        # Reverse log transform if needed
         if self.preprocessing_config["target"]["log_transform"]:
-            predictions = reverse_log_transform(
-                df=predictions, transform_cols=[self.target]
+            inv_scaled = reverse_log_transform(
+                df=inv_scaled, transform_cols=[self.target]
             )
 
-        return predictions[self.target]
+        return inv_scaled[self.target].values
 
     def get_scalers(self):
         """Return the scalers used for preprocessing"""
