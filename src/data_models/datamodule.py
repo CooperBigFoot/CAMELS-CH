@@ -37,7 +37,6 @@ class HydroDataModule(pl.LightningDataModule):
         min_test_years: int = 1,
         max_missing_pct: float = 0.1,
         max_gap_length: int = 30,
-        imputation_gap_size: int = 2,
     ):
         """
         Initialize the HydroDataModule.
@@ -110,7 +109,6 @@ class HydroDataModule(pl.LightningDataModule):
         # Data quality parameters
         self.max_missing_pct = max_missing_pct
         self.max_gap_length = max_gap_length
-        self.imputation_gap_size = imputation_gap_size
         self.total_years = self.train_years + self.val_years + self.min_test_years
         self.quality_report = None
 
@@ -140,15 +138,15 @@ class HydroDataModule(pl.LightningDataModule):
             raise ValueError(f"Target {self.target} not found in time series data")
 
     def prepare_data(self):
-        """Prepare data with proper temporal splitting and scaling."""
-        # Quality check
+        """
+        Prepare data with proper temporal splitting and scaling.
+        """
         required_columns = list(set(self.features + [self.target]))
         filtered_df, quality_report = check_data_quality(
             self.time_series_df,
             required_columns=required_columns,
             max_missing_pct=self.max_missing_pct,
             max_gap_length=self.max_gap_length,
-            imputation_gap_size=self.imputation_gap_size,
             total_years=self.total_years,
         )
 
@@ -157,34 +155,30 @@ class HydroDataModule(pl.LightningDataModule):
                 "No basins passed quality checks. Check quality_report for details."
             )
 
+        # Enhanced logging of quality check results
         print("\nQuality Check Summary:")
         print(f"Original basins: {quality_report['original_basins']}")
         print(f"Retained basins: {quality_report['retained_basins']}")
         print(f"Excluded basins: {len(quality_report['excluded_basins'])}")
 
-        # Store quality report
+        retained_basins = filtered_df["gauge_id"].unique()
+
+        # Store quality report for use in setup
         self.quality_report = quality_report
 
         # Update time series and static data with filtered results
         self.processed_time_series = filtered_df
         self.processed_static = None
         if self.static_df is not None:
-            self.processed_static = self.static_df.copy()
-            self.processed_static = self.processed_static[
-                self.processed_static.index.isin(filtered_df["gauge_id"].unique())
+            self.processed_static = self.static_df[
+                self.static_df.index.isin(retained_basins)
             ]
 
-        # Get training periods from filtered data
-        train_data = HydroDataModule.get_training_periods(
-            self.processed_time_series, self.train_years
-        )
-
-        # Log transforms - apply to full dataset
+        # Apply log transforms if configured
         if self.preprocessing_config["target"]["log_transform"]:
             self.processed_time_series = apply_log_transform(
                 self.processed_time_series, transform_cols=[self.target]
             )
-            train_data = apply_log_transform(train_data, transform_cols=[self.target])
 
         if "log_transform" in self.preprocessing_config["features"]:
             log_features = self.preprocessing_config["features"]["log_transform"]
@@ -192,29 +186,26 @@ class HydroDataModule(pl.LightningDataModule):
                 self.processed_time_series = apply_log_transform(
                     self.processed_time_series, transform_cols=log_features
                 )
-                train_data = apply_log_transform(
-                    train_data, transform_cols=log_features
-                )
 
-        # Scale features using training data
+        # Scale features using valid periods for each basin
         if self.features:
             self.processed_time_series, self.scalers["features"] = scale_time_series(
                 df_full=self.processed_time_series,
-                df_train=train_data,
+                df_train=self.processed_time_series,  # Will be filtered in setup
                 features=self.features,
                 by_basin=self.preprocessing_config["features"]["scale_method"]
                 == "per_basin",
             )
 
         # Scale static features if any
-        if self.static_features:
+        if self.static_features and self.processed_static is not None:
             self.processed_static, self.scalers["static"] = scale_static_attributes(
                 static_df=self.processed_static, attributes=self.static_features
             )
 
+        # Handle target scaling
         if self.target in self.features:
-            # This happens when running the models autoregressively
-            # Reuse the feature scaler for the target, but keep only the target column
+            # Reuse feature scaler for target when target is also an input
             full_scaler = self.scalers["features"]
             self.scalers["target"] = ScalingParameters(
                 scalers={self.target: full_scaler.scalers[self.target]},
@@ -224,16 +215,13 @@ class HydroDataModule(pl.LightningDataModule):
         else:
             self.processed_time_series, self.scalers["target"] = scale_time_series(
                 df_full=self.processed_time_series,
-                df_train=train_data,
+                df_train=self.processed_time_series,  # Will be filtered in setup
                 features=[self.target],
                 by_basin=self.preprocessing_config["target"]["scale_method"]
                 == "per_basin",
             )
 
-        print("Data preprocessing completed with temporal splitting:")
-        print(
-            f"- Using first {self.train_years} years of each basin for fitting scalers"
-        )
+        print("\nData preprocessing completed:")
         print(
             f"- Features scaled using {self.preprocessing_config['features']['scale_method']} method"
         )
@@ -243,56 +231,76 @@ class HydroDataModule(pl.LightningDataModule):
         if self.static_features:
             print(f"- {len(self.static_features)} static features scaled")
         print(
-            f"- Log transforms applied to: {self.preprocessing_config['features'].get('log_transform', [])} and target: {self.preprocessing_config['target']['log_transform']}"
+            f"- Log transforms applied to: {self.preprocessing_config['features'].get('log_transform', [])} "
+            f"and target: {self.preprocessing_config['target']['log_transform']}"
         )
 
     def setup(self, stage: Optional[str] = None):
         """
-        Split data into train/val/test sets and create HydroDataset instances.
-        Splits are done chronologically by basin, ensuring each basin has enough years of data.
+        Split data into train/val/test sets using valid periods from quality checks.
+        Creates HydroDataset instances for each split.
+
+        Args:
+            stage: Optional string specifying stage ('fit' or 'test')
         """
-        # Group data by gauge_id and get time ranges
-        basin_groups = self.processed_time_series.groupby("gauge_id")
+        if not hasattr(self, "quality_report"):
+            raise RuntimeError("Quality report not found. Did you run prepare_data()?")
 
         # Initialize containers for each split
         train_data = []
         val_data = []
         test_data = []
-        excluded_basins = []
 
-        for gauge_id, basin_data in basin_groups:
-            # Calculate total years for this basin
-            basin_data = basin_data.sort_values("date")
-            total_years = (
-                basin_data["date"].max() - basin_data["date"].min()
-            ).days / 365.25
+        # Get valid periods from quality report
+        valid_periods = self.quality_report["valid_periods"]
 
-            # Check if basin has enough data
-            required_years = self.train_years + self.val_years + self.min_test_years
-            if total_years < required_years:
-                excluded_basins.append(gauge_id)
+        for gauge_id, basin_data in self.processed_time_series.groupby("gauge_id"):
+            # Get overall valid period for this basin
+            periods = valid_periods[gauge_id]
+            valid_start = max(
+                period["start"]
+                for period in periods.values()
+                if period["start"] is not None
+            )
+            valid_end = min(
+                period["end"]
+                for period in periods.values()
+                if period["end"] is not None
+            )
+
+            # Calculate total valid days and required days for each split
+            total_days = (valid_end - valid_start).days + 1
+            train_days = int(self.train_years * 365.25)
+            val_days = int(self.val_years * 365.25)
+
+            # Verify sufficient data for all splits
+            if total_days < train_days + val_days + int(self.min_test_years * 365.25):
+                print(
+                    f"Warning: Basin {gauge_id} has insufficient valid data for splitting"
+                )
                 continue
 
             # Calculate split dates
-            start_date = basin_data["date"].min()
-            train_end = start_date + pd.DateOffset(years=self.train_years)
-            val_end = train_end + pd.DateOffset(years=self.val_years)
+            train_end = valid_start + pd.Timedelta(days=train_days)
+            val_end = train_end + pd.Timedelta(days=val_days)
 
-            # Split the data
-            train_mask = basin_data["date"] < train_end
-            val_mask = (basin_data["date"] >= train_end) & (
-                basin_data["date"] < val_end
+            # Filter basin data to valid period and create splits
+            basin_data = basin_data.sort_values("date")
+            mask = (basin_data["date"] >= valid_start) & (
+                basin_data["date"] <= valid_end
             )
-            test_mask = basin_data["date"] >= val_end
+            valid_data = basin_data[mask]
 
-            train_data.append(basin_data[train_mask])
-            val_data.append(basin_data[val_mask])
-            test_data.append(basin_data[test_mask])
+            # Create splits
+            train_mask = valid_data["date"] < train_end
+            val_mask = (valid_data["date"] >= train_end) & (
+                valid_data["date"] < val_end
+            )
+            test_mask = valid_data["date"] >= val_end
 
-        # Print excluded basins
-        if excluded_basins:
-            print(f"Excluded {len(excluded_basins)} basins due to insufficient data:")
-            print(f"Basin IDs: {', '.join(excluded_basins)}")
+            train_data.append(valid_data[train_mask])
+            val_data.append(valid_data[val_mask])
+            test_data.append(valid_data[test_mask])
 
         # Combine data for each split
         train_df = (
