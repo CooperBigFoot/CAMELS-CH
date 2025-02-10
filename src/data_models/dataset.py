@@ -5,6 +5,7 @@ import pandas as pd
 from typing import List, Dict, Optional
 
 
+# TODO: Add group_identifier instead of hardcoding gauge_id
 class HydroDataset(Dataset):
     def __init__(
         self,

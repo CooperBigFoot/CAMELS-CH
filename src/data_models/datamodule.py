@@ -24,6 +24,7 @@ class HydroDataModule(pl.LightningDataModule):
         self,
         time_series_df: pd.DataFrame,
         static_df: pd.DataFrame,
+        group_identifier: str,
         preprocessing_config: Dict[str, Dict[str, Union[str, List[str], bool]]],
         batch_size: int = 32,
         input_length: int = 365,
@@ -77,6 +78,7 @@ class HydroDataModule(pl.LightningDataModule):
         # Store the input data
         self.time_series_df = time_series_df
         self.static_df = static_df
+        self.group_identifier = group_identifier
 
         # Configuration
         self.preprocessing_config = preprocessing_config
@@ -125,8 +127,18 @@ class HydroDataModule(pl.LightningDataModule):
 
         # Check static features
         if self.static_features:
+
+            static_columns = list(self.static_df.columns)
+
+            if self.group_identifier not in static_columns:
+                raise ValueError(
+                    f"Group identifier {self.group_identifier} not found in static data. Make sure static data includes the [{self.group_identifier}] column."
+                )
+
             missing_static = [
-                f for f in self.static_features if f not in self.static_df.columns
+                f
+                for f in self.static_features
+                if f not in static_columns and f != self.group_identifier
             ]
             if missing_static:
                 raise ValueError(
@@ -161,7 +173,7 @@ class HydroDataModule(pl.LightningDataModule):
         print(f"Retained basins: {quality_report['retained_basins']}")
         print(f"Excluded basins: {len(quality_report['excluded_basins'])}")
 
-        retained_basins = filtered_df["gauge_id"].unique()
+        retained_basins = filtered_df[self.group_identifier].unique()
 
         # Store quality report for use in setup
         self.quality_report = quality_report
@@ -171,7 +183,7 @@ class HydroDataModule(pl.LightningDataModule):
         self.processed_static = None
         if self.static_df is not None:
             self.processed_static = self.static_df[
-                self.static_df.index.isin(retained_basins)
+                self.static_df[self.group_identifier].isin(retained_basins)
             ]
 
         # Apply log transforms if configured
@@ -254,7 +266,9 @@ class HydroDataModule(pl.LightningDataModule):
         # Get valid periods from quality report
         valid_periods = self.quality_report["valid_periods"]
 
-        for gauge_id, basin_data in self.processed_time_series.groupby("gauge_id"):
+        for gauge_id, basin_data in self.processed_time_series.groupby(
+            self.group_identifier
+        ):
             # Get overall valid period for this basin
             periods = valid_periods[gauge_id]
             valid_start = max(
@@ -314,9 +328,13 @@ class HydroDataModule(pl.LightningDataModule):
         # Handle static data if provided
         static_data = None
         if self.processed_static is not None and not self.processed_static.empty:
-            remaining_basins = set(train_df["gauge_id"].unique())
+            if self.group_identifier not in self.processed_static.columns:
+                raise ValueError(
+                    f"'{self.group_identifier}' must be a column in processed_static. Please ensure your static data includes this column (it should not be the index)."
+                )
+            remaining_basins = set(train_df[self.group_identifier].unique())
             static_data = self.processed_static[
-                self.processed_static.index.isin(remaining_basins)
+                self.processed_static[self.group_identifier].isin(remaining_basins)
             ]
 
         # Create datasets based on stage
@@ -428,7 +446,7 @@ class HydroDataModule(pl.LightningDataModule):
     ) -> np.ndarray:
         # Build dataframe with target and gauge_id columns
         df_pred = pd.DataFrame(
-            {self.target: predictions.flatten(), "gauge_id": basin_ids}
+            {self.target: predictions.flatten(), self.group_identifier: basin_ids}
         )
         # Get target scaler parameters
         target_scalers = self.scalers["target"]
@@ -454,12 +472,11 @@ class HydroDataModule(pl.LightningDataModule):
         """Return the preprocessing configuration"""
         return self.preprocessing_config
 
-    @staticmethod
-    def get_training_periods(df: pd.DataFrame, train_years: int) -> pd.DataFrame:
+    def get_training_periods(self, df: pd.DataFrame, train_years: int) -> pd.DataFrame:
         """Get training periods for all basins based on first train_years."""
         train_data = []
 
-        for gauge_id, basin_data in df.groupby("gauge_id"):
+        for gauge_id, basin_data in df.groupby(self.group_identifier):
             basin_data = basin_data.sort_values("date")
             start_date = basin_data["date"].min()
             train_end = start_date + pd.DateOffset(years=train_years)

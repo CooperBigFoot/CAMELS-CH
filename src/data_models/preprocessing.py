@@ -31,10 +31,17 @@ def scale_static_attributes(
     scaler = StandardScaler()
     scaled_values = scaler.fit_transform(static_stacked)
 
-    # Reshape and create DataFrame with sorted columns
+    # Create DataFrame with scaled values
     df_static_scaled = pd.DataFrame(
-        scaled_values.reshape(static_df.shape[0], -1), columns=attributes
+        scaled_values.reshape(static_df.shape[0], -1),
+        columns=attributes,
+        index=static_df.index,
     )
+
+    # Add back non-scaled columns (like gauge_id)
+    non_scaled_cols = [col for col in static_df.columns if col not in attributes]
+    for col in non_scaled_cols:
+        df_static_scaled[col] = static_df[col]
 
     return df_static_scaled, StaticScalingParameters(
         scaler=scaler, attribute_names=attributes
