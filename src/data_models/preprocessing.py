@@ -1,10 +1,10 @@
-from typing import Union, List, Tuple, Dict
+from typing import Union, List, Tuple, Dict, Optional
 import pandas as pd
 import numpy as np
 from dataclasses import dataclass
 from sklearn.preprocessing import StandardScaler
 
-
+# TODO: add group identifier to scaling function to avoid hardcoding "gauge_id"
 # Pandas FutureWarning:
 pd.set_option("future.no_silent_downcasting", True)
 
@@ -21,30 +21,55 @@ def scale_static_attributes(
     static_df: pd.DataFrame,
     attributes: List[str],
 ) -> Tuple[pd.DataFrame, StaticScalingParameters]:
-    # Sort attributes alphabetically
-    attributes = sorted(attributes)
+    """
+    Scale static attributes while preserving gauge_id relationships.
 
-    # Stack values from sorted columns
-    static_stacked = static_df[attributes].values.reshape(-1, 1)
+    Args:
+        static_df: DataFrame containing static attributes with a gauge_id column
+        attributes: List of attribute names to scale
+
+    Returns:
+        Tuple of (scaled DataFrame, scaling parameters)
+    """
+    # Remove gauge_id from attributes if present
+    scaling_attributes = [attr for attr in attributes if attr != "gauge_id"]
+
+    # Sort attributes for consistency
+    scaling_attributes = sorted(scaling_attributes)
+
+    # Verify gauge_id exists
+    if "gauge_id" not in static_df.columns:
+        raise ValueError("static_df must contain a 'gauge_id' column")
+
+    # Set gauge_id as index to preserve relationships
+    df_indexed = static_df.set_index("gauge_id")
+
+    # Verify all attributes exist
+    missing_attrs = [
+        attr for attr in scaling_attributes if attr not in df_indexed.columns
+    ]
+    if missing_attrs:
+        raise ValueError(f"Attributes {missing_attrs} not found in static_df")
+
+    # Stack values from specified columns
+    static_stacked = df_indexed[scaling_attributes].values.reshape(-1, 1)
 
     # Scale
     scaler = StandardScaler()
     scaled_values = scaler.fit_transform(static_stacked)
 
-    # Create DataFrame with scaled values
+    # Reshape and create DataFrame with scaled values
     df_static_scaled = pd.DataFrame(
-        scaled_values.reshape(static_df.shape[0], -1),
-        columns=attributes,
-        index=static_df.index,
+        scaled_values.reshape(df_indexed.shape[0], -1),
+        columns=scaling_attributes,
+        index=df_indexed.index,
     )
 
-    # Add back non-scaled columns (like gauge_id)
-    non_scaled_cols = [col for col in static_df.columns if col not in attributes]
-    for col in non_scaled_cols:
-        df_static_scaled[col] = static_df[col]
+    # Reset index to get gauge_id as first column
+    df_static_scaled = df_static_scaled.reset_index()
 
     return df_static_scaled, StaticScalingParameters(
-        scaler=scaler, attribute_names=attributes
+        scaler=scaler, attribute_names=scaling_attributes
     )
 
 
@@ -209,11 +234,6 @@ def validate_input(df: pd.DataFrame, required_columns: List[str]) -> None:
     missing_cols = [col for col in required_columns if col not in df.columns]
     if missing_cols:
         raise ValueError(f"Required columns not found: {missing_cols}")
-
-
-from typing import Tuple, Optional
-import pandas as pd
-import numpy as np
 
 
 def find_valid_data_period(

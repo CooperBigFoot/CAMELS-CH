@@ -241,7 +241,7 @@ class HydroDataModule(pl.LightningDataModule):
             f"- Target scaled using {self.preprocessing_config['target']['scale_method']} method"
         )
         if self.static_features:
-            print(f"- {len(self.static_features)} static features scaled")
+            print(f"- {len(self.static_features) - 1} static features scaled") # Exclude group_identifier
         print(
             f"- Log transforms applied to: {self.preprocessing_config['features'].get('log_transform', [])} "
             f"and target: {self.preprocessing_config['target']['log_transform']}"
@@ -347,6 +347,7 @@ class HydroDataModule(pl.LightningDataModule):
                 features=self.features,
                 target=self.target,
                 static_features=self.static_features,
+                group_identifier=self.group_identifier,
             )
 
             self.val_dataset = HydroDataset(
@@ -357,6 +358,7 @@ class HydroDataModule(pl.LightningDataModule):
                 features=self.features,
                 target=self.target,
                 static_features=self.static_features,
+                group_identifier=self.group_identifier,
             )
 
         if stage == "test" or stage is None:
@@ -368,6 +370,7 @@ class HydroDataModule(pl.LightningDataModule):
                 features=self.features,
                 target=self.target,
                 static_features=self.static_features,
+                group_identifier=self.group_identifier,
             )
 
         # Print split info

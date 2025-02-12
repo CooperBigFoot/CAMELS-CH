@@ -1,24 +1,16 @@
 #!/bin/bash
 
-# Check if uv is installed, install if missing
-if ! command -v uv &> /dev/null
-then
-    echo "Installing uv..."
-    pip install uv
-fi
+# Install pip-tools
+echo "Installing pip-tools..."
+pip install pip-tools
 
-# Create a virtual environment
-echo "Creating virtual environment..."
-uv venv
+# Create requirements.txt from pyproject.toml
+echo "Creating requirements.txt from pyproject.toml..."
+pip-compile
 
-# Sync dependencies from pyproject.toml
-echo "Syncing dependencies from pyproject.toml..."
-if [ -f "pyproject.toml" ]; then
-    uv sync
-else
-    echo "Error: pyproject.toml not found!"
-    exit 1
-fi
+# Install dependencies
+echo "Installing dependencies..."
+pip install -r requirements.txt
 
 # Configure Git user
 echo "Configuring Git..."
