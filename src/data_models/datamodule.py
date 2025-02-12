@@ -91,14 +91,17 @@ class HydroDataModule(pl.LightningDataModule):
         self.max_missing_pct = max_missing_pct
         self.max_gap_length = max_gap_length
 
-        self._validate_features()
-
-        # Will be set up in setup()
+        # Initialize attributes
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
         self.scalers = {}
         self.quality_report = None
+        self.processed_static = None
+        self.processed_time_series = None
+
+        # Validate features
+        self._validate_features()
 
     def _validate_features(self):
         """Validate that all specified features exist in the dataframes"""
@@ -149,16 +152,7 @@ class HydroDataModule(pl.LightningDataModule):
         )
 
         if filtered_df.empty:
-            raise ValueError(
-                "No basins passed quality checks. Check quality_report for details."
-            )
-
-        print("\nQuality Check Summary:")
-        print(f"Original basins: {quality_report['original_basins']}")
-        print(f"Retained basins: {quality_report['retained_basins']}")
-        print(f"Excluded basins: {len(quality_report['excluded_basins'])}")
-
-        retained_basins = filtered_df[self.group_identifier].unique()
+            raise ValueError("No basins passed quality checks.")
 
         # Store quality report and processed time series
         self.quality_report = quality_report
@@ -166,10 +160,45 @@ class HydroDataModule(pl.LightningDataModule):
 
         # Process static data if provided
         self.processed_static = None
-        if self.static_df is not None:
-            self.processed_static = self.static_df[
+        if self.static_df is not None and self.static_features:
+            retained_basins = filtered_df[self.group_identifier].unique()
+            static_filtered = self.static_df[
                 self.static_df[self.group_identifier].isin(retained_basins)
             ]
+            if not static_filtered.empty:
+                self.processed_static, self.scalers["static"] = scale_static_attributes(
+                    static_filtered, self.static_features
+                )
+
+        # Split data first
+        train_data, val_data, test_data = [], [], []
+        for gauge_id, basin_data in self.processed_time_series.groupby(
+            self.group_identifier
+        ):
+            periods = self.quality_report["valid_periods"][gauge_id]
+            valid_end = min(
+                period["end"]
+                for period in periods.values()
+                if period["end"] is not None
+            )
+
+            test_start = valid_end - pd.Timedelta(days=int(self.test_years * 365.25))
+            val_start = test_start - pd.Timedelta(days=int(self.val_years * 365.25))
+
+            basin_data = basin_data.sort_values("date")
+            test_mask = basin_data["date"] >= test_start
+            val_mask = (basin_data["date"] >= val_start) & (
+                basin_data["date"] < test_start
+            )
+            train_mask = basin_data["date"] < val_start
+
+            train_data.append(basin_data[train_mask])
+            val_data.append(basin_data[val_mask])
+            test_data.append(basin_data[test_mask])
+
+        train_df = (
+            pd.concat(train_data, ignore_index=True) if train_data else pd.DataFrame()
+        )
 
         # Apply log transforms if configured
         if self.preprocessing_config["target"]["log_transform"]:
@@ -184,52 +213,33 @@ class HydroDataModule(pl.LightningDataModule):
                     self.processed_time_series, transform_cols=log_features
                 )
 
-        # Scale features
+        # Scale features using only training data
         if self.features:
             self.processed_time_series, self.scalers["features"] = scale_time_series(
                 df_full=self.processed_time_series,
-                df_train=self.processed_time_series,
+                df_train=train_df,
                 features=self.features,
                 by_basin=self.preprocessing_config["features"]["scale_method"]
                 == "per_basin",
             )
 
-        # Scale static features
-        if self.static_features and self.processed_static is not None:
-            self.processed_static, self.scalers["static"] = scale_static_attributes(
-                static_df=self.processed_static, attributes=self.static_features
+        # Scale target separately if not in features
+        if self.target not in self.features:
+            self.processed_time_series, self.scalers["target"] = scale_time_series(
+                df_full=self.processed_time_series,
+                df_train=train_df,
+                features=[self.target],
+                by_basin=self.preprocessing_config["target"]["scale_method"]
+                == "per_basin",
             )
-
-        # Handle target scaling
-        if self.target in self.features:
+        else:
+            # Use feature scaler for target
             full_scaler = self.scalers["features"]
             self.scalers["target"] = ScalingParameters(
                 scalers={self.target: full_scaler.scalers[self.target]},
                 feature_names=[self.target],
                 gauge_ids=full_scaler.gauge_ids,
             )
-        else:
-            self.processed_time_series, self.scalers["target"] = scale_time_series(
-                df_full=self.processed_time_series,
-                df_train=self.processed_time_series,
-                features=[self.target],
-                by_basin=self.preprocessing_config["target"]["scale_method"]
-                == "per_basin",
-            )
-
-        print("\nData preprocessing completed:")
-        print(
-            f"- Features scaled using {self.preprocessing_config['features']['scale_method']} method"
-        )
-        print(
-            f"- Target scaled using {self.preprocessing_config['target']['scale_method']} method"
-        )
-        if self.static_features:
-            print(f"- {len(self.static_features)} static features scaled")
-        print(
-            f"- Log transforms applied to: {self.preprocessing_config['features'].get('log_transform', [])} "
-            f"and target: {self.preprocessing_config['target']['log_transform']}"
-        )
 
     def setup(self, stage: Optional[str] = None):
         """

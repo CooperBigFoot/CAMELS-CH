@@ -103,19 +103,7 @@ def scale_time_series(
     features: List[str],
     by_basin: bool = True,
 ) -> Tuple[pd.DataFrame, ScalingParameters]:
-    """
-    Scale features using z-score standardization. If by_basin is True, scale each feature
-    separately for each basin (gauge_id); otherwise, scale globally.
-
-    Args:
-        df_full: DataFrame with time series data for multiple basins
-        df_train: DataFrame with training data
-        features: List of features to scale
-        by_basin: If True, scale features separately for each
-
-    Returns:
-        Tuple of scaled training and test dataframes, and ScalingParameters object
-    """
+    """Scale features using only training data for fitting."""
     df_scaled = df_full.copy()
     scalers = {feat: {} for feat in features}
 
@@ -125,27 +113,33 @@ def scale_time_series(
                 mask = df_full["gauge_id"] == gauge_id
                 train_mask = df_train["gauge_id"] == gauge_id
 
-                # First convert to float
-                df_scaled[feat] = df_scaled[feat].astype(float)
+                train_data = df_train.loc[train_mask, feat].astype(float)
+
+                # Check for zero variance
+                if np.isclose(train_data.var(), 0):
+                    raise ValueError(f"Zero variance in {feat} for basin {gauge_id}")
 
                 sc = StandardScaler()
-                sc.fit(df_train.loc[train_mask, [feat]])
+                sc.fit(train_data.values.reshape(-1, 1))
 
-                # Transform and round to 3 decimal places
-                scaled_values = sc.transform(df_full.loc[mask, [feat]])
+                scaled_values = sc.transform(
+                    df_full.loc[mask, feat].values.reshape(-1, 1)
+                )
                 df_scaled.loc[mask, feat] = np.round(scaled_values, decimals=3)
 
                 scalers[feat][gauge_id] = sc
     else:
         for feat in features:
-            # First convert to float
-            df_scaled[feat] = df_scaled[feat].astype(float)
+            train_data = df_train[feat].astype(float)
+
+            # Check for zero variance
+            if np.isclose(train_data.var(), 0):
+                raise ValueError(f"Zero variance in feature {feat}")
 
             sc = StandardScaler()
-            sc.fit(df_train[[feat]])
+            sc.fit(train_data.values.reshape(-1, 1))
 
-            # Transform and round to 3 decimal places
-            scaled_values = sc.transform(df_full[[feat]])
+            scaled_values = sc.transform(df_full[feat].values.reshape(-1, 1))
             df_scaled[feat] = np.round(scaled_values, decimals=3)
 
             scalers[feat]["global"] = sc
