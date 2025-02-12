@@ -17,8 +17,5 @@ echo "Configuring Git..."
 git config --global user.name "YourUsername"
 git config --global user.email "your.email@example.com"
 
-# Activate the virtual environment
-echo "Activating the virtual environment..."
-source .venv/bin/activate
-
-echo "Git configuration and virtual environment setup complete!"
+# Print success message
+echo "RunPod setup complete. You can now train and push the code to GitHub"

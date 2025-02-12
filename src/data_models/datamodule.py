@@ -33,9 +33,9 @@ class HydroDataModule(pl.LightningDataModule):
         features: List[str] = None,
         static_features: List[str] = None,
         target: str = "discharge_spec",
-        train_years: int = 15,
+        min_train_years: int = 10,
         val_years: int = 1,
-        min_test_years: int = 1,
+        test_years: int = 2,
         max_missing_pct: float = 0.1,
         max_gap_length: int = 30,
     ):
@@ -66,52 +66,38 @@ class HydroDataModule(pl.LightningDataModule):
             features: List of features to use as input
             static_features: List of static features to use
             target: Target variable to predict
-            train_years: Number of years to use for training
+            min_train_years: Minimum number of years required for training
             val_years: Number of years to use for validation
-            min_test_years: Minimum number of years to use for testing
+            test_years: Number of years to use for testing
             max_missing_pct: Maximum percentage of missing values allowed
             max_gap_length: Maximum gap length allowed in data
-            imputation_gap_size: Number of consecutive missing values to fill
         """
         super().__init__()
 
-        # Store the input data
         self.time_series_df = time_series_df
         self.static_df = static_df
         self.group_identifier = group_identifier
-
-        # Configuration
         self.preprocessing_config = preprocessing_config
         self.batch_size = batch_size
         self.input_length = input_length
         self.output_length = output_length
         self.num_workers = num_workers
-
-        # Features and target
         self.features = features if features else []
         self.static_features = static_features if static_features else []
         self.target = target
+        self.min_train_years = min_train_years
+        self.val_years = val_years
+        self.test_years = test_years
+        self.max_missing_pct = max_missing_pct
+        self.max_gap_length = max_gap_length
 
-        # Validate features exist in dataframes
         self._validate_features()
 
         # Will be set up in setup()
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
-
-        # Will store preprocessing parameters
         self.scalers = {}
-
-        # The splitting configuration
-        self.train_years = train_years
-        self.val_years = val_years
-        self.min_test_years = min_test_years
-
-        # Data quality parameters
-        self.max_missing_pct = max_missing_pct
-        self.max_gap_length = max_gap_length
-        self.total_years = self.train_years + self.val_years + self.min_test_years
         self.quality_report = None
 
     def _validate_features(self):
@@ -150,16 +136,16 @@ class HydroDataModule(pl.LightningDataModule):
             raise ValueError(f"Target {self.target} not found in time series data")
 
     def prepare_data(self):
-        """
-        Prepare data with proper temporal splitting and scaling.
-        """
+        """Prepare data with fixed validation and test periods."""
         required_columns = list(set(self.features + [self.target]))
         filtered_df, quality_report = check_data_quality(
             self.time_series_df,
             required_columns=required_columns,
             max_missing_pct=self.max_missing_pct,
             max_gap_length=self.max_gap_length,
-            total_years=self.total_years,
+            min_train_years=self.min_train_years,
+            val_years=self.val_years,
+            test_years=self.test_years,
         )
 
         if filtered_df.empty:
@@ -167,7 +153,6 @@ class HydroDataModule(pl.LightningDataModule):
                 "No basins passed quality checks. Check quality_report for details."
             )
 
-        # Enhanced logging of quality check results
         print("\nQuality Check Summary:")
         print(f"Original basins: {quality_report['original_basins']}")
         print(f"Retained basins: {quality_report['retained_basins']}")
@@ -175,11 +160,11 @@ class HydroDataModule(pl.LightningDataModule):
 
         retained_basins = filtered_df[self.group_identifier].unique()
 
-        # Store quality report for use in setup
+        # Store quality report and processed time series
         self.quality_report = quality_report
-
-        # Update time series and static data with filtered results
         self.processed_time_series = filtered_df
+
+        # Process static data if provided
         self.processed_static = None
         if self.static_df is not None:
             self.processed_static = self.static_df[
@@ -199,17 +184,17 @@ class HydroDataModule(pl.LightningDataModule):
                     self.processed_time_series, transform_cols=log_features
                 )
 
-        # Scale features using valid periods for each basin
+        # Scale features
         if self.features:
             self.processed_time_series, self.scalers["features"] = scale_time_series(
                 df_full=self.processed_time_series,
-                df_train=self.processed_time_series,  # Will be filtered in setup
+                df_train=self.processed_time_series,
                 features=self.features,
                 by_basin=self.preprocessing_config["features"]["scale_method"]
                 == "per_basin",
             )
 
-        # Scale static features if any
+        # Scale static features
         if self.static_features and self.processed_static is not None:
             self.processed_static, self.scalers["static"] = scale_static_attributes(
                 static_df=self.processed_static, attributes=self.static_features
@@ -217,7 +202,6 @@ class HydroDataModule(pl.LightningDataModule):
 
         # Handle target scaling
         if self.target in self.features:
-            # Reuse feature scaler for target when target is also an input
             full_scaler = self.scalers["features"]
             self.scalers["target"] = ScalingParameters(
                 scalers={self.target: full_scaler.scalers[self.target]},
@@ -227,7 +211,7 @@ class HydroDataModule(pl.LightningDataModule):
         else:
             self.processed_time_series, self.scalers["target"] = scale_time_series(
                 df_full=self.processed_time_series,
-                df_train=self.processed_time_series,  # Will be filtered in setup
+                df_train=self.processed_time_series,
                 features=[self.target],
                 by_basin=self.preprocessing_config["target"]["scale_method"]
                 == "per_basin",
@@ -241,7 +225,7 @@ class HydroDataModule(pl.LightningDataModule):
             f"- Target scaled using {self.preprocessing_config['target']['scale_method']} method"
         )
         if self.static_features:
-            print(f"- {len(self.static_features) - 1} static features scaled") # Exclude group_identifier
+            print(f"- {len(self.static_features)} static features scaled")
         print(
             f"- Log transforms applied to: {self.preprocessing_config['features'].get('log_transform', [])} "
             f"and target: {self.preprocessing_config['target']['log_transform']}"
@@ -258,65 +242,37 @@ class HydroDataModule(pl.LightningDataModule):
         if not hasattr(self, "quality_report"):
             raise RuntimeError("Quality report not found. Did you run prepare_data()?")
 
-        # Initialize containers for each split
-        train_data = []
-        val_data = []
-        test_data = []
+        train_data, val_data, test_data = [], [], []
 
-        # Get valid periods from quality report
-        valid_periods = self.quality_report["valid_periods"]
-
+        # Calculate split dates and create datasets for each basin
         for gauge_id, basin_data in self.processed_time_series.groupby(
             self.group_identifier
         ):
-            # Get overall valid period for this basin
-            periods = valid_periods[gauge_id]
-            valid_start = max(
-                period["start"]
-                for period in periods.values()
-                if period["start"] is not None
-            )
+            # Get valid period from quality report
+            periods = self.quality_report["valid_periods"][gauge_id]
             valid_end = min(
                 period["end"]
                 for period in periods.values()
                 if period["end"] is not None
             )
 
-            # Calculate total valid days and required days for each split
-            total_days = (valid_end - valid_start).days + 1
-            train_days = int(self.train_years * 365.25)
-            val_days = int(self.val_years * 365.25)
+            # Calculate split dates working backwards
+            test_start = valid_end - pd.Timedelta(days=int(self.test_years * 365.25))
+            val_start = test_start - pd.Timedelta(days=int(self.val_years * 365.25))
 
-            # Verify sufficient data for all splits
-            if total_days < train_days + val_days + int(self.min_test_years * 365.25):
-                print(
-                    f"Warning: Basin {gauge_id} has insufficient valid data for splitting"
-                )
-                continue
-
-            # Calculate split dates
-            train_end = valid_start + pd.Timedelta(days=train_days)
-            val_end = train_end + pd.Timedelta(days=val_days)
-
-            # Filter basin data to valid period and create splits
+            # Split the data
             basin_data = basin_data.sort_values("date")
-            mask = (basin_data["date"] >= valid_start) & (
-                basin_data["date"] <= valid_end
+            test_mask = basin_data["date"] >= test_start
+            val_mask = (basin_data["date"] >= val_start) & (
+                basin_data["date"] < test_start
             )
-            valid_data = basin_data[mask]
+            train_mask = basin_data["date"] < val_start
 
-            # Create splits
-            train_mask = valid_data["date"] < train_end
-            val_mask = (valid_data["date"] >= train_end) & (
-                valid_data["date"] < val_end
-            )
-            test_mask = valid_data["date"] >= val_end
+            train_data.append(basin_data[train_mask])
+            val_data.append(basin_data[val_mask])
+            test_data.append(basin_data[test_mask])
 
-            train_data.append(valid_data[train_mask])
-            val_data.append(valid_data[val_mask])
-            test_data.append(valid_data[test_mask])
-
-        # Combine data for each split
+        # Combine splits
         train_df = (
             pd.concat(train_data, ignore_index=True) if train_data else pd.DataFrame()
         )
@@ -330,7 +286,7 @@ class HydroDataModule(pl.LightningDataModule):
         if self.processed_static is not None and not self.processed_static.empty:
             if self.group_identifier not in self.processed_static.columns:
                 raise ValueError(
-                    f"'{self.group_identifier}' must be a column in processed_static. Please ensure your static data includes this column (it should not be the index)."
+                    f"'{self.group_identifier}' must be a column in processed_static"
                 )
             remaining_basins = set(train_df[self.group_identifier].unique())
             static_data = self.processed_static[
@@ -376,13 +332,13 @@ class HydroDataModule(pl.LightningDataModule):
         # Print split info
         print("\nData split summary:")
         print(
-            f"Training: {len(train_df)} samples from {len(train_df['gauge_id'].unique())} basins"
+            f"Training: {len(train_df)} samples from {len(train_df[self.group_identifier].unique())} basins"
         )
         print(
-            f"Validation: {len(val_df)} samples from {len(val_df['gauge_id'].unique())} basins"
+            f"Validation: {len(val_df)} samples from {len(val_df[self.group_identifier].unique())} basins"
         )
         print(
-            f"Testing: {len(test_df)} samples from {len(test_df['gauge_id'].unique())} basins"
+            f"Testing: {len(test_df)} samples from {len(test_df[self.group_identifier].unique())} basins"
         )
 
     def train_dataloader(self) -> DataLoader:

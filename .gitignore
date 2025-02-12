@@ -12,7 +12,6 @@ wheels/
 # Mac OS X generated files
 .DS_Store
 
-
 data
-# notebooks/checkpoints
-# notebooks/lightning_logs
+notebooks/checkpoints
+notebooks/lightning_logs

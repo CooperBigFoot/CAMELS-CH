@@ -125,15 +125,29 @@ def scale_time_series(
                 mask = df_full["gauge_id"] == gauge_id
                 train_mask = df_train["gauge_id"] == gauge_id
 
+                # First convert to float
+                df_scaled[feat] = df_scaled[feat].astype(float)
+
                 sc = StandardScaler()
                 sc.fit(df_train.loc[train_mask, [feat]])
-                df_scaled.loc[mask, feat] = sc.transform(df_full.loc[mask, [feat]])
+
+                # Transform and round to 3 decimal places
+                scaled_values = sc.transform(df_full.loc[mask, [feat]])
+                df_scaled.loc[mask, feat] = np.round(scaled_values, decimals=3)
+
                 scalers[feat][gauge_id] = sc
     else:
         for feat in features:
+            # First convert to float
+            df_scaled[feat] = df_scaled[feat].astype(float)
+
             sc = StandardScaler()
             sc.fit(df_train[[feat]])
-            df_scaled[feat] = sc.transform(df_full[[feat]])
+
+            # Transform and round to 3 decimal places
+            scaled_values = sc.transform(df_full[[feat]])
+            df_scaled[feat] = np.round(scaled_values, decimals=3)
+
             scalers[feat]["global"] = sc
 
     return df_scaled, ScalingParameters(
@@ -281,44 +295,46 @@ def find_valid_data_period(
 def check_data_period(
     start_date: Optional[pd.Timestamp],
     end_date: Optional[pd.Timestamp],
-    required_years: float,
+    min_train_years: float,
+    val_years: float,
+    test_years: float,
 ) -> Tuple[bool, Optional[str]]:
     """
-    Check if the period between two dates meets the minimum year requirement.
+    Check if period has sufficient data for training after reserving validation and test periods.
 
     Args:
-        start_date: Start date of the period (can be None)
-        end_date: End date of the period (can be None)
-        required_years: Minimum number of years required
+        start_date: Start date of available data period
+        end_date: End date of available data period
+        min_train_years: Minimum required years for training
+        val_years: Fixed validation period in years
+        test_years: Fixed test period in years
 
     Returns:
         Tuple of (meets_requirement, reason)
-        - meets_requirement: Boolean indicating if period meets required years
-        - reason: String explaining why requirement wasn't met (None if requirement met)
     """
-    # Handle None values
     if start_date is None or end_date is None:
         return False, "Missing start or end date"
 
-    # Ensure dates are pd.Timestamp objects
     if not isinstance(start_date, pd.Timestamp) or not isinstance(
         end_date, pd.Timestamp
     ):
         return False, "Invalid date format"
 
-    # Check date order
     if start_date > end_date:
         return False, "Start date is after end date"
 
-    # Calculate period in years (using exact number of days)
-    days_in_period = (end_date - start_date).days
-    years_in_period = days_in_period / 365.25  # Using astronomical year
+    # Calculate required validation and test periods
+    required_val_test_days = int((val_years + test_years) * 365.25)
 
-    # Check if period meets requirement
-    if years_in_period < required_years:
+    # Calculate available training days after reserving val/test periods
+    total_days = (end_date - start_date).days
+    available_train_days = total_days - required_val_test_days
+    available_train_years = available_train_days / 365.25
+
+    if available_train_years < min_train_years:
         return (
             False,
-            f"Period length ({years_in_period:.2f} years) is less than required ({required_years} years)",
+            f"Insufficient training data ({available_train_years:.2f} years available, {min_train_years} required)",
         )
 
     return True, None
@@ -700,26 +716,27 @@ def check_data_quality(
     required_columns: List[str],
     max_missing_pct: float,
     max_gap_length: int,
-    total_years: float,
+    min_train_years: float,
+    val_years: float,
+    test_years: float,
 ) -> Tuple[pd.DataFrame, Dict]:
     """
-    Check data quality for multiple basins, determining valid periods and applying quality checks.
+    Check data quality and ensure sufficient data for fixed validation/test periods.
 
     Args:
         df: DataFrame with basin data
         required_columns: List of columns to check
         max_missing_pct: Maximum allowed percentage of missing values
         max_gap_length: Maximum allowed gap length in days
-        total_years: Minimum required years of data
+        min_train_years: Minimum required years for training
+        val_years: Fixed validation period in years
+        test_years: Fixed test period in years
 
     Returns:
-        Tuple of (filtered_df, quality_report) where filtered_df contains only basins
-        passing all quality checks and quality_report contains detailed quality information
+        Tuple of (filtered_df, quality_report)
     """
-    # Input validation
     validate_input(df, required_columns)
 
-    # Initialize quality report
     quality_report = {
         "original_basins": len(df["gauge_id"].unique()),
         "retained_basins": 0,
@@ -730,12 +747,11 @@ def check_data_quality(
 
     filtered_basins = []
 
-    # Process each basin
     for gauge_id, basin_data in df.groupby("gauge_id"):
         basin_data = basin_data.sort_values("date").reset_index(drop=True)
         quality_report["processing_steps"][gauge_id] = []
 
-        # Step 1: Find valid periods for each required column
+        # Find valid periods for each required column
         valid_periods = {}
         for column in required_columns:
             start_date, end_date = find_valid_data_period(
@@ -745,7 +761,7 @@ def check_data_quality(
 
         quality_report["valid_periods"][gauge_id] = valid_periods
 
-        # Step 2: Determine overall valid period (intersection of all column periods)
+        # Determine overall valid period
         try:
             overall_start = max(
                 period["start"]
@@ -764,16 +780,16 @@ def check_data_quality(
             )
             continue
 
-        # Step 3: Check if valid period meets minimum years requirement
+        # Check if period meets requirements
         meets_requirement, reason = check_data_period(
-            overall_start, overall_end, total_years
+            overall_start, overall_end, min_train_years, val_years, test_years
         )
         if not meets_requirement:
             quality_report["excluded_basins"][gauge_id] = reason
             quality_report["processing_steps"][gauge_id].append(f"Failed: {reason}")
             continue
 
-        # Step 4: Fill missing dates within valid period
+        # Fill missing dates within valid period
         basin_data_filled = ensure_complete_date_range(
             basin_data, gauge_id, overall_start, overall_end, quality_report
         )
@@ -781,7 +797,7 @@ def check_data_quality(
             "Completed date range filling"
         )
 
-        # Step 5: Check missing percentages
+        # Check missing percentages
         if not check_missing_percentage(
             basin_data_filled,
             gauge_id,
@@ -798,7 +814,7 @@ def check_data_quality(
             "Passed missing percentage check"
         )
 
-        # Step 6: Check for gaps
+        # Check for gaps
         if not check_missing_gaps(
             basin_data_filled,
             gauge_id,
@@ -812,12 +828,9 @@ def check_data_quality(
             continue
 
         quality_report["processing_steps"][gauge_id].append("Passed gap check")
-
-        # Basin passed all checks
         filtered_basins.append(basin_data_filled)
         quality_report["processing_steps"][gauge_id].append("Passed all quality checks")
 
-    # Combine filtered data
     if filtered_basins:
         filtered_df = pd.concat(filtered_basins, ignore_index=True)
         quality_report["retained_basins"] = len(filtered_df["gauge_id"].unique())
