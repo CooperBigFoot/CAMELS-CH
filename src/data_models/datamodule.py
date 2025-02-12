@@ -149,6 +149,7 @@ class HydroDataModule(pl.LightningDataModule):
             min_train_years=self.min_train_years,
             val_years=self.val_years,
             test_years=self.test_years,
+            group_identifier=self.group_identifier,
         )
 
         if filtered_df.empty:
@@ -167,7 +168,7 @@ class HydroDataModule(pl.LightningDataModule):
             ]
             if not static_filtered.empty:
                 self.processed_static, self.scalers["static"] = scale_static_attributes(
-                    static_filtered, self.static_features
+                    static_filtered, self.static_features, self.group_identifier
                 )
 
         # Split data first
@@ -203,14 +204,18 @@ class HydroDataModule(pl.LightningDataModule):
         # Apply log transforms if configured
         if self.preprocessing_config["target"]["log_transform"]:
             self.processed_time_series = apply_log_transform(
-                self.processed_time_series, transform_cols=[self.target]
+                self.processed_time_series,
+                transform_cols=[self.target],
+                group_identifier=self.group_identifier,
             )
 
         if "log_transform" in self.preprocessing_config["features"]:
             log_features = self.preprocessing_config["features"]["log_transform"]
             if log_features:
                 self.processed_time_series = apply_log_transform(
-                    self.processed_time_series, transform_cols=log_features
+                    self.processed_time_series,
+                    transform_cols=log_features,
+                    group_identifier=self.group_identifier,
                 )
 
         # Scale features using only training data
@@ -221,6 +226,7 @@ class HydroDataModule(pl.LightningDataModule):
                 features=self.features,
                 by_basin=self.preprocessing_config["features"]["scale_method"]
                 == "per_basin",
+                group_identifier=self.group_identifier,
             )
 
         # Scale target separately if not in features
@@ -231,6 +237,7 @@ class HydroDataModule(pl.LightningDataModule):
                 features=[self.target],
                 by_basin=self.preprocessing_config["target"]["scale_method"]
                 == "per_basin",
+                group_identifier=self.group_identifier,
             )
         else:
             # Use feature scaler for target
@@ -422,13 +429,17 @@ class HydroDataModule(pl.LightningDataModule):
 
         # Inverse scale the target column
         inv_scaled = inverse_scale_time_series(
-            df=df_pred, scaling_params=target_scalers
+            df=df_pred,
+            scaling_params=target_scalers,
+            group_identifier=self.group_identifier,
         )
 
         # Reverse log transform if needed
         if self.preprocessing_config["target"]["log_transform"]:
             inv_scaled = reverse_log_transform(
-                df=inv_scaled, transform_cols=[self.target]
+                df=inv_scaled,
+                transform_cols=[self.target],
+                group_identifier=self.group_identifier,
             )
 
         return inv_scaled[self.target].values
