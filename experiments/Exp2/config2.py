@@ -6,7 +6,6 @@ OUTPUT_LENGTH = 10
 MAX_EPOCHS = 15
 ACCELERATOR = "cuda"
 
-ACCELERATOR = "cpu"
 
 # Model specific configs
 HIDDEN_SIZE = 64
@@ -40,19 +39,19 @@ FORCING_FEATURES = [
 
 # Config specific to Central Asia -> these configs result in 44 valid basins
 CA_ATTRIBUTE_DIR = (
-    "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CA/post_processed/attributes"
+    "/workspace/CARAVANIFY/CA/post_processed/attributes"
 )
 CA_TIMESERIES_DIR = (
-    "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CA/post_processed/timeseries/csv"
+    "/workspace/CARAVANIFY/CA/post_processed/timeseries/csv"
 )
 CA_GAUGE_ID_PREFIX = "CA"
 
 # Config specific to Switzeerland -> these configs result in 132 valid basins
 CH_ATTRIBUTE_DIR = (
-    "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CH/post_processed/attributes"
+    "/workspace/CARAVANIFY/CH/post_processed/attributes"
 )
 CH_TIMESERIES_DIR = (
-    "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CH/post_processed/timeseries/csv"
+    "/workspace/CARAVANIFY/CH/post_processed/timeseries/csv"
 )
 CH_GAUGE_ID_PREFIX = "CH"
 

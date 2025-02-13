@@ -14,8 +14,8 @@ pip install -r requirements.txt
 
 # Configure Git user
 echo "Configuring Git..."
-git config --global user.name "YourUsername"
-git config --global user.email "your.email@example.com"
+git config --global user.name "CooperBigFoot"
+git config --global user.email "nlazaro@student.ethz.ch"
 
 # Print success message
 echo "RunPod setup complete. You can now train and push the code to GitHub"
