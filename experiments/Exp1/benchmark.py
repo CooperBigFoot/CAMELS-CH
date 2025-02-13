@@ -29,6 +29,9 @@ import multiprocessing
 
 from experiments.Exp1 import config
 
+if config.ACCELERATOR == "cuda":
+    torch.set_float32_matmul_precision("medium")
+
 
 # ----- CONFIGURE DATASET -----
 print("CONFIGURING DATASET")
@@ -49,7 +52,9 @@ benchmark_caravan.load_stations(all_basins)
 
 ts_columns = config.FORCING_FEATURES + [config.TARGET]
 
-ts_data = benchmark_caravan.get_time_series()[ts_columns]
+ts_data = benchmark_caravan.get_time_series()[
+    ts_columns + ["date"] + [config.GROUP_IDENTIFIER]
+]
 
 static_columns = config.STATIC_FEATURES
 
@@ -82,10 +87,10 @@ data_module = HydroDataModule(
     features=ts_columns,
     static_features=static_columns,
     target=config.TARGET,
-    min_train_years=config.MIN_TRAIN_YEARS,
-    val_years=config.VAL_YEARS,
-    test_years=config.TEST_YEARS,
-    max_missing_pct=config.MAX_MISSING_PCT,
+    min_train_years=config.CA_MIN_TRAIN_YEARS,
+    val_years=config.CA_VAL_YEARS,
+    test_years=config.CA_TEST_YEARS,
+    max_missing_pct=config.CA_MAX_MISSING_PCT,
 )
 
 # ----- MODEL SET UP AND TRAINING START -----
@@ -101,7 +106,7 @@ model = LitTSMixer(
 
 trainer = pl.Trainer(
     max_epochs=config.MAX_EPOCHS,
-    accelerator="GPU",
+    accelerator=config.ACCELERATOR,
     devices=1,
     callbacks=[
         ModelCheckpoint(
