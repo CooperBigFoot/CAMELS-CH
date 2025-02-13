@@ -210,4 +210,15 @@ class LitTSMixer(pl.LightningModule):
         self.test_outputs = []
 
     def configure_optimizers(self):
-        return Adam(self.parameters(), lr=self.learning_rate)
+        optimizer = Adam(self.parameters(), lr=self.learning_rate)
+        scheduler = {
+            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer, mode="min", patience=2, factor=0.5
+            ),
+            "monitor": "val_loss",
+        }
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": scheduler,
+            "monitor": "val_loss",
+        }
