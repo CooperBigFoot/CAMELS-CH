@@ -18,6 +18,9 @@ from src.data_models.preprocessing import (
 )
 from src.data_models.dataset import HydroDataset
 
+# TODO: fix future warning: /Users/cooper/Desktop/CAMELS-CH/src/data_models/preprocessing.py:178: FutureWarning: Setting an item of incompatible dtype is deprecated and will raise an error in a future version of pandas. Value '[-1.718 -1.709 -1.699 ...  1.706  1.716  1.725]' has dtype incompatible with int32, please explicitly cast to a compatible dtype first.
+#   df_scaled.loc[mask, feat] = np.round(scaled_values, decimals=3)
+
 
 class HydroDataModule(pl.LightningDataModule):
     def __init__(
@@ -36,7 +39,7 @@ class HydroDataModule(pl.LightningDataModule):
         min_train_years: int = 10,
         val_years: int = 1,
         test_years: int = 2,
-        max_missing_pct: float = 0.1,
+        max_missing_pct: float = 10,
         max_gap_length: int = 30,
     ):
         """
@@ -157,6 +160,16 @@ class HydroDataModule(pl.LightningDataModule):
 
         # Store quality report and processed time series
         self.quality_report = quality_report
+
+        # Print original_basins and retained_basins from quality report
+        print(
+            f"\nQuality check summary: {self.quality_report['original_basins']} basins in original data"
+        )
+
+        print(
+            f"Quality check summary: {self.quality_report['retained_basins']} basins passed quality checks"
+        )
+
         self.processed_time_series = filtered_df
 
         # Process static data if provided
@@ -224,7 +237,7 @@ class HydroDataModule(pl.LightningDataModule):
                 df_full=self.processed_time_series,
                 df_train=train_df,
                 features=self.features,
-                by_basin=self.preprocessing_config["features"]["scale_method"]
+                by_group=self.preprocessing_config["features"]["scale_method"]
                 == "per_basin",
                 group_identifier=self.group_identifier,
             )
@@ -235,7 +248,7 @@ class HydroDataModule(pl.LightningDataModule):
                 df_full=self.processed_time_series,
                 df_train=train_df,
                 features=[self.target],
-                by_basin=self.preprocessing_config["target"]["scale_method"]
+                by_group=self.preprocessing_config["target"]["scale_method"]
                 == "per_basin",
                 group_identifier=self.group_identifier,
             )
@@ -245,7 +258,7 @@ class HydroDataModule(pl.LightningDataModule):
             self.scalers["target"] = ScalingParameters(
                 scalers={self.target: full_scaler.scalers[self.target]},
                 feature_names=[self.target],
-                gauge_ids=full_scaler.gauge_ids,
+                group_ids=full_scaler.group_ids,
             )
 
     def setup(self, stage: Optional[str] = None):
