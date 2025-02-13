@@ -31,11 +31,7 @@ import multiprocessing
 from experiments.Exp1 import config
 
 if config.ACCELERATOR == "cuda":
-<<<<<<< HEAD
-    torch.set_float32_matmul_precision('medium')
-=======
     torch.set_float32_matmul_precision("medium")
->>>>>>> 003a712c5351bae8f79cdb436bc53c5a66fdba54
 
 
 # ----- CONFIGURE DATASET -----
@@ -57,13 +53,9 @@ benchmark_caravan.load_stations(all_basins)
 
 ts_columns = config.FORCING_FEATURES + [config.TARGET]
 
-<<<<<<< HEAD
-ts_data = benchmark_caravan.get_time_series()[ts_columns + ["date"]+ [config.GROUP_IDENTIFIER]]
-=======
 ts_data = benchmark_caravan.get_time_series()[
     ts_columns + ["date"] + [config.GROUP_IDENTIFIER]
 ]
->>>>>>> 003a712c5351bae8f79cdb436bc53c5a66fdba54
 
 static_columns = config.STATIC_FEATURES
 
@@ -115,11 +107,7 @@ model = LitTSMixer(
 
 trainer = pl.Trainer(
     max_epochs=config.MAX_EPOCHS,
-<<<<<<< HEAD
-    accelerator="cuda",
-=======
     accelerator=config.ACCELERATOR,
->>>>>>> 003a712c5351bae8f79cdb436bc53c5a66fdba54
     devices=1,
     callbacks=[
         ModelCheckpoint(
