@@ -150,7 +150,7 @@ evaluator = TSForecastEvaluator(
 results_df, overall_metrics, basin_metrics = evaluator.evaluate(raw_results)
 
 # Save evaluation results
-results_dir = Path("experiments/Exp1/results")
+results_dir = Path("experiments/Exp2/results")
 results_dir.mkdir(parents=True, exist_ok=True)
 
 results_df.to_csv(results_dir / "challenger2_detailed_results.csv", index=True)
