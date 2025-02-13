@@ -1,10 +1,12 @@
 # General configs
 GROUP_IDENTIFIER = "gauge_id"
-BATCH_SIZE = 128
-INPUT_LENGTH = 60
+BATCH_SIZE = 32
+INPUT_LENGTH = 30
 OUTPUT_LENGTH = 10
 MAX_EPOCHS = 15
 ACCELERATOR = 'cuda'
+
+ACCELERATOR = "cpu"
 
 # Model specific configs
 HIDDEN_SIZE = 64
@@ -61,5 +63,8 @@ CH_MIN_TRAIN_YEARS = 20
 CH_VAL_YEARS = 10
 CH_TEST_YEARS = 0
 CH_MAX_MISSING_PCT = 10
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> 003a712c5351bae8f79cdb436bc53c5a66fdba54
