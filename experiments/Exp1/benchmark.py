@@ -24,10 +24,14 @@ from src.data_models.caravanify import Caravanify, CaravanifyConfig
 
 from src.data_models.datamodule import HydroDataModule
 from src.models.TSMixer import LitTSMixer
+from src.models.evaluators import TSForecastEvaluator
 
 import multiprocessing
 
 from experiments.Exp1 import config
+
+if config.ACCELERATOR == "cuda":
+    torch.set_float32_matmul_precision('medium')
 
 
 # ----- CONFIGURE DATASET -----
@@ -49,7 +53,7 @@ benchmark_caravan.load_stations(all_basins)
 
 ts_columns = config.FORCING_FEATURES + [config.TARGET]
 
-ts_data = benchmark_caravan.get_time_series()[ts_columns]
+ts_data = benchmark_caravan.get_time_series()[ts_columns + ["date"]+ [config.GROUP_IDENTIFIER]]
 
 static_columns = config.STATIC_FEATURES
 
@@ -82,10 +86,10 @@ data_module = HydroDataModule(
     features=ts_columns,
     static_features=static_columns,
     target=config.TARGET,
-    min_train_years=config.MIN_TRAIN_YEARS,
-    val_years=config.VAL_YEARS,
-    test_years=config.TEST_YEARS,
-    max_missing_pct=config.MAX_MISSING_PCT,
+    min_train_years=config.CA_MIN_TRAIN_YEARS,
+    val_years=config.CA_VAL_YEARS,
+    test_years=config.CA_TEST_YEARS,
+    max_missing_pct=config.CA_MAX_MISSING_PCT,
 )
 
 # ----- MODEL SET UP AND TRAINING START -----
@@ -101,7 +105,7 @@ model = LitTSMixer(
 
 trainer = pl.Trainer(
     max_epochs=config.MAX_EPOCHS,
-    accelerator="GPU",
+    accelerator="cuda",
     devices=1,
     callbacks=[
         ModelCheckpoint(
@@ -126,3 +130,48 @@ model_save_path = Path("experiments/Exp1/saved_models/benchmark.pt")
 model_save_path.parent.mkdir(parents=True, exist_ok=True)
 torch.save(model.state_dict(), model_save_path)
 print("TRAINING COMPLETE")
+
+# ----- EVALUATE MODEL -----
+print("STARTING MODEL EVALUATION")
+
+# Create results directory if it doesn't exist
+results_dir = Path("experiments/Exp1/results")
+results_dir.mkdir(parents=True, exist_ok=True)
+
+# Run test evaluation
+print("Running model testing...")
+trainer.test(model, data_module)
+raw_results = model.test_results
+
+# Create evaluator and calculate metrics
+print("Calculating evaluation metrics...")
+evaluator = TSForecastEvaluator(
+    data_module, 
+    horizons=list(range(1, model.config.pred_len + 1))
+)
+results_df, overall_metrics, basin_metrics = evaluator.evaluate(raw_results)
+
+# Generate summary metrics
+print("Generating metric summaries...")
+overall_summary = evaluator.summarize_metrics(overall_metrics)
+basin_summary = evaluator.summarize_metrics(basin_metrics, per_basin=True)
+
+# Save all results
+print("Saving evaluation results...")
+
+# Save detailed results dataframe
+results_path = results_dir / "detailed_results.csv"
+results_df.to_csv(results_path, index=True)
+print(f"Saved detailed results to {results_path}")
+
+# Save overall metrics summary
+overall_path = results_dir / "overall_metrics.csv"
+overall_summary.to_csv(overall_path, index=True)
+print(f"Saved overall metrics to {overall_path}")
+
+# Save per-basin metrics summary
+basin_path = results_dir / "basin_metrics.csv"
+basin_summary.to_csv(basin_path, index=True)
+print(f"Saved basin metrics to {basin_path}")
+
+print("EVALUATION COMPLETE")

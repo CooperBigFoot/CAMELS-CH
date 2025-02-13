@@ -3,7 +3,8 @@ GROUP_IDENTIFIER = "gauge_id"
 BATCH_SIZE = 128
 INPUT_LENGTH = 60
 OUTPUT_LENGTH = 10
-MAX_EPOCHS = 1
+MAX_EPOCHS = 15
+ACCELERATOR = 'cuda'
 
 # Model specific configs
 HIDDEN_SIZE = 64
@@ -37,22 +38,28 @@ FORCING_FEATURES = [
 
 # Config specific to Central Asia -> these configs result in 44 valid basins
 CA_ATTRIBUTE_DIR = (
-    "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CA/post_processed/attributes"
+    "/workspace/CARAVANIFY/CA/post_processed/attributes"
 )
 CA_TIMESERIES_DIR = (
-    "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CA/post_processed/timeseries/csv"
+    "/workspace/CARAVANIFY/CA/post_processed/timeseries/csv"
 )
 CA_GAUGE_ID_PREFIX = "CA"
-MIN_TRAIN_YEARS = 8
-VAL_YEARS = 2
-TEST_YEARS = 3
-MAX_MISSING_PCT = 10
+CA_MIN_TRAIN_YEARS = 8
+CA_VAL_YEARS = 2
+CA_TEST_YEARS = 3
+CA_MAX_MISSING_PCT = 10
 
 # Config specific to Switzeerland -> these configs result in 132 valid basins
-CH_ATTRIBUTE_DIR = ""
-CH_TIMESERIES_DIR = ""
+CH_ATTRIBUTE_DIR = (
+    "/workspace/CARAVANIFY/CH/post_processed/attributes"
+)
+CH_TIMESERIES_DIR = (
+    "/workspace/CARAVANIFY/CH/post_processed/timeseries/csv"
+)
 CH_GAUGE_ID_PREFIX = "CH"
-MIN_TRAIN_YEARS = 20
-VAL_YEARS = 10
-TEST_YEARS = 0
-MAX_MISSING_PCT = 10
+CH_MIN_TRAIN_YEARS = 20
+CH_VAL_YEARS = 10
+CH_TEST_YEARS = 0
+CH_MAX_MISSING_PCT = 10
+
+
