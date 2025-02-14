@@ -28,7 +28,7 @@ from src.models.evaluators import TSForecastEvaluator
 
 import multiprocessing
 
-from experiments.Exp3 import config
+from experiments.Exp3 import config3 as config
 
 if config.ACCELERATOR == "cuda":
     torch.set_float32_matmul_precision("medium")

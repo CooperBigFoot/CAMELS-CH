@@ -1,7 +1,7 @@
 # General configs
 GROUP_IDENTIFIER = "gauge_id"
-BATCH_SIZE = 32
-INPUT_LENGTH = 30
+BATCH_SIZE = 128
+INPUT_LENGTH = 64
 OUTPUT_LENGTH = 10
 MAX_EPOCHS = 15
 ACCELERATOR = 'cuda'
@@ -11,7 +11,7 @@ PRETRAIN_LR = 1e-3
 FINETUNE_LR = 1e-4  # 10x smaller
 
 # Model specific configs
-HIDDEN_SIZE = 64
+HIDDEN_SIZE = 32
 
 TARGET = "streamflow"
 STATIC_FEATURES = [
