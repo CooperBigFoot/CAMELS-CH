@@ -1,34 +1,31 @@
-import pytorch_lightning as pl
-from torch.utils.data import DataLoader
-from typing import Optional, List, Dict, Union
-from pathlib import Path
+from typing import Dict, List, Union, Optional
 import pandas as pd
 import numpy as np
 import torch
-
-from src.data_models.camels_ch import CamelsCHConfig
-from src.data_models.preprocessing import (
-    apply_log_transform,
-    scale_time_series,
-    scale_static_attributes,
-    inverse_scale_time_series,
-    reverse_log_transform,
-    check_data_quality,
-    ScalingParameters,
-)
+from torch.utils.data import DataLoader
+import pytorch_lightning as pl
+from sklearn.base import clone
+from sklearn.pipeline import Pipeline
 from src.data_models.dataset import HydroDataset
-
-# TODO: fix future warning: /Users/cooper/Desktop/CAMELS-CH/src/data_models/preprocessing.py:178: FutureWarning: Setting an item of incompatible dtype is deprecated and will raise an error in a future version of pandas. Value '[-1.718 -1.709 -1.699 ...  1.706  1.716  1.725]' has dtype incompatible with int32, please explicitly cast to a compatible dtype first.
-#   df_scaled.loc[mask, feat] = np.round(scaled_values, decimals=3)
+from src.data_models.preprocessing import check_data_quality
+from src.preprocessing.transformers import GroupedTransformer
 
 
 class HydroDataModule(pl.LightningDataModule):
+    """
+    A PyTorch Lightning DataModule for hydrological data processing and loading.
+
+    This module handles data preprocessing, including feature scaling and transformations,
+    while maintaining proper separation between training, validation, and test data.
+    It supports both grouped and non-grouped preprocessing pipelines.
+    """
+
     def __init__(
         self,
         time_series_df: pd.DataFrame,
         static_df: pd.DataFrame,
         group_identifier: str,
-        preprocessing_config: Dict[str, Dict[str, Union[str, List[str], bool]]],
+        preprocessing_config: Dict[str, Dict[str, Union[Pipeline, GroupedTransformer]]],
         batch_size: int = 32,
         input_length: int = 365,
         output_length: int = 1,
@@ -42,45 +39,16 @@ class HydroDataModule(pl.LightningDataModule):
         max_missing_pct: float = 10,
         max_gap_length: int = 30,
     ):
-        """
-        Initialize the HydroDataModule.
-
-        Args:
-            time_series_df: DataFrame containing preprocessed time series data
-            static_df: DataFrame containing preprocessed static features
-            preprocessing_config: Dictionary specifying preprocessing options:
-                {
-                    "features": {
-                        "scale_method": "global" or "per_basin",
-                        "log_transform": List of features to log transform
-                    },
-                    "target": {
-                        "scale_method": "global" or "per_basin",
-                        "log_transform": bool
-                    },
-                    "static_features": {
-                        "scale_method": "global" or "per_basin"
-                    }
-                }
-            batch_size: Batch size for dataloaders
-            input_length: Number of timesteps to use as input
-            output_length: Number of timesteps to predict
-            num_workers: Number of workers for dataloaders
-            features: List of features to use as input
-            static_features: List of static features to use
-            target: Target variable to predict
-            min_train_years: Minimum number of years required for training
-            val_years: Number of years to use for validation
-            test_years: Number of years to use for testing
-            max_missing_pct: Maximum percentage of missing values allowed
-            max_gap_length: Maximum gap length allowed in data
-        """
+        """Initialize the HydroDataModule with data and configuration parameters."""
         super().__init__()
 
+        # Store input data
         self.time_series_df = time_series_df
         self.static_df = static_df
         self.group_identifier = group_identifier
         self.preprocessing_config = preprocessing_config
+
+        # Store configuration parameters
         self.batch_size = batch_size
         self.input_length = input_length
         self.output_length = output_length
@@ -88,27 +56,91 @@ class HydroDataModule(pl.LightningDataModule):
         self.features = features if features else []
         self.static_features = static_features if static_features else []
         self.target = target
+
+        # Store quality check parameters
         self.min_train_years = min_train_years
         self.val_years = val_years
         self.test_years = test_years
         self.max_missing_pct = max_missing_pct
         self.max_gap_length = max_gap_length
 
-        # Initialize attributes
+        # Initialize storage attributes
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
-        self.scalers = {}
         self.quality_report = None
         self.processed_static = None
         self.processed_time_series = None
+        self.fitted_pipelines = {}
 
-        # Validate features
+        # Validate configuration
+        self._validate_preprocessing_config(preprocessing_config)
         self._validate_features()
 
-    def _validate_features(self):
-        """Validate that all specified features exist in the dataframes"""
-        # Check time series features
+    def _validate_preprocessing_config(self, config: Dict) -> None:
+        """
+        Validate the preprocessing configuration structure and pipeline types.
+
+        This ensures all pipelines are properly configured and compatible with
+        the data module's requirements.
+        """
+        required_keys = ["pipeline"]
+
+        for data_type, cfg in config.items():
+            # Check for required configuration keys
+            missing = [k for k in required_keys if k not in cfg]
+            if missing:
+                raise ValueError(
+                    f"Missing required keys {missing} in {data_type} config"
+                )
+
+            pipeline = cfg["pipeline"]
+
+            # Validate pipeline type
+            if not isinstance(pipeline, (Pipeline, GroupedTransformer)):
+                raise TypeError(
+                    f"Pipeline for {data_type} must be either sklearn.pipeline.Pipeline "
+                    f"or GroupedTransformer, got {type(pipeline)}"
+                )
+
+            # For grouped transformers, validate group identifier
+            if isinstance(pipeline, GroupedTransformer):
+                if pipeline.group_identifier != self.group_identifier:
+                    raise ValueError(
+                        f"GroupedTransformer for {data_type} uses group_identifier "
+                        f"'{pipeline.group_identifier}' but data module uses "
+                        f"'{self.group_identifier}'"
+                    )
+
+            # Validate transformer compatibility
+            self._validate_pipeline_compatibility(pipeline)
+
+    def _validate_pipeline_compatibility(
+        self, pipeline: Union[Pipeline, GroupedTransformer]
+    ) -> None:
+        """
+        Verify that all transformers in the pipeline implement required methods.
+
+        This ensures each transformer has fit, transform, and inverse_transform methods.
+        """
+        if isinstance(pipeline, GroupedTransformer):
+            pipeline = pipeline.pipeline
+
+        for _, transformer in pipeline.steps:
+            required_methods = ["fit", "transform", "inverse_transform"]
+            missing = [m for m in required_methods if not hasattr(transformer, m)]
+            if missing:
+                raise ValueError(
+                    f"Transformer {transformer.__class__.__name__} "
+                    f"missing required methods: {missing}"
+                )
+
+    def _validate_features(self) -> None:
+        """
+        Validate that all specified features exist in the input data.
+
+        This prevents errors from missing columns during preprocessing.
+        """
         missing_features = [
             f for f in self.features if f not in self.time_series_df.columns
         ]
@@ -117,32 +149,33 @@ class HydroDataModule(pl.LightningDataModule):
                 f"Features {missing_features} not found in time series data"
             )
 
-        # Check static features
         if self.static_features:
-
-            static_columns = list(self.static_df.columns)
-
-            if self.group_identifier not in static_columns:
+            if self.group_identifier not in self.static_df.columns:
                 raise ValueError(
-                    f"Group identifier {self.group_identifier} not found in static data. Make sure static data includes the [{self.group_identifier}] column."
+                    f"Group identifier {self.group_identifier} not found in static data"
                 )
 
             missing_static = [
                 f
                 for f in self.static_features
-                if f not in static_columns and f != self.group_identifier
+                if f not in self.static_df.columns and f != self.group_identifier
             ]
             if missing_static:
                 raise ValueError(
                     f"Static features {missing_static} not found in static data"
                 )
 
-        # Check target
         if self.target not in self.time_series_df.columns:
             raise ValueError(f"Target {self.target} not found in time series data")
 
-    def prepare_data(self):
-        """Prepare data with fixed validation and test periods."""
+    def prepare_data(self) -> None:
+        """
+        Prepare data by performing quality checks and preprocessing.
+
+        This method handles data quality validation, splitting, and transformation
+        using the configured preprocessing pipelines.
+        """
+        # Check data quality
         required_columns = list(set(self.features + [self.target]))
         filtered_df, quality_report = check_data_quality(
             self.time_series_df,
@@ -156,44 +189,37 @@ class HydroDataModule(pl.LightningDataModule):
         )
 
         if filtered_df.empty:
-            raise ValueError("No basins passed quality checks.")
+            raise ValueError("No basins passed quality checks")
 
-        # Store quality report and processed time series
         self.quality_report = quality_report
-
-        # Print original_basins and retained_basins from quality report
-        print(
-            f"\nQuality check summary: {self.quality_report['original_basins']} basins in original data"
-        )
-
-        print(
-            f"Quality check summary: {self.quality_report['retained_basins']} basins passed quality checks"
-        )
-
         self.processed_time_series = filtered_df
 
         # Process static data if provided
-        self.processed_static = None
         if self.static_df is not None and self.static_features:
             retained_basins = filtered_df[self.group_identifier].unique()
-            static_filtered = self.static_df[
+            self.processed_static = self.static_df[
                 self.static_df[self.group_identifier].isin(retained_basins)
             ]
-            if not static_filtered.empty:
-                self.processed_static, self.scalers["static"] = scale_static_attributes(
-                    static_filtered, self.static_features, self.group_identifier
-                )
 
-        # Split data first
+        # Split data and apply preprocessing
+        train_df, val_df, test_df = self._split_data()
+        self._apply_preprocessing(train_df)
+
+    def _split_data(self) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        """
+        Split data into training, validation, and test sets.
+
+        Returns:
+            Tuple of DataFrames for train, validation, and test sets
+        """
         train_data, val_data, test_data = [], [], []
+
         for gauge_id, basin_data in self.processed_time_series.groupby(
             self.group_identifier
         ):
             periods = self.quality_report["valid_periods"][gauge_id]
             valid_end = min(
-                period["end"]
-                for period in periods.values()
-                if period["end"] is not None
+                period["end"] for period in periods.values() if period["end"]
             )
 
             test_start = valid_end - pd.Timedelta(days=int(self.test_years * 365.25))
@@ -210,124 +236,113 @@ class HydroDataModule(pl.LightningDataModule):
             val_data.append(basin_data[val_mask])
             test_data.append(basin_data[test_mask])
 
-        train_df = (
-            pd.concat(train_data, ignore_index=True) if train_data else pd.DataFrame()
+        return (
+            pd.concat(train_data, ignore_index=True),
+            pd.concat(val_data, ignore_index=True),
+            pd.concat(test_data, ignore_index=True),
         )
 
-        # Apply log transforms if configured
-        if self.preprocessing_config["target"]["log_transform"]:
-            self.processed_time_series = apply_log_transform(
-                self.processed_time_series,
-                transform_cols=[self.target],
-                group_identifier=self.group_identifier,
-            )
+    def _apply_preprocessing(self, train_df: pd.DataFrame) -> None:
+        """
+        Apply preprocessing pipelines to features, target, and static data.
 
-        if "log_transform" in self.preprocessing_config["features"]:
-            log_features = self.preprocessing_config["features"]["log_transform"]
-            if log_features:
-                self.processed_time_series = apply_log_transform(
-                    self.processed_time_series,
-                    transform_cols=log_features,
-                    group_identifier=self.group_identifier,
+        The pipelines are fitted on training data only to prevent data leakage.
+        Fitted pipelines are stored for later use in inverse transformations.
+        """
+        # Process features
+        if "features" in self.preprocessing_config and self.features:
+            if self.target in self.features:
+                features_to_process = [f for f in self.features if f != self.target]
+
+            config = self.preprocessing_config["features"]
+            pipeline = clone(config["pipeline"])
+            pipeline.fit(train_df[features_to_process])
+            transformed = pipeline.transform(
+                self.processed_time_series[features_to_process]
+            )
+            self.processed_time_series[features_to_process] = transformed
+            self.fitted_pipelines["features"] = pipeline
+
+        # Process target - Convert Series to DataFrame
+        if "target" in self.preprocessing_config:
+            config = self.preprocessing_config["target"]
+            pipeline = clone(config["pipeline"])
+
+            target_df = train_df[
+                [self.target, self.group_identifier]
+            ]  # Create DataFrame with both columns
+            if isinstance(pipeline, GroupedTransformer):
+                pipeline.fit(target_df)
+                transformed = pipeline.transform(
+                    self.processed_time_series[[self.target, self.group_identifier]]
+                )
+            else:
+                pipeline.fit(train_df[[self.target]])
+                transformed = pipeline.transform(
+                    self.processed_time_series[[self.target]]
                 )
 
-        # Scale features using only training data
-        if self.features:
-            self.processed_time_series, self.scalers["features"] = scale_time_series(
-                df_full=self.processed_time_series,
-                df_train=train_df,
-                features=self.features,
-                by_group=self.preprocessing_config["features"]["scale_method"]
-                == "per_basin",
-                group_identifier=self.group_identifier,
-            )
+            self.processed_time_series[self.target] = transformed[self.target]
+            self.fitted_pipelines["target"] = pipeline
 
-        # Scale target separately if not in features
-        if self.target not in self.features:
-            self.processed_time_series, self.scalers["target"] = scale_time_series(
-                df_full=self.processed_time_series,
-                df_train=train_df,
-                features=[self.target],
-                by_group=self.preprocessing_config["target"]["scale_method"]
-                == "per_basin",
-                group_identifier=self.group_identifier,
-            )
-        else:
-            # Use feature scaler for target
-            full_scaler = self.scalers["features"]
-            self.scalers["target"] = ScalingParameters(
-                scalers={self.target: full_scaler.scalers[self.target]},
-                feature_names=[self.target],
-                group_ids=full_scaler.group_ids,
-            )
+        # Process static features
+        if (
+            "static_features" in self.preprocessing_config
+            and self.processed_static is not None
+            and self.static_features
+        ):
+            config = self.preprocessing_config["static_features"]
+            pipeline = clone(config["pipeline"])
 
-    def setup(self, stage: Optional[str] = None):
+            # Filter out group identifier from features to process
+            features_to_process = [
+                f for f in self.static_features if f != self.group_identifier
+            ]
+
+            if isinstance(pipeline, GroupedTransformer):
+                pipeline.fit(
+                    self.processed_static[features_to_process + [self.group_identifier]]
+                )
+                transformed = pipeline.transform(
+                    self.processed_static[features_to_process + [self.group_identifier]]
+                )
+                # For GroupedTransformer, select only the processed features
+                for col in features_to_process:
+                    self.processed_static[col] = transformed[col]
+            else:
+                pipeline.fit(self.processed_static[features_to_process])
+                transformed = pipeline.transform(
+                    self.processed_static[features_to_process]
+                )
+                # Handle case where transform returns numpy array
+                if isinstance(transformed, np.ndarray):
+                    for i, col in enumerate(features_to_process):
+                        self.processed_static[col] = transformed[:, i]
+                else:
+                    # Handle DataFrame/Series case
+                    for col in features_to_process:
+                        self.processed_static[col] = transformed[col]
+
+            self.fitted_pipelines["static"] = pipeline
+
+    def setup(self, stage: Optional[str] = None) -> None:
         """
-        Split data into train/val/test sets using valid periods from quality checks.
-        Creates HydroDataset instances for each split.
+        Create datasets for training, validation, and testing.
 
-        Args:
-            stage: Optional string specifying stage ('fit' or 'test')
+        This method is called by PyTorch Lightning to set up datasets
+        for each stage of training.
         """
         if not hasattr(self, "quality_report"):
             raise RuntimeError("Quality report not found. Did you run prepare_data()?")
 
-        train_data, val_data, test_data = [], [], []
-
-        # Calculate split dates and create datasets for each basin
-        for gauge_id, basin_data in self.processed_time_series.groupby(
-            self.group_identifier
-        ):
-            # Get valid period from quality report
-            periods = self.quality_report["valid_periods"][gauge_id]
-            valid_end = min(
-                period["end"]
-                for period in periods.values()
-                if period["end"] is not None
-            )
-
-            # Calculate split dates working backwards
-            test_start = valid_end - pd.Timedelta(days=int(self.test_years * 365.25))
-            val_start = test_start - pd.Timedelta(days=int(self.val_years * 365.25))
-
-            # Split the data
-            basin_data = basin_data.sort_values("date")
-            test_mask = basin_data["date"] >= test_start
-            val_mask = (basin_data["date"] >= val_start) & (
-                basin_data["date"] < test_start
-            )
-            train_mask = basin_data["date"] < val_start
-
-            train_data.append(basin_data[train_mask])
-            val_data.append(basin_data[val_mask])
-            test_data.append(basin_data[test_mask])
-
-        # Combine splits
-        train_df = (
-            pd.concat(train_data, ignore_index=True) if train_data else pd.DataFrame()
-        )
-        val_df = pd.concat(val_data, ignore_index=True) if val_data else pd.DataFrame()
-        test_df = (
-            pd.concat(test_data, ignore_index=True) if test_data else pd.DataFrame()
-        )
-
-        # Handle static data if provided
-        static_data = None
-        if self.processed_static is not None and not self.processed_static.empty:
-            if self.group_identifier not in self.processed_static.columns:
-                raise ValueError(
-                    f"'{self.group_identifier}' must be a column in processed_static"
-                )
-            remaining_basins = set(train_df[self.group_identifier].unique())
-            static_data = self.processed_static[
-                self.processed_static[self.group_identifier].isin(remaining_basins)
-            ]
+        # Split data
+        train_data, val_data, test_data = self._split_data()
 
         # Create datasets based on stage
         if stage == "fit" or stage is None:
             self.train_dataset = HydroDataset(
-                time_series_df=train_df,
-                static_df=static_data,
+                time_series_df=train_data,
+                static_df=self.processed_static,
                 input_length=self.input_length,
                 output_length=self.output_length,
                 features=self.features,
@@ -337,8 +352,8 @@ class HydroDataModule(pl.LightningDataModule):
             )
 
             self.val_dataset = HydroDataset(
-                time_series_df=val_df,
-                static_df=static_data,
+                time_series_df=val_data,
+                static_df=self.processed_static,
                 input_length=self.input_length,
                 output_length=self.output_length,
                 features=self.features,
@@ -349,8 +364,8 @@ class HydroDataModule(pl.LightningDataModule):
 
         if stage == "test" or stage is None:
             self.test_dataset = HydroDataset(
-                time_series_df=test_df,
-                static_df=static_data,
+                time_series_df=test_data,
+                static_df=self.processed_static,
                 input_length=self.input_length,
                 output_length=self.output_length,
                 features=self.features,
@@ -359,28 +374,51 @@ class HydroDataModule(pl.LightningDataModule):
                 group_identifier=self.group_identifier,
             )
 
-        # Print split info
-        print("\nData split summary:")
-        print(
-            f"Training: {len(train_df)} samples from {len(train_df[self.group_identifier].unique())} basins"
-        )
-        print(
-            f"Validation: {len(val_df)} samples from {len(val_df[self.group_identifier].unique())} basins"
-        )
-        print(
-            f"Testing: {len(test_df)} samples from {len(test_df[self.group_identifier].unique())} basins"
-        )
-
-    def train_dataloader(self) -> DataLoader:
+    def inverse_transform_predictions(
+        self,
+        predictions: np.ndarray,
+        basin_ids: np.ndarray,
+    ) -> np.ndarray:
         """
-        Create the training data loader.
+        Inverse transform predictions back to original scale.
+
+        Args:
+            predictions: Model predictions to inverse transform
+            basin_ids: Associated basin IDs for the predictions
 
         Returns:
-            DataLoader configured for training data
+            Array of inverse-transformed predictions
         """
-        if self.train_dataset is None:
-            raise RuntimeError("Train dataset not created. Did you run setup()?")
+        if "target" not in self.fitted_pipelines:
+            raise ValueError("Target pipeline not found - did you run prepare_data()?")
 
+        # Ensure predictions and basin_ids are numpy arrays
+        predictions = np.asarray(predictions)
+        basin_ids = np.asarray(basin_ids)
+
+        # Create DataFrame with target and group identifier columns
+        df_pred = pd.DataFrame(
+            {self.group_identifier: basin_ids, self.target: predictions.flatten()}
+        )
+
+        # Get unique basin IDs to validate
+        unique_basins = np.unique(basin_ids)
+        missing_basins = []
+        for basin in unique_basins:
+            if basin not in self.fitted_pipelines["target"].fitted_pipelines:
+                missing_basins.append(basin)
+
+        if missing_basins:
+            raise ValueError(f"No fitted pipeline found for basins: {missing_basins}")
+
+        # Use fitted pipeline for inverse transform
+        target_pipeline = self.fitted_pipelines["target"]
+        df_inverse = target_pipeline.inverse_transform(df_pred)
+
+        return df_inverse[self.target].values
+
+    def train_dataloader(self) -> DataLoader:
+        """Create the training data loader."""
         return DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
@@ -391,88 +429,30 @@ class HydroDataModule(pl.LightningDataModule):
         )
 
     def val_dataloader(self) -> DataLoader:
-        """
-        Create the validation data loader.
-
-        Returns:
-            DataLoader configured for validation data
-        """
-        if self.val_dataset is None:
-            raise RuntimeError("Validation dataset not created. Did you run setup()?")
-
+        """Create the validation data loader."""
         return DataLoader(
             self.val_dataset,
             batch_size=self.batch_size,
-            shuffle=False,  # No need to shuffle validation data
+            shuffle=False,
             num_workers=self.num_workers,
             pin_memory=True,
             persistent_workers=True,
         )
 
     def test_dataloader(self) -> DataLoader:
-        """
-        Create the test data loader.
-
-        Returns:
-            DataLoader configured for test data
-        """
-        if self.test_dataset is None:
-            raise RuntimeError("Test dataset not created. Did you run setup()?")
-
+        """Create the test data loader."""
         return DataLoader(
             self.test_dataset,
             batch_size=self.batch_size,
-            shuffle=False,  # No need to shuffle test data
+            shuffle=False,
             num_workers=self.num_workers,
             pin_memory=True,
             persistent_workers=True,
         )
 
-    def inverse_transform_predictions(
-        self,
-        predictions: np.ndarray,
-        basin_ids: np.ndarray,
-    ) -> np.ndarray:
-        # Build dataframe with target and gauge_id columns
-        df_pred = pd.DataFrame(
-            {self.target: predictions.flatten(), self.group_identifier: basin_ids}
-        )
-        # Get target scaler parameters
-        target_scalers = self.scalers["target"]
-
-        # Inverse scale the target column
-        inv_scaled = inverse_scale_time_series(
-            df=df_pred,
-            scaling_params=target_scalers,
-            group_identifier=self.group_identifier,
-        )
-
-        # Reverse log transform if needed
-        if self.preprocessing_config["target"]["log_transform"]:
-            inv_scaled = reverse_log_transform(
-                df=inv_scaled,
-                transform_cols=[self.target],
-                group_identifier=self.group_identifier,
-            )
-
-        return inv_scaled[self.target].values
-
-    def get_scalers(self):
-        """Return the scalers used for preprocessing"""
-        return self.scalers
-
-    def get_preprocessing_config(self):
-        """Return the preprocessing configuration"""
-        return self.preprocessing_config
-
-    def get_training_periods(self, df: pd.DataFrame, train_years: int) -> pd.DataFrame:
-        """Get training periods for all basins based on first train_years."""
-        train_data = []
-
-        for gauge_id, basin_data in df.groupby(self.group_identifier):
-            basin_data = basin_data.sort_values("date")
-            start_date = basin_data["date"].min()
-            train_end = start_date + pd.DateOffset(years=train_years)
-            train_data.append(basin_data[basin_data["date"] < train_end])
-
-        return pd.concat(train_data)
+    def save_preprocessing_report(self) -> None:
+        """Save data quality report and preprocessing configuration."""
+        self.preprocessing_state = {
+            "quality_report": self.quality_report,
+            "config": self.preprocessing_config,
+        }

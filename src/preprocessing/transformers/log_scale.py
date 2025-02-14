@@ -1,100 +1,78 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 import numpy as np
 import pandas as pd
 from ..base import HydroTransformer
 
 
 class LogTransformer(HydroTransformer):
-    """Applies log1p transform to specified columns, handling negative values.
-
-    For each column, computes y = log1p(x + offset), where offset is computed
-    to ensure all values are positive before transformation.
-
-    Args:
-        columns: List of column names to transform
-        epsilon: Small constant added for numerical stability
-
-    Attributes:
-        _fitted_state: Stores offset values per column needed for inverse transform
-    """
-
-    def __init__(self, columns: List[str], epsilon: float = 1e-8):
-        super().__init__(columns)
+    def __init__(self, epsilon: float = 1e-3):
         self.epsilon = epsilon
+        self._fitted_state = {}
+        self._feature_names = None
 
-    def fit(self, X: pd.DataFrame, y: Optional[pd.Series] = None) -> "LogTransformer":
-        """Compute offset for each column based on minimum values.
-
-        Args:
-            X: Input features
-            y: Ignored, included for sklearn compatibility
-
-        Returns:
-            self
-
-        Raises:
-            ValueError: If any specified columns are missing from X
-        """
-        super().fit(X)
-
-        # Calculate offsets per column to handle negative values
+    def fit(
+        self, X: Union[pd.DataFrame, np.ndarray], y: Optional[pd.Series] = None
+    ) -> "LogTransformer":
         self._fitted_state["offsets"] = {}
-        for col in self.columns:
-            min_val = X[col].min()
-            # Only add offset if we have negative values
-            if min_val < 0:
-                self._fitted_state["offsets"][col] = abs(min_val) + self.epsilon
-            else:
-                self._fitted_state["offsets"][col] = 0
+
+        if isinstance(X, pd.DataFrame):
+            self._feature_names = X.columns.tolist()
+            for col_idx, col in enumerate(self._feature_names):
+                min_val = X[col].min()
+                self._fitted_state["offsets"][col_idx] = (
+                    abs(min_val) + self.epsilon if min_val < 0 else 0
+                )
+        else:
+            self._feature_names = [f"feature_{i}" for i in range(X.shape[1])]
+            for col_idx in range(X.shape[1]):
+                min_val = X[:, col_idx].min()
+                self._fitted_state["offsets"][col_idx] = (
+                    abs(min_val) + self.epsilon if min_val < 0 else 0
+                )
 
         return self
 
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Apply log1p transform with computed offsets.
-
-        Args:
-            X: Input features
-
-        Returns:
-            DataFrame with transformed values
-
-        Raises:
-            ValueError: If transform is called before fit or columns are missing
-        """
+    def transform(
+        self, X: Union[pd.DataFrame, np.ndarray]
+    ) -> Union[pd.DataFrame, np.ndarray]:
         if not self._fitted_state:
             raise ValueError("Transformer must be fitted before calling transform")
 
-        super().transform(X)
-        X_transformed = X.copy()
+        if isinstance(X, pd.DataFrame):
+            X_transformed = X.copy()
+            for col_idx, col in enumerate(X.columns):
+                offset = self._fitted_state["offsets"][col_idx]
+                X_transformed[col] = np.log1p(X[col] + offset)
+            return X_transformed
+        else:
+            X_transformed = X.copy()
+            for col_idx in range(X.shape[1]):
+                offset = self._fitted_state["offsets"][col_idx]
+                X_transformed[:, col_idx] = np.log1p(X[:, col_idx] + offset)
+            return X_transformed
 
-        for col in self.columns:
-            offset = self._fitted_state["offsets"][col]
-            X_transformed[col] = np.log1p(X[col] + offset)
-
-        return X_transformed
-
-    def inverse_transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Reverse the log transform using stored offsets.
-
-        Args:
-            X: Input features
-
-        Returns:
-            DataFrame with original scale values
-
-        Raises:
-            ValueError: If inverse_transform is called before fit or columns are missing
-        """
+    def inverse_transform(
+        self, X: Union[pd.DataFrame, np.ndarray]
+    ) -> Union[pd.DataFrame, np.ndarray]:
         if not self._fitted_state:
             raise ValueError(
                 "Transformer must be fitted before calling inverse_transform"
             )
 
-        super().inverse_transform(X)
-        X_inverse = X.copy()
+        if isinstance(X, pd.DataFrame):
+            X_inverse = X.copy()
+            for col_idx, col in enumerate(X.columns):
+                offset = self._fitted_state["offsets"][col_idx]
+                X_inverse[col] = np.expm1(X[col]) - offset
+            return X_inverse
+        else:
+            X_inverse = X.copy()
+            for col_idx in range(X.shape[1]):
+                offset = self._fitted_state["offsets"][col_idx]
+                X_inverse[:, col_idx] = np.expm1(X[:, col_idx]) - offset
+            return X_inverse
 
-        for col in self.columns:
-            offset = self._fitted_state["offsets"][col]
-            X_inverse[col] = np.expm1(X[col]) - offset
-
-        return X_inverse
+    def get_feature_names_out(self) -> List[str]:
+        if self._feature_names is None:
+            raise ValueError("Transformer must be fitted before getting feature names")
+        return self._feature_names

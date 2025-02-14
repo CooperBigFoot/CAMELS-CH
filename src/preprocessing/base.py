@@ -6,26 +6,17 @@ from sklearn.base import BaseEstimator, TransformerMixin
 class HydroTransformer(BaseEstimator, TransformerMixin):
     """Base class for all hydrological transformers."""
 
-    def __init__(self, columns: List[str], **kwargs):
-        self.columns = columns
+    def __init__(self, **kwargs):
         self.kwargs = kwargs
         self._fitted_state = {}
 
     def fit(self, X: pd.DataFrame, y: Optional[pd.Series] = None) -> "HydroTransformer":
         """Fit transformer to specified columns."""
-        # Validate columns exist in data
-        missing_cols = [col for col in self.columns if col not in X.columns]
-        if missing_cols:
-            raise ValueError(f"Columns not found in data: {missing_cols}")
         return self
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         """Transform specified columns."""
         # Validate columns exist in data
-        missing_cols = [col for col in self.columns if col not in X.columns]
-        if missing_cols:
-            raise ValueError(f"Columns not found in data: {missing_cols}")
-        return X
 
     def inverse_transform(self, X: pd.DataFrame) -> pd.DataFrame:
         """Inverse transform specified columns."""
