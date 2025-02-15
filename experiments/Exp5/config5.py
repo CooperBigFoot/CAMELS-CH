@@ -10,7 +10,7 @@ class ExperimentConfig:
     # Base configuration
     GROUP_IDENTIFIER: str = "gauge_id"
     BATCH_SIZE: int = 128
-    INPUT_LENGTH: int = 270
+    INPUT_LENGTH: int = 100
     OUTPUT_LENGTH: int = 10
     MAX_EPOCHS: int = 15
     ACCELERATOR: str = "cuda"
