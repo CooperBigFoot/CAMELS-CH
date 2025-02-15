@@ -192,7 +192,11 @@ class HydroDataModule(pl.LightningDataModule):
             raise ValueError("No basins passed quality checks")
 
         self.quality_report = quality_report
-        self.processed_time_series = filtered_df
+
+        print(f"Original basins: {self.quality_report['original_basins']}")
+        print(f"Retained basins: {self.quality_report['retained_basins']}")
+
+        self.processed_time_series = filtered_df.copy()
 
         # Process static data if provided
         if self.static_df is not None and self.static_features:
@@ -251,37 +255,44 @@ class HydroDataModule(pl.LightningDataModule):
         """
         # Process features
         if "features" in self.preprocessing_config and self.features:
-            if self.target in self.features:
-                features_to_process = [f for f in self.features if f != self.target]
+            # Remove target from features list if present
+            features_to_process = [f for f in self.features if f != self.target]
 
             config = self.preprocessing_config["features"]
             pipeline = clone(config["pipeline"])
-            pipeline.fit(train_df[features_to_process])
-            transformed = pipeline.transform(
-                self.processed_time_series[features_to_process]
-            )
-            self.processed_time_series[features_to_process] = transformed
+
+            # Create DataFrame with features and group identifier
+            train_features = train_df[features_to_process + [self.group_identifier]]
+            all_features = self.processed_time_series[
+                features_to_process + [self.group_identifier]
+            ]
+
+            # Fit and transform
+            pipeline.fit(train_features)
+            transformed = pipeline.transform(all_features)
+
+            # Update only the feature columns in processed_time_series
+            for col in features_to_process:
+                self.processed_time_series[col] = transformed[col]
+
             self.fitted_pipelines["features"] = pipeline
 
-        # Process target - Convert Series to DataFrame
+        # Process target
         if "target" in self.preprocessing_config:
             config = self.preprocessing_config["target"]
             pipeline = clone(config["pipeline"])
 
-            target_df = train_df[
+            # Create DataFrame with target and group identifier
+            train_target = train_df[[self.target, self.group_identifier]]
+            all_target = self.processed_time_series[
                 [self.target, self.group_identifier]
-            ]  # Create DataFrame with both columns
-            if isinstance(pipeline, GroupedTransformer):
-                pipeline.fit(target_df)
-                transformed = pipeline.transform(
-                    self.processed_time_series[[self.target, self.group_identifier]]
-                )
-            else:
-                pipeline.fit(train_df[[self.target]])
-                transformed = pipeline.transform(
-                    self.processed_time_series[[self.target]]
-                )
+            ]
 
+            # Fit and transform
+            pipeline.fit(train_target)
+            transformed = pipeline.transform(all_target)
+
+            # Update target column in processed_time_series
             self.processed_time_series[self.target] = transformed[self.target]
             self.fitted_pipelines["target"] = pipeline
 
@@ -291,6 +302,7 @@ class HydroDataModule(pl.LightningDataModule):
             and self.processed_static is not None
             and self.static_features
         ):
+
             config = self.preprocessing_config["static_features"]
             pipeline = clone(config["pipeline"])
 
@@ -300,20 +312,20 @@ class HydroDataModule(pl.LightningDataModule):
             ]
 
             if isinstance(pipeline, GroupedTransformer):
-                pipeline.fit(
-                    self.processed_static[features_to_process + [self.group_identifier]]
-                )
-                transformed = pipeline.transform(
-                    self.processed_static[features_to_process + [self.group_identifier]]
-                )
-                # For GroupedTransformer, select only the processed features
+                static_data = self.processed_static[
+                    features_to_process + [self.group_identifier]
+                ]
+                pipeline.fit(static_data)
+                transformed = pipeline.transform(static_data)
+
+                # Update static features columns
                 for col in features_to_process:
                     self.processed_static[col] = transformed[col]
             else:
-                pipeline.fit(self.processed_static[features_to_process])
-                transformed = pipeline.transform(
-                    self.processed_static[features_to_process]
-                )
+                static_data = self.processed_static[features_to_process]
+                pipeline.fit(static_data)
+                transformed = pipeline.transform(static_data)
+
                 # Handle case where transform returns numpy array
                 if isinstance(transformed, np.ndarray):
                     for i, col in enumerate(features_to_process):
