@@ -121,18 +121,14 @@ class ExperimentConfig:
 
         # Create preprocessing pipelines with domain-specific parameters
         from sklearn.pipeline import Pipeline
-        from src.preprocessing.transformers.log_scale import (
+        from src.preprocessing.transformers import (
             LogTransformer,
             GroupedTransformer,
         )
-        from scikit_learning.preprocessing import StandardScaler
+        from sklearn.preprocessing import StandardScaler
 
         # Use GroupedTransformer for both features and target
-        feature_pipeline = GroupedTransformer(
-            Pipeline([("log", LogTransformer()), ("scaler", StandardScaler())]),
-            columns=self.FORCING_FEATURES,
-            group_identifier=self.GROUP_IDENTIFIER,
-        )
+        feature_pipeline = (Pipeline([("scaler", StandardScaler())]),)
 
         target_pipeline = GroupedTransformer(
             Pipeline([("log", LogTransformer()), ("scaler", StandardScaler())]),
