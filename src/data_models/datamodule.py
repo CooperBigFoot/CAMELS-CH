@@ -261,39 +261,51 @@ class HydroDataModule(pl.LightningDataModule):
             config = self.preprocessing_config["features"]
             pipeline = clone(config["pipeline"])
 
-            # Create DataFrame with features and group identifier
-            train_features = train_df[features_to_process + [self.group_identifier]]
+            # Only pass numeric features to the pipeline, not the group identifier
+            train_features = train_df[features_to_process]  # Remove group_identifier
             all_features = self.processed_time_series[
-                features_to_process + [self.group_identifier]
-            ]
+                features_to_process
+            ]  # Remove group_identifier
 
             # Fit and transform
             pipeline.fit(train_features)
             transformed = pipeline.transform(all_features)
 
             # Update only the feature columns in processed_time_series
-            for col in features_to_process:
-                self.processed_time_series[col] = transformed[col]
+            if isinstance(transformed, np.ndarray):
+                for i, col in enumerate(features_to_process):
+                    self.processed_time_series[col] = transformed[:, i]
+            else:
+                for col in features_to_process:
+                    self.processed_time_series[col] = transformed[col]
 
             self.fitted_pipelines["features"] = pipeline
 
-        # Process target
+        # Process target - similar change needed
         if "target" in self.preprocessing_config:
             config = self.preprocessing_config["target"]
             pipeline = clone(config["pipeline"])
 
-            # Create DataFrame with target and group identifier
-            train_target = train_df[[self.target, self.group_identifier]]
-            all_target = self.processed_time_series[
-                [self.target, self.group_identifier]
-            ]
+            if isinstance(pipeline, GroupedTransformer):
+                # GroupedTransformer needs the group_identifier
+                train_target = train_df[[self.target, self.group_identifier]]
+                all_target = self.processed_time_series[
+                    [self.target, self.group_identifier]
+                ]
+            else:
+                # Regular pipeline only gets the target column
+                train_target = train_df[[self.target]]
+                all_target = self.processed_time_series[[self.target]]
 
-            # Fit and transform
             pipeline.fit(train_target)
             transformed = pipeline.transform(all_target)
 
             # Update target column in processed_time_series
-            self.processed_time_series[self.target] = transformed[self.target]
+            if isinstance(transformed, np.ndarray):
+                self.processed_time_series[self.target] = transformed[:, 0]
+            else:
+                self.processed_time_series[self.target] = transformed[self.target]
+
             self.fitted_pipelines["target"] = pipeline
 
         # Process static features
