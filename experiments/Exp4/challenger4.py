@@ -1,5 +1,8 @@
 import sys
 from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+
 import gc
 import torch
 import pytorch_lightning as pl
@@ -80,6 +83,7 @@ class ExperimentRunner:
         ]
         self.ca_static_data = self.ca_caravan.get_static_attributes()[static_columns]
 
+
     def run_experiment(self):
         """Run the complete experiment with multiple runs."""
         all_results = []
@@ -89,13 +93,19 @@ class ExperimentRunner:
                 print(f"\nStarting run {run}...")
                 self.config.set_seed(run)
                 run_results = self.run_single_experiment(run)
-                all_results.append(run_results)
+                if run_results is not None:
+                    all_results.append(run_results)
+                    print(f"Successfully completed run {run}")
+                else:
+                    print(f"Run {run} failed to produce results")
 
                 # Clean up after each run
                 self.cleanup()
 
             except Exception as e:
                 print(f"Error in run {run}: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 continue
 
         # Aggregate results across runs
@@ -124,11 +134,11 @@ class ExperimentRunner:
         # Evaluate
         return self.evaluate_model(finetune_model, ca_data_module, run)
 
-    def create_data_module(
-        self, ts_data, static_data, preprocessing_configs, is_source
-    ):
+    def create_data_module(self, ts_data, static_data, preprocessing_configs, is_source: bool):
         """Create a data module with appropriate configuration."""
-        config_key = "CH_CONFIG" if is_source else "CA_CONFIG"
+        # Get the appropriate domain config using dot notation
+        domain_config = self.config.CH_CONFIG if is_source else self.config.CA_CONFIG
+        
         return HydroDataModule(
             time_series_df=ts_data,
             static_df=static_data,
@@ -141,10 +151,10 @@ class ExperimentRunner:
             features=self.config.FORCING_FEATURES + [self.config.TARGET],
             static_features=self.config.STATIC_FEATURES,
             target=self.config.TARGET,
-            min_train_years=self.config[config_key]["MIN_TRAIN_YEARS"],
-            val_years=self.config[config_key]["VAL_YEARS"],
-            test_years=self.config[config_key]["TEST_YEARS"],
-            max_missing_pct=self.config[config_key]["MAX_MISSING_PCT"],
+            min_train_years=domain_config["MIN_TRAIN_YEARS"],
+            val_years=domain_config["VAL_YEARS"],
+            test_years=domain_config["TEST_YEARS"],
+            max_missing_pct=domain_config["MAX_MISSING_PCT"],
         )
 
     def run_pretraining(self, data_module, run):
@@ -257,19 +267,30 @@ class ExperimentRunner:
 
     def save_aggregated_results(self, all_results):
         """Save aggregated results across all runs."""
-        # Combine overall metrics across runs
-        overall_metrics_df = pd.concat(
-            [
+        if not all_results:
+            print("Warning: No results to aggregate - all runs failed")
+            return
+
+        try:
+            # Combine overall metrics across runs
+            overall_metrics_df = pd.concat([
                 pd.DataFrame(run["overall_metrics"]).assign(run=i)
                 for i, run in enumerate(all_results)
-            ]
-        )
+                if run is not None and "overall_metrics" in run
+            ])
 
-        # Calculate and save summary statistics
-        summary_stats = overall_metrics_df.groupby(level=0).agg(
-            ["mean", "std", "min", "max"]
-        )
-        summary_stats.to_csv(self.results_dir / "challenger_aggregate_metrics.csv")
+            if overall_metrics_df.empty:
+                print("Warning: No valid metrics to aggregate")
+                return
+
+            # Calculate and save summary statistics
+            summary_stats = overall_metrics_df.groupby(level=0).agg(['mean', 'std', 'min', 'max'])
+            summary_stats.to_csv(self.results_dir / "challenger_aggregate_metrics.csv")
+            
+            print(f"Successfully saved aggregate metrics for {len(all_results)} runs")
+            
+        except Exception as e:
+            print(f"Error while saving aggregated results: {str(e)}")
 
 
 if __name__ == "__main__":

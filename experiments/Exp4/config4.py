@@ -15,7 +15,7 @@ class ExperimentConfig:
     MAX_EPOCHS: int = 15
     ACCELERATOR: str = "cuda"
     NUM_RUNS: int = 5
-    MAX_WORKERS: int = 4  # Limit worker count
+    MAX_WORKERS: int = 4  
 
     # Learning rates with scheduling
     PRETRAIN_LR: float = 1e-3
@@ -128,7 +128,7 @@ class ExperimentConfig:
         from sklearn.preprocessing import StandardScaler
 
         # Use GroupedTransformer for both features and target
-        feature_pipeline = (Pipeline([("scaler", StandardScaler())]),)
+        feature_pipeline = Pipeline([("scaler", StandardScaler())])
 
         target_pipeline = GroupedTransformer(
             Pipeline([("log", LogTransformer()), ("scaler", StandardScaler())]),
