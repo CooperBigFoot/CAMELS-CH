@@ -15,11 +15,11 @@ class ExperimentConfig:
     MAX_EPOCHS: int = 15
     ACCELERATOR: str = "cuda"
     NUM_RUNS: int = 5
-    MAX_WORKERS: int = 4  
+    MAX_WORKERS: int = 4
 
     # Learning rates with scheduling
-    PRETRAIN_LR: float = 1e-3
-    FINETUNE_LR: float = 1e-4
+    PRETRAIN_LR: float = 3e-4
+    FINETUNE_LR: float = 1e-5
     LR_SCHEDULER_PATIENCE: int = 3
     LR_SCHEDULER_FACTOR: float = 0.5
 
@@ -72,6 +72,9 @@ class ExperimentConfig:
             "VAL_YEARS": 2,
             "TEST_YEARS": 3,
             "MAX_MISSING_PCT": 10,
+            "BATCH_SIZE": 188,
+            "INPUT_LENGTH": 227,
+            "HIDDEN_SIZE": 35,
         }
 
         # Switzerland configuration
@@ -83,6 +86,9 @@ class ExperimentConfig:
             "VAL_YEARS": 10,
             "TEST_YEARS": 0,
             "MAX_MISSING_PCT": 10,
+            "BATCH_SIZE": 74,
+            "INPUT_LENGTH": 279,
+            "HIDDEN_SIZE": 254,
         }
 
         # Validate configuration

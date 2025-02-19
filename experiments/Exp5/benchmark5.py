@@ -98,8 +98,8 @@ class BenchmarkRunner:
             static_df=self.ca_static_data,
             group_identifier=self.config.GROUP_IDENTIFIER,
             preprocessing_config=preprocessing_configs,
-            batch_size=self.config.BATCH_SIZE,
-            input_length=self.config.INPUT_LENGTH,
+            batch_size=self.config.CA_CONFIG["BATCH_SIZE"],
+            input_length=self.config.CA_CONFIG["INPUT_LENGTH"],
             output_length=self.config.OUTPUT_LENGTH,
             num_workers=min(self.config.MAX_WORKERS, multiprocessing.cpu_count()),
             features=self.config.FORCING_FEATURES + [self.config.TARGET],
@@ -124,7 +124,7 @@ class BenchmarkRunner:
             input_size=len(self.config.FORCING_FEATURES) + 1,  # +1 for target
             static_size=len(self.config.STATIC_FEATURES) - 1,  # -1 for gauge_id
             hidden_size=self.config.HIDDEN_SIZE,
-            learning_rate=self.config.PRETRAIN_LR,  # Using PRETRAIN_LR for direct training
+            learning_rate=self.config.PRETRAIN_LR, 
         )
 
         trainer = self.create_trainer("train", run)
