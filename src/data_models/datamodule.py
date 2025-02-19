@@ -1,8 +1,10 @@
-from typing import Dict, List, Union, Optional
+import math
+from typing import Optional, Dict, Union, List
+from lightning.pytorch.utilities.combined_loader import CombinedLoader
 import pandas as pd
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, IterableDataset
 import pytorch_lightning as pl
 from sklearn.base import clone
 from sklearn.pipeline import Pipeline
@@ -32,7 +34,8 @@ class HydroDataModule(pl.LightningDataModule):
         num_workers: int = 4,
         features: List[str] = None,
         static_features: List[str] = None,
-        target: str = "discharge_spec",
+        target: str = "streamflow",
+        domain_id: Union[str, int] = "training",
         min_train_years: int = 10,
         val_years: int = 1,
         test_years: int = 2,
@@ -56,6 +59,7 @@ class HydroDataModule(pl.LightningDataModule):
         self.features = features if features else []
         self.static_features = static_features if static_features else []
         self.target = target
+        self.domain_id = domain_id
 
         # Store quality check parameters
         self.min_train_years = min_train_years
@@ -65,9 +69,9 @@ class HydroDataModule(pl.LightningDataModule):
         self.max_gap_length = max_gap_length
 
         # Initialize storage attributes
-        self.train_dataset = None
-        self.val_dataset = None
-        self.test_dataset = None
+        self._train_dataset = None
+        self._val_dataset = None
+        self._test_dataset = None
         self.quality_report = None
         self.processed_static = None
         self.processed_time_series = None
@@ -128,7 +132,8 @@ class HydroDataModule(pl.LightningDataModule):
 
         for _, transformer in pipeline.steps:
             required_methods = ["fit", "transform", "inverse_transform"]
-            missing = [m for m in required_methods if not hasattr(transformer, m)]
+            missing = [
+                m for m in required_methods if not hasattr(transformer, m)]
             if missing:
                 raise ValueError(
                     f"Transformer {transformer.__class__.__name__} "
@@ -166,7 +171,8 @@ class HydroDataModule(pl.LightningDataModule):
                 )
 
         if self.target not in self.time_series_df.columns:
-            raise ValueError(f"Target {self.target} not found in time series data")
+            raise ValueError(
+                f"Target {self.target} not found in time series data")
 
     def prepare_data(self) -> None:
         """
@@ -226,8 +232,10 @@ class HydroDataModule(pl.LightningDataModule):
                 period["end"] for period in periods.values() if period["end"]
             )
 
-            test_start = valid_end - pd.Timedelta(days=int(self.test_years * 365.25))
-            val_start = test_start - pd.Timedelta(days=int(self.val_years * 365.25))
+            test_start = valid_end - \
+                pd.Timedelta(days=int(self.test_years * 365.25))
+            val_start = test_start - \
+                pd.Timedelta(days=int(self.val_years * 365.25))
 
             basin_data = basin_data.sort_values("date")
             test_mask = basin_data["date"] >= test_start
@@ -256,13 +264,15 @@ class HydroDataModule(pl.LightningDataModule):
         # Process features
         if "features" in self.preprocessing_config and self.features:
             # Remove target from features list if present
-            features_to_process = [f for f in self.features if f != self.target]
+            features_to_process = [
+                f for f in self.features if f != self.target]
 
             config = self.preprocessing_config["features"]
             pipeline = clone(config["pipeline"])
 
             # Only pass numeric features to the pipeline, not the group identifier
-            train_features = train_df[features_to_process]  # Remove group_identifier
+            # Remove group_identifier
+            train_features = train_df[features_to_process]
             all_features = self.processed_time_series[
                 features_to_process
             ]  # Remove group_identifier
@@ -357,14 +367,15 @@ class HydroDataModule(pl.LightningDataModule):
         for each stage of training.
         """
         if not hasattr(self, "quality_report"):
-            raise RuntimeError("Quality report not found. Did you run prepare_data()?")
+            raise RuntimeError(
+                "Quality report not found. Did you run prepare_data()?")
 
         # Split data
         train_data, val_data, test_data = self._split_data()
 
         # Create datasets based on stage
         if stage == "fit" or stage is None:
-            self.train_dataset = HydroDataset(
+            self._train_dataset = HydroDataset(
                 time_series_df=train_data,
                 static_df=self.processed_static,
                 input_length=self.input_length,
@@ -373,9 +384,10 @@ class HydroDataModule(pl.LightningDataModule):
                 target=self.target,
                 static_features=self.static_features,
                 group_identifier=self.group_identifier,
+                domain_id=self.domain_id,
             )
 
-            self.val_dataset = HydroDataset(
+            self._val_dataset = HydroDataset(
                 time_series_df=val_data,
                 static_df=self.processed_static,
                 input_length=self.input_length,
@@ -384,10 +396,11 @@ class HydroDataModule(pl.LightningDataModule):
                 target=self.target,
                 static_features=self.static_features,
                 group_identifier=self.group_identifier,
+                domain_id=self.domain_id,
             )
 
         if stage == "test" or stage is None:
-            self.test_dataset = HydroDataset(
+            self._test_dataset = HydroDataset(
                 time_series_df=test_data,
                 static_df=self.processed_static,
                 input_length=self.input_length,
@@ -396,6 +409,7 @@ class HydroDataModule(pl.LightningDataModule):
                 target=self.target,
                 static_features=self.static_features,
                 group_identifier=self.group_identifier,
+                domain_id=self.domain_id,
             )
 
     def inverse_transform_predictions(
@@ -414,7 +428,8 @@ class HydroDataModule(pl.LightningDataModule):
             Array of inverse-transformed predictions
         """
         if "target" not in self.fitted_pipelines:
-            raise ValueError("Target pipeline not found - did you run prepare_data()?")
+            raise ValueError(
+                "Target pipeline not found - did you run prepare_data()?")
 
         # Ensure predictions and basin_ids are numpy arrays
         predictions = np.asarray(predictions)
@@ -433,7 +448,8 @@ class HydroDataModule(pl.LightningDataModule):
                 missing_basins.append(basin)
 
         if missing_basins:
-            raise ValueError(f"No fitted pipeline found for basins: {missing_basins}")
+            raise ValueError(
+                f"No fitted pipeline found for basins: {missing_basins}")
 
         # Use fitted pipeline for inverse transform
         target_pipeline = self.fitted_pipelines["target"]
@@ -444,7 +460,7 @@ class HydroDataModule(pl.LightningDataModule):
     def train_dataloader(self) -> DataLoader:
         """Create the training data loader."""
         return DataLoader(
-            self.train_dataset,
+            self._train_dataset,
             batch_size=self.batch_size,
             shuffle=True,
             num_workers=self.num_workers,
@@ -455,7 +471,7 @@ class HydroDataModule(pl.LightningDataModule):
     def val_dataloader(self) -> DataLoader:
         """Create the validation data loader."""
         return DataLoader(
-            self.val_dataset,
+            self._val_dataset,
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=self.num_workers,
@@ -466,7 +482,7 @@ class HydroDataModule(pl.LightningDataModule):
     def test_dataloader(self) -> DataLoader:
         """Create the test data loader."""
         return DataLoader(
-            self.test_dataset,
+            self._test_dataset,
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=self.num_workers,
@@ -480,3 +496,188 @@ class HydroDataModule(pl.LightningDataModule):
             "quality_report": self.quality_report,
             "config": self.preprocessing_config,
         }
+
+    # Protected properties to access datasets. I do not want to expose them (shitty stuff happens if I do)
+    @property
+    def train_dataset(self) -> HydroDataset:
+        """Get the training dataset."""
+        return self._train_dataset
+
+    @property
+    def val_dataset(self) -> HydroDataset:
+        """Get the validation dataset."""
+        return self._val_dataset
+
+    @property
+    def test_dataset(self) -> HydroDataset:
+        """Get the test dataset."""
+        return self._test_dataset
+
+
+class HydroTransferDataModule(pl.LightningDataModule):
+    """DataModule for transfer learning with batch mixing strategy."""
+
+    def __init__(
+        self,
+        source_datamodule: HydroDataModule,
+        target_datamodule: HydroDataModule,
+        num_workers: int = 4,
+    ):
+        super().__init__()
+        # Validate input types
+        if not isinstance(source_datamodule, HydroDataModule):
+            raise TypeError(
+                "source_datamodule must be a HydroDataModule instance")
+        if not isinstance(target_datamodule, HydroDataModule):
+            raise TypeError(
+                "target_datamodule must be a HydroDataModule instance")
+        # Ensure batch sizes match
+        if source_datamodule.batch_size != target_datamodule.batch_size:
+            raise ValueError(
+                f"Source batch_size ({source_datamodule.batch_size}) must match target batch_size ({target_datamodule.batch_size})"
+            )
+
+        self.source_dm = source_datamodule
+        self.target_dm = target_datamodule
+        self.batch_size = source_datamodule.batch_size
+        self.num_workers = num_workers
+
+    def train_dataloader(self) -> DataLoader:
+
+        # Verify that the datasets are not empty
+        if len(self.source_dm.train_dataset) == 0:
+            raise ValueError("Source training dataset is empty")
+        if len(self.target_dm.train_dataset) == 0:
+            raise ValueError("Target training dataset is empty")
+
+        mixing_dataset = MixingDataset(
+            self.source_dm.train_dataset,
+            self.target_dm.train_dataset,
+            self.batch_size
+        )
+
+        return DataLoader(
+            mixing_dataset,
+            batch_size=None,
+            num_workers=self.num_workers,
+            pin_memory=True,
+            persistent_workers=self.num_workers > 0,
+        )
+
+    def val_dataloader(self) -> DataLoader:
+
+        # Verify that the datasets are not empty
+        if len(self.source_dm.val_dataset) == 0:
+            raise ValueError("Source validation dataset is empty")
+        if len(self.target_dm.val_dataset) == 0:
+            raise ValueError("Target validation dataset is empty")
+
+        mixing_dataset = MixingDataset(
+            self.source_dm.val_dataset,
+            self.target_dm.val_dataset,
+            self.batch_size
+        )
+
+        return DataLoader(
+            mixing_dataset,
+            batch_size=None,
+            num_workers=self.num_workers,
+            pin_memory=True,
+            persistent_workers=self.num_workers > 0,
+        )
+
+    def test_dataloader(self) -> DataLoader:
+
+        # Verify that the datasets are not empty
+        if len(self.source_dm.test_dataset) == 0:
+            raise ValueError("Source test dataset is empty")
+        if len(self.target_dm.test_dataset) == 0:
+            raise ValueError("Target test dataset is empty")
+
+        mixing_dataset = MixingDataset(
+            self.source_dm.test_dataset,
+            self.target_dm.test_dataset,
+            self.batch_size
+        )
+
+        return DataLoader(
+            mixing_dataset,
+            batch_size=None,
+            num_workers=self.num_workers,
+            pin_memory=True,
+            persistent_workers=self.num_workers > 0,
+        )
+
+
+class MixingDataset(IterableDataset):
+    """Custom IterableDataset to mix batches from two DataLoaders."""
+
+    def __init__(self, source_dataset, target_dataset, batch_size: int):
+        self.source_dataset = source_dataset
+        self.target_dataset = target_dataset
+        self.batch_size = batch_size
+
+    def _mix_batch_elements(self, elem1, elem2):
+        """Handle different types of batch elements during concatenation."""
+        if isinstance(elem1, torch.Tensor):
+            return torch.cat([elem1, elem2], dim=0)
+        elif isinstance(elem1, list):
+            return elem1 + elem2  # Concatenate lists
+        elif isinstance(elem1, str):
+            # For string elements (like domain_id), return as list
+            return [elem1, elem2]
+        else:
+            # For other types, return as is or handle specifically
+            return elem1
+
+    def _split_batch(self, batch, split_idx):
+        """Split a batch while handling different types of elements."""
+        split1 = {}
+        split2 = {}
+
+        for k, v in batch.items():
+            if isinstance(v, torch.Tensor):
+                split1[k] = v[:split_idx]
+                split2[k] = v[split_idx:]
+            elif isinstance(v, list):
+                split1[k] = v[:split_idx]
+                split2[k] = v[split_idx:]
+            else:
+                # For non-splittable elements, copy to both
+                split1[k] = v
+                split2[k] = v
+
+        return split1, split2
+
+    def __iter__(self):
+        source_dl = DataLoader(
+            self.source_dataset,
+            batch_size=self.batch_size,
+            shuffle=True
+        )
+        target_dl = DataLoader(
+            self.target_dataset,
+            batch_size=self.batch_size,
+            shuffle=True
+        )
+
+        source_iter = iter(source_dl)
+        target_iter = iter(target_dl)
+
+        for batch_a, batch_b in zip(source_iter, target_iter):
+            batch_size = len(batch_a['X'])
+            split = (batch_size + 1) // 2  # Ceil division
+
+            # Split batches
+            a1, a2 = self._split_batch(batch_a, split)
+            b1, b2 = self._split_batch(batch_b, split)
+
+            # Create mixed batches
+            mixed1 = {k: self._mix_batch_elements(a1[k], b2[k]) for k in a1}
+            mixed2 = {k: self._mix_batch_elements(b1[k], a2[k]) for k in b1}
+
+            yield mixed1
+            yield mixed2
+
+    def __len__(self):
+        return 2 * min(len(self.source_dataset), len(self.target_dataset)) // self.batch_size
