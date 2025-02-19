@@ -12,7 +12,7 @@ class ExperimentConfig:
     BATCH_SIZE: int = 128
     INPUT_LENGTH: int = 100
     OUTPUT_LENGTH: int = 10
-    MAX_EPOCHS: int = 15
+    MAX_EPOCHS: int = 30
     ACCELERATOR: str = "cuda"
     NUM_RUNS: int = 5
     MAX_WORKERS: int = 4  

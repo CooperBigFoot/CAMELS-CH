@@ -25,7 +25,7 @@ class ChallengerTuner:
     def setup_directories(self):
         """Create necessary directories for experiment outputs."""
         # We create a single directory to store our optimization results
-        self.results_dir = Path("experiments/HyperparamerTune/results")
+        self.results_dir = Path("experiments/HyperparameterTune/results")
         self.results_dir.mkdir(parents=True, exist_ok=True)
 
     def load_data(self):
@@ -104,7 +104,7 @@ class ChallengerTuner:
                 EarlyStopping(monitor="val_loss", patience=3, mode="min"),
                 LearningRateMonitor(logging_interval="epoch"),
             ],
-            enable_progress_bar=False,  # Reduce output clutter
+            enable_progress_bar=True,  # Reduce output clutter
         )
 
         # Train and get best validation loss

@@ -5,7 +5,6 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 
 import optuna
-from pathlib import Path
 import pandas as pd
 import torch
 import pytorch_lightning as pl
@@ -16,7 +15,6 @@ from src.data_models.caravanify import Caravanify, CaravanifyConfig
 from src.data_models.datamodule import HydroDataModule
 from src.models.TSMixer import LitTSMixer
 
-
 class BenchmarkTuner:
     def __init__(self, config: ExperimentConfig):
         self.config = config
@@ -24,7 +22,7 @@ class BenchmarkTuner:
 
     def setup_directories(self):
         """Create necessary directories for experiment outputs."""
-        self.results_dir = Path("experiments/HyperparamerTune/results")
+        self.results_dir = Path("experiments/HyperparameterTune/results")
         self.results_dir.mkdir(parents=True, exist_ok=True)
 
     def load_data(self):
@@ -51,7 +49,8 @@ class BenchmarkTuner:
         self.ca_ts_data = self.ca_caravan.get_time_series()[
             ts_columns + ["date"] + [self.config.GROUP_IDENTIFIER]
         ]
-        self.ca_static_data = self.ca_caravan.get_static_attributes()[static_columns]
+        self.ca_static_data = self.ca_caravan.get_static_attributes()[
+            static_columns]
 
     def objective(self, trial: optuna.Trial) -> float:
         """Optuna objective function for hyperparameter optimization."""
@@ -89,7 +88,7 @@ class BenchmarkTuner:
             static_size=len(self.config.STATIC_FEATURES) - 1,
             hidden_size=hidden_size,
             dropout=dropout,
-            learning_rate=self.config.LEARNING_RATE,
+            learning_rate=self.config.PRETRAIN_LR,
         )
 
         # Configure trainer
@@ -101,7 +100,7 @@ class BenchmarkTuner:
                 EarlyStopping(monitor="val_loss", patience=3, mode="min"),
                 LearningRateMonitor(logging_interval="epoch"),
             ],
-            enable_progress_bar=False,  # Reduce output clutter
+            enable_progress_bar=True,  # Reduce output clutter
         )
 
         # Train and get best validation loss
@@ -173,7 +172,8 @@ if __name__ == "__main__":
     # Run optimization
     tuner = BenchmarkTuner(config)
     tuner.load_data()
-    study = tuner.run_optimization(n_trials=30)  # Adjust number of trials as needed
+    # Adjust number of trials as needed
+    study = tuner.run_optimization(n_trials=30)
 
     print("\nBest trial:")
     print(f"  Value: {study.best_trial.value:.5f}")
