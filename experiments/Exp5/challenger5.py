@@ -144,8 +144,8 @@ class ExperimentRunner:
             static_df=static_data,
             group_identifier=self.config.GROUP_IDENTIFIER,
             preprocessing_config=preprocessing_configs,
-            batch_size=self.config.BATCH_SIZE,
-            input_length=self.config.INPUT_LENGTH,
+            batch_size=self.config.CH_CONFIG["BATCH_SIZE"],
+            input_length=self.config.CH_CONFIG["INPUT_LENGTH"],
             output_length=self.config.OUTPUT_LENGTH,
             num_workers=min(self.config.MAX_WORKERS, multiprocessing.cpu_count()),
             features=self.config.FORCING_FEATURES + [self.config.TARGET],
@@ -161,12 +161,13 @@ class ExperimentRunner:
         """Run pretraining phase."""
         print("SETTING UP MODEL FOR PRETRAINING")
         model = LitTSMixer(
-            input_len=self.config.INPUT_LENGTH,
+            input_len=self.config.CH_CONFIG["INPUT_LENGTH"],
             output_len=self.config.OUTPUT_LENGTH,
             input_size=len(self.config.FORCING_FEATURES) + 1,  # +1 for target
             static_size=len(self.config.STATIC_FEATURES) - 1,  # -1 for gauge_id
-            hidden_size=self.config.HIDDEN_SIZE,
+            hidden_size=self.config.CH_CONFIG["HIDDEN_SIZE"],
             learning_rate=self.config.PRETRAIN_LR,
+            dropout=self.config.CH_CONFIG["DROPOUT"],
         )
 
         trainer = self.create_trainer("pretrain", run)
@@ -182,12 +183,13 @@ class ExperimentRunner:
         """Run fine-tuning phase."""
         print("CONFIGURING MODEL FOR FINE-TUNING")
         model = LitTSMixer(
-            input_len=self.config.INPUT_LENGTH,
+            input_len=self.config.CH_CONFIG["INPUT_LENGTH"],
             output_len=self.config.OUTPUT_LENGTH,
             input_size=len(self.config.FORCING_FEATURES) + 1,
             static_size=len(self.config.STATIC_FEATURES) - 1,
-            hidden_size=self.config.HIDDEN_SIZE,
-            learning_rate=self.config.FINETUNE_LR,
+            hidden_size=self.config.CH_CONFIG["HIDDEN_SIZE"],
+            learning_rate=self.config.BENCHMARK_LR,
+            dropout=self.config.CH_CONFIG["DROPOUT"],
         )
 
         # Load pretrained weights

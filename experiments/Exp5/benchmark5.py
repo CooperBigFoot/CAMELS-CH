@@ -119,12 +119,12 @@ class BenchmarkRunner:
         """Train the model."""
         print("SETTING UP MODEL FOR TRAINING")
         model = LitTSMixer(
-            input_len=self.config.INPUT_LENGTH,
+            input_len=self.config.CA_CONFIG["INPUT_LENGTH"],
             output_len=self.config.OUTPUT_LENGTH,
             input_size=len(self.config.FORCING_FEATURES) + 1,  # +1 for target
             static_size=len(self.config.STATIC_FEATURES) - 1,  # -1 for gauge_id
-            hidden_size=self.config.HIDDEN_SIZE,
-            learning_rate=self.config.PRETRAIN_LR, 
+            hidden_size=self.config.CA_CONFIG["HIDDEN_SIZE"],
+            learning_rate=self.config.BENCHMARK_LR, 
         )
 
         trainer = self.create_trainer("train", run)

@@ -18,8 +18,8 @@ class ExperimentConfig:
     MAX_WORKERS: int = 4
 
     # Learning rates with scheduling
+    BENCHMARK_LR: float = 1e-5
     PRETRAIN_LR: float = 3e-4
-    FINETUNE_LR: float = 1e-5
     LR_SCHEDULER_PATIENCE: int = 3
     LR_SCHEDULER_FACTOR: float = 0.5
 
@@ -72,9 +72,10 @@ class ExperimentConfig:
             "VAL_YEARS": 2,
             "TEST_YEARS": 3,
             "MAX_MISSING_PCT": 10,
-            "BATCH_SIZE": 188,
-            "INPUT_LENGTH": 227,
-            "HIDDEN_SIZE": 35,
+            "BATCH_SIZE": 183,
+            "INPUT_LENGTH": 232,
+            "HIDDEN_SIZE": 173,
+            "DROPOUT": 0.26,
         }
 
         # Switzerland configuration
@@ -89,6 +90,7 @@ class ExperimentConfig:
             "BATCH_SIZE": 74,
             "INPUT_LENGTH": 279,
             "HIDDEN_SIZE": 254,
+            "DROPOUT": 0.1,
         }
 
         # Validate configuration
