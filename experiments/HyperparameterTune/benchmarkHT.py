@@ -58,6 +58,7 @@ class BenchmarkTuner:
         batch_size = trial.suggest_int("batch_size", 16, 256)
         input_length = trial.suggest_int("input_length", 30, 365)
         hidden_size = trial.suggest_int("hidden_size", 32, 256)
+        learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-3, log=True)
         dropout = trial.suggest_float("dropout", 0.0, 0.5)
 
         # Create data module with trial hyperparameters
@@ -88,7 +89,7 @@ class BenchmarkTuner:
             static_size=len(self.config.STATIC_FEATURES) - 1,
             hidden_size=hidden_size,
             dropout=dropout,
-            learning_rate=self.config.PRETRAIN_LR,
+            learning_rate=learning_rate
         )
 
         # Configure trainer

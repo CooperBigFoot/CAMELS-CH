@@ -1,2 +1,2 @@
-best_value,batch_size,input_length,hidden_size,dropout
-0.510890007019043,188,227,35,0.4884239231995916
+best_value,batch_size,input_length,hidden_size,learning_rate,dropout
+0.495109498500824,183,232,173,1.0301812461765918e-05,0.2592432729503241
