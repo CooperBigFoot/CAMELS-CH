@@ -610,46 +610,71 @@ class HydroTransferDataModule(pl.LightningDataModule):
 
 
 class MixingDataset(IterableDataset):
-    """Custom IterableDataset to mix batches from two DataLoaders."""
+    """
+    Custom IterableDataset to mix batches from two DataLoaders.
+
+    This version partitions data among workers to mitigate inaccuracies in __len__
+    when using multiple workers. Each worker only yields its assigned batches.
+    """
 
     def __init__(self, source_dataset, target_dataset, batch_size: int):
+        """
+        Args:
+            source_dataset: Dataset from the source domain.
+            target_dataset: Dataset from the target domain.
+            batch_size: Batch size used for creating DataLoaders.
+        """
         self.source_dataset = source_dataset
         self.target_dataset = target_dataset
         self.batch_size = batch_size
 
     def _mix_batch_elements(self, elem1, elem2):
-        """Handle different types of batch elements during concatenation."""
+        """
+        Mix elements from two batches based on their type.
+
+        For tensors, concatenates along the first dimension;
+        for lists or strings, performs list concatenation.
+        """
         if isinstance(elem1, torch.Tensor):
             return torch.cat([elem1, elem2], dim=0)
         elif isinstance(elem1, list):
-            return elem1 + elem2  # Concatenate lists
+            return elem1 + elem2
         elif isinstance(elem1, str):
-            # For string elements (like domain_id), return as list
             return [elem1, elem2]
         else:
-            # For other types, return as is or handle specifically
+            # For other types, return the first element (or handle as needed)
             return elem1
 
     def _split_batch(self, batch, split_idx):
-        """Split a batch while handling different types of elements."""
-        split1 = {}
-        split2 = {}
+        """
+        Split a batch into two parts at the given index.
 
-        for k, v in batch.items():
-            if isinstance(v, torch.Tensor):
-                split1[k] = v[:split_idx]
-                split2[k] = v[split_idx:]
-            elif isinstance(v, list):
-                split1[k] = v[:split_idx]
-                split2[k] = v[split_idx:]
+        Handles tensors and lists; for unsplittable types, the same value is returned for both splits.
+        """
+        split1, split2 = {}, {}
+        for key, value in batch.items():
+            if isinstance(value, torch.Tensor):
+                split1[key] = value[:split_idx]
+                split2[key] = value[split_idx:]
+            elif isinstance(value, list):
+                split1[key] = value[:split_idx]
+                split2[key] = value[split_idx:]
             else:
-                # For non-splittable elements, copy to both
-                split1[k] = v
-                split2[k] = v
-
+                split1[key] = value
+                split2[key] = value
         return split1, split2
 
     def __iter__(self):
+        # Partition batches among workers to avoid duplicate processing.
+        worker_info = torch.utils.data.get_worker_info()
+        if worker_info is None:
+            worker_id = 0
+            num_workers = 1
+        else:
+            worker_id = worker_info.id
+            num_workers = worker_info.num_workers
+
+        # Create individual DataLoaders for source and target datasets.
         source_dl = DataLoader(
             self.source_dataset,
             batch_size=self.batch_size,
@@ -663,16 +688,25 @@ class MixingDataset(IterableDataset):
 
         source_iter = iter(source_dl)
         target_iter = iter(target_dl)
+        batch_index = 0
 
+        # Zip through batches from both iterators.
         for batch_a, batch_b in zip(source_iter, target_iter):
-            batch_size = len(batch_a['X'])
-            split = (batch_size + 1) // 2  # Ceil division
+            # Assign batches to workers based on batch_index modulo num_workers.
+            if batch_index % num_workers != worker_id:
+                batch_index += 1
+                continue
+            batch_index += 1
 
-            # Split batches
+            # Determine split index (ceil division of batch size).
+            current_batch_size = len(batch_a['X'])
+            split = (current_batch_size + 1) // 2
+
+            # Split both batches into two halves.
             a1, a2 = self._split_batch(batch_a, split)
             b1, b2 = self._split_batch(batch_b, split)
 
-            # Create mixed batches
+            # Mix the splits: first mixed batch takes a1 and b2, second takes b1 and a2.
             mixed1 = {k: self._mix_batch_elements(a1[k], b2[k]) for k in a1}
             mixed2 = {k: self._mix_batch_elements(b1[k], a2[k]) for k in b1}
 
@@ -680,4 +714,21 @@ class MixingDataset(IterableDataset):
             yield mixed2
 
     def __len__(self):
-        return 2 * min(len(self.source_dataset), len(self.target_dataset)) // self.batch_size
+        """
+        Returns an approximate length of the dataset (number of batches per worker).
+
+        The total number of mixed batches is estimated as twice the number of batches available
+        from the smaller of the two datasets, divided by the number of workers.
+        """
+        # Calculate total batches available in each domain.
+        total_source_batches = len(self.source_dataset) // self.batch_size
+        total_target_batches = len(self.target_dataset) // self.batch_size
+        # Each pair of batches produces 2 mixed batches.
+        total_mixed_batches = 2 * \
+            min(total_source_batches, total_target_batches)
+
+        worker_info = torch.utils.data.get_worker_info()
+        if worker_info is not None:
+            return total_mixed_batches // worker_info.num_workers
+        else:
+            return total_mixed_batches
