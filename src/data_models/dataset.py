@@ -23,7 +23,7 @@ class HydroDataset(Dataset):
         static_df: Optional[pd.DataFrame] = None,
         static_features: Optional[List[str]] = None,
         group_identifier: str = "gauge_id",
-        domain_id: Union[str, int] = "training",  # New parameter with default
+        domain_id: str = "source",
     ) -> None:
         """Initialize the dataset with optional domain awareness.
 
@@ -36,7 +36,7 @@ class HydroDataset(Dataset):
             static_df: Optional DataFrame containing static catchment attributes
             static_features: Optional list of static feature names to use
             group_identifier: Column name identifying the grouping variable
-            domain_id: Identifier for the data domain (defaults to "training")
+            domain_id: Identifier for the domain (default is "source")
         """
         self.input_length = input_length
         self.output_length = output_length
@@ -170,12 +170,16 @@ class HydroDataset(Dataset):
         )
 
         # Build return dictionary
+        domain_tensor = torch.tensor([1.0 if self.domain_id == "target" else 0.0],
+                                     dtype=torch.float32)
+
         return_dict = {
             "X": X,
             "y": y,
             "static": static,
-            "domain_id": self.domain_id,
+            "domain_id": domain_tensor,
             self.group_identifier: gauge_id,
         }
 
         return return_dict
+

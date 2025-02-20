@@ -636,13 +636,14 @@ class MixingDataset(IterableDataset):
         for lists or strings, performs list concatenation.
         """
         if isinstance(elem1, torch.Tensor):
+            if elem1.numel() == 1:
+                return torch.cat([elem1.view(-1), elem2.view(-1)], dim=0)
             return torch.cat([elem1, elem2], dim=0)
         elif isinstance(elem1, list):
             return elem1 + elem2
         elif isinstance(elem1, str):
             return [elem1, elem2]
         else:
-            # For other types, return the first element (or handle as needed)
             return elem1
 
     def _split_batch(self, batch, split_idx):
@@ -665,7 +666,6 @@ class MixingDataset(IterableDataset):
         return split1, split2
 
     def __iter__(self):
-        # Partition batches among workers to avoid duplicate processing.
         worker_info = torch.utils.data.get_worker_info()
         if worker_info is None:
             worker_id = 0
@@ -674,7 +674,6 @@ class MixingDataset(IterableDataset):
             worker_id = worker_info.id
             num_workers = worker_info.num_workers
 
-        # Create individual DataLoaders for source and target datasets.
         source_dl = DataLoader(
             self.source_dataset,
             batch_size=self.batch_size,
@@ -690,25 +689,27 @@ class MixingDataset(IterableDataset):
         target_iter = iter(target_dl)
         batch_index = 0
 
-        # Zip through batches from both iterators.
         for batch_a, batch_b in zip(source_iter, target_iter):
-            # Assign batches to workers based on batch_index modulo num_workers.
             if batch_index % num_workers != worker_id:
                 batch_index += 1
                 continue
             batch_index += 1
 
-            # Determine split index (ceil division of batch size).
             current_batch_size = len(batch_a['X'])
             split = (current_batch_size + 1) // 2
 
-            # Split both batches into two halves.
+            # Split batches
             a1, a2 = self._split_batch(batch_a, split)
             b1, b2 = self._split_batch(batch_b, split)
 
-            # Mix the splits: first mixed batch takes a1 and b2, second takes b1 and a2.
+            # Create mixed batches
             mixed1 = {k: self._mix_batch_elements(a1[k], b2[k]) for k in a1}
             mixed2 = {k: self._mix_batch_elements(b1[k], a2[k]) for k in b1}
+
+            # Ensure domain_ids are proper tensors
+            for batch in [mixed1, mixed2]:
+                if 'domain_id' in batch:
+                    batch['domain_id'] = batch['domain_id'].float()
 
             yield mixed1
             yield mixed2
