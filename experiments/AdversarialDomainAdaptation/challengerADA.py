@@ -160,7 +160,7 @@ class DomainAdaptationRunner:
         # Get the appropriate domain config
         domain_config = self.config.CH_CONFIG if is_source else self.config.CA_CONFIG
         
-        return HydroDataModule(
+        dm = HydroDataModule(
             time_series_df=ts_data,
             static_df=static_data,
             group_identifier=self.config.GROUP_IDENTIFIER,
@@ -178,6 +178,12 @@ class DomainAdaptationRunner:
             max_missing_pct=domain_config["MAX_MISSING_PCT"],
             domain_id=domain_id  # Add domain identifier
         )
+        
+        # Explicitly prepare and set up the data module
+        dm.prepare_data()
+        dm.setup(stage="fit")
+        
+        return dm
 
     def run_pretraining(self, data_module, run):
         """Run pretraining phase on source data only."""

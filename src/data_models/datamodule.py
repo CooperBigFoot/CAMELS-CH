@@ -565,8 +565,10 @@ class HydroTransferDataModule(pl.LightningDataModule):
         )
 
     def val_dataloader(self) -> DataLoader:
-
-        # Verify that the datasets are not empty
+        # Verify that the datasets are not None and not empty
+        if self.source_dm.val_dataset is None or self.target_dm.val_dataset is None:
+            raise RuntimeError(
+                "Source or target validation dataset is not initialized.")
         if len(self.source_dm.val_dataset) == 0:
             raise ValueError("Source validation dataset is empty")
         if len(self.target_dm.val_dataset) == 0:
