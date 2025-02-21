@@ -166,7 +166,7 @@ class BenchmarkRunner:
         trainer.test(model, data_module)
 
         evaluator = TSForecastEvaluator(
-            data_module, horizons=list(range(1, model.config.pred_len + 1))
+            data_module, horizons=list(range(1, self.config.OUTPUT_LENGTH + 1))
         )
 
         results_df, overall_metrics, basin_metrics = evaluator.evaluate(

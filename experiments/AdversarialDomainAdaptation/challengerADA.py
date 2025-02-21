@@ -165,8 +165,8 @@ class DomainAdaptationRunner:
             static_df=static_data,
             group_identifier=self.config.GROUP_IDENTIFIER,
             preprocessing_config=preprocessing_configs,
-            batch_size=domain_config["BATCH_SIZE"],
-            input_length=domain_config["INPUT_LENGTH"],
+            batch_size=self.config.BATCH_SIZE,
+            input_length=self.config.INPUT_LENGTH,
             output_length=self.config.OUTPUT_LENGTH,
             num_workers=min(self.config.MAX_WORKERS, multiprocessing.cpu_count()),
             features=self.config.FORCING_FEATURES + [self.config.TARGET],
@@ -213,15 +213,15 @@ class DomainAdaptationRunner:
             output_len=self.config.OUTPUT_LENGTH,
             static_size=len(self.config.STATIC_FEATURES) - 1,
             hidden_size=self.config.HIDDEN_SIZE,
-            dropout=self.config.CH_CONFIG["DROPOUT"],
+            dropout=self.config.DROPOUT
         )
         
         # Create domain adaptation model
         model = LitTSMixerDomainAdaptation(
             config=model_config,
-            lambda_adv=1.0,  # Can be tuned
-            domain_loss_weight=0.5,  # Can be tuned
-            learning_rate=self.config.PRETRAIN_LR / 2,  # Reduced learning rate for stability
+            lambda_adv=self.config.LAMBDA_ADV,
+            domain_loss_weight=self.config.DOMAIN_LOSS_WEIGHT,
+            learning_rate=self.config.FINETUNE_LR,  
             group_identifier=self.config.GROUP_IDENTIFIER
         )
         
@@ -250,7 +250,7 @@ class DomainAdaptationRunner:
             output_len=self.config.OUTPUT_LENGTH,
             static_size=len(self.config.STATIC_FEATURES) - 1,
             hidden_size=self.config.HIDDEN_SIZE,
-            dropout=self.config.CH_CONFIG["DROPOUT"],
+            dropout=self.config.DROPOUT
         )
         
         # Create a new model for fine-tuning (prevents issues with optimizer state)
