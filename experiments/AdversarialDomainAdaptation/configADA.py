@@ -38,7 +38,7 @@ class ExperimentConfig:
 
     # Adversarial configs
     LAMBDA_ADV: int = 1
-    DOMAIN_LOSS_WEIGHT: float = 0.5
+    DOMAIN_LOSS_WEIGHT: float = 0.3
 
     def __post_init__(self):
         # Initialize feature lists
