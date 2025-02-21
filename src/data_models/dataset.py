@@ -44,7 +44,7 @@ class HydroDataset(Dataset):
         self.features = sorted(features)  # Sort for consistency
         self.target = target
         self.group_identifier = group_identifier
-        self.domain_id = domain_id  # Store domain identifier
+        self.domain_id = domain_id  
 
         # Process static features
         if static_features:
@@ -79,20 +79,27 @@ class HydroDataset(Dataset):
         else:
             self.static_dict = {}
 
-        # Convert time series to tensors
+        # Convert time series to tensors and save original indices for each group.
         self.gauge_ids = []
         self.features_data: Dict[str, torch.Tensor] = {}
         self.target_data: Dict[str, torch.Tensor] = {}
+        # NEW: to store original indices
+        self.index_data: Dict[str, np.ndarray] = {}
 
         for gauge_id, group in self.df_sorted.groupby(self.group_identifier):
             # Convert features and target to tensors
             feat_tensor = torch.tensor(
-                group[self.features].to_numpy(dtype=np.float32))
+                group[self.features].to_numpy(dtype=np.float32)
+            )
             targ_tensor = torch.tensor(
-                group[self.target].to_numpy(dtype=np.float32))
+                group[self.target].to_numpy(dtype=np.float32)
+            )
 
             self.features_data[gauge_id] = feat_tensor
             self.target_data[gauge_id] = targ_tensor
+            # Save the original DataFrame indices (which correspond to the sorted order)
+            self.index_data[gauge_id] = group.index.to_numpy()
+
             self.gauge_ids.append(gauge_id)
 
         # Build index of valid sequences
@@ -147,6 +154,7 @@ class HydroDataset(Dataset):
                 - static: Static features tensor
                 - domain_id: Domain identifier (if not "training")
                 - group_identifier: Basin/gauge identifier
+                - slice_idx: Original indices corresponding to the full sequence slice
         """
         # Get sequence information
         row = self.index.iloc[idx]
@@ -159,6 +167,10 @@ class HydroDataset(Dataset):
                                          self.input_length]
         y = self.target_data[gauge_id][start_idx + self.input_length: end_idx]
 
+        # Retrieve the original DataFrame indices for this sequence
+        # (You can later use these indices to fetch the dates from the original df.)
+        slice_idx = self.index_data[gauge_id][start_idx: end_idx].tolist()
+
         # Get static features or zeros if none available
         static = (
             self.static_dict.get(
@@ -170,8 +182,9 @@ class HydroDataset(Dataset):
         )
 
         # Build return dictionary
-        domain_tensor = torch.tensor([1.0 if self.domain_id == "target" else 0.0],
-                                     dtype=torch.float32)
+        domain_tensor = torch.tensor(
+            [1.0 if self.domain_id == "target" else 0.0], dtype=torch.float32
+        )
 
         return_dict = {
             "X": X,
@@ -179,7 +192,7 @@ class HydroDataset(Dataset):
             "static": static,
             "domain_id": domain_tensor,
             self.group_identifier: gauge_id,
+            "slice_idx": slice_idx,  
         }
 
         return return_dict
-

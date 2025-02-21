@@ -54,11 +54,72 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         self.learning_rate = learning_rate
         self.group_identifier = group_identifier
 
+    def freeze_backbone(self):
+        """Freeze backbone parameters for fine-tuning."""
+        for param in self.model.backbone.parameters():
+            param.requires_grad = False
+        print("Backbone parameters frozen")
+
+    def unfreeze_backbone(self):
+        """Unfreeze backbone parameters."""
+        for param in self.model.backbone.parameters():
+            param.requires_grad = True
+        print("Backbone parameters unfrozen")
+
+    def freeze_head(self):
+        """Freeze prediction head parameters."""
+        for param in self.model.head.parameters():
+            param.requires_grad = False
+        print("Head parameters frozen")
+
+    def unfreeze_head(self):
+        """Unfreeze prediction head parameters."""
+        for param in self.model.head.parameters():
+            param.requires_grad = True
+        print("Head parameters unfrozen")
+
+    def extract_backbone_state_dict(self, state_dict):
+        """Extract backbone-specific weights from a full model state dict."""
+        backbone_state_dict = {}
+        for key, value in state_dict.items():
+            if key.startswith('model.backbone.'):
+                backbone_key = key.replace('model.backbone.', '')
+                backbone_state_dict[backbone_key] = value
+        return backbone_state_dict
+
+    def load_backbone_from_pretrained(self, pretrained_state_dict):
+        """Load only backbone weights from a pretrained model."""
+        backbone_dict = self.extract_backbone_state_dict(pretrained_state_dict)
+        self.model.backbone.load_state_dict(backbone_dict)
+        print(f"Loaded backbone weights with {len(backbone_dict)} parameters")
+
+    def load_from_pretrained(self, pretrained_state_dict):
+        """Load the entire model weights from a pretrained TSMixer model."""
+        # Create a new state dict with keys matching this model's structure
+        model_state_dict = {}
+
+        for key, value in pretrained_state_dict.items():
+            # Map keys from LitTSMixer to LitTSMixerDomainAdaptation format
+            if key.startswith('model.'):
+                model_state_dict[key] = value
+
+        # Load compatible weights
+        missing_keys, unexpected_keys = self.model.load_state_dict(
+            model_state_dict, strict=False)
+
+        if missing_keys:
+            print(
+                f"Warning: Missing keys when loading pretrained model: {missing_keys}")
+        if unexpected_keys:
+            print(
+                f"Warning: Unexpected keys when loading pretrained model: {unexpected_keys}")
+
+        print(f"Loaded model weights from pretrained model")
+
     def forward(self, x, static):
         return self.model(x, static)
 
     def extract_features(self, x, static):
-
         # TODO: Potential domain leackage through static features. If model performs poorly
         # on target domain, consider removing static features from adversarial training.
         features = self.model.backbone(x, static)
@@ -108,7 +169,9 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         # Log metrics
         self.log_dict({
             "train_loss": total_loss,
-        }, prog_bar=False)
+            "train_task_loss": task_loss,
+            "train_domain_loss": domain_loss,
+        }, prog_bar=True)
 
         return total_loss
 
@@ -139,7 +202,7 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         self.log_dict({
             "val_loss": task_loss,
             "val_domain_acc": domain_acc
-        }, prog_bar=False)
+        }, prog_bar=True)
 
         return task_loss
 
@@ -190,4 +253,18 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         self.test_outputs = []
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        optimizer = Adam(self.parameters(), lr=self.learning_rate)
+        scheduler = {
+            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                mode="min",
+                patience=3,
+                factor=0.5
+            ),
+            "monitor": "val_loss",
+        }
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": scheduler,
+            "monitor": "val_loss",
+        }
