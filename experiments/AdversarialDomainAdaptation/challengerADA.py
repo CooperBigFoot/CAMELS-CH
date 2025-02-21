@@ -1,26 +1,26 @@
-import sys
 from pathlib import Path
+import gc
+import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-import gc
-import torch
-import pytorch_lightning as pl
+
+import multiprocessing
+from src.models.evaluators import TSForecastEvaluator
+from src.models.TSMixerDomainAdaptation import LitTSMixerDomainAdaptation
+from src.models.TSMixer import LitTSMixer
+from src.data_models.datamodule import HydroDataModule, HydroTransferDataModule
+from src.data_models.caravanify import Caravanify, CaravanifyConfig
+from experiments.AdversarialDomainAdaptation.configADA import ExperimentConfig
+import numpy as np
+import pandas as pd
 from pytorch_lightning.callbacks import (
     ModelCheckpoint,
     EarlyStopping,
     LearningRateMonitor,
 )
-import pandas as pd
-import numpy as np
-from experiments.AdversarialDomainAdaptation.configADA import ExperimentConfig
-from src.data_models.caravanify import Caravanify, CaravanifyConfig
-from src.data_models.datamodule import HydroDataModule, HydroTransferDataModule
-from src.models.TSMixer import LitTSMixer
-from src.models.TSMixerDomainAdaptation import LitTSMixerDomainAdaptation
-from src.models.evaluators import TSForecastEvaluator
-import multiprocessing
-
+import pytorch_lightning as pl
+import torch
 
 class DomainAdaptationRunner:
     def __init__(self, config: ExperimentConfig):
@@ -29,9 +29,12 @@ class DomainAdaptationRunner:
 
     def setup_directories(self):
         """Create necessary directories for experiment outputs."""
-        self.results_dir = Path("experiments/AdversarialDomainAdaptation/results")
-        self.model_dir = Path("experiments/AdversarialDomainAdaptation/saved_models")
-        self.checkpoint_dir = Path("experiments/AdversarialDomainAdaptation/checkpoints")
+        self.results_dir = Path(
+            "experiments/AdversarialDomainAdaptation/results")
+        self.model_dir = Path(
+            "experiments/AdversarialDomainAdaptation/saved_models")
+        self.checkpoint_dir = Path(
+            "experiments/AdversarialDomainAdaptation/checkpoints")
 
         for directory in [self.results_dir, self.model_dir, self.checkpoint_dir]:
             directory.mkdir(parents=True, exist_ok=True)
@@ -77,12 +80,14 @@ class DomainAdaptationRunner:
         self.ch_ts_data = self.ch_caravan.get_time_series()[
             ts_columns + ["date"] + [self.config.GROUP_IDENTIFIER]
         ]
-        self.ch_static_data = self.ch_caravan.get_static_attributes()[static_columns]
+        self.ch_static_data = self.ch_caravan.get_static_attributes()[
+            static_columns]
 
         self.ca_ts_data = self.ca_caravan.get_time_series()[
             ts_columns + ["date"] + [self.config.GROUP_IDENTIFIER]
         ]
-        self.ca_static_data = self.ca_caravan.get_static_attributes()[static_columns]
+        self.ca_static_data = self.ca_caravan.get_static_attributes()[
+            static_columns]
 
     def run_experiment(self):
         """Run the complete experiment with multiple runs."""
@@ -118,39 +123,42 @@ class DomainAdaptationRunner:
 
         # Create source and target data modules
         ch_data_module = self.create_data_module(
-            self.ch_ts_data, 
-            self.ch_static_data, 
-            preprocessing_configs, 
+            self.ch_ts_data,
+            self.ch_static_data,
+            preprocessing_configs,
             is_source=True,
             domain_id=0  # Source domain = 0
         )
-        
+
         ca_data_module = self.create_data_module(
-            self.ca_ts_data, 
-            self.ca_static_data, 
-            preprocessing_configs, 
+            self.ca_ts_data,
+            self.ca_static_data,
+            preprocessing_configs,
             is_source=False,
             domain_id=1  # Target domain = 1
         )
-        
+
         # Create transfer data module for domain adaptation
         transfer_data_module = HydroTransferDataModule(
             source_datamodule=ch_data_module,
             target_datamodule=ca_data_module,
-            num_workers=min(self.config.MAX_WORKERS, multiprocessing.cpu_count())
+            num_workers=min(self.config.MAX_WORKERS,
+                            multiprocessing.cpu_count())
         )
 
         # Phase 1: Pretrain on source data
         print("\n=== PHASE 1: PRETRAINING ON SOURCE DATA ===")
         pretrain_model = self.run_pretraining(ch_data_module, run)
-        
+
         # Phase 2: Domain adaptation with adversarial training
         print("\n=== PHASE 2: DOMAIN ADAPTATION ===")
-        adapted_model = self.run_domain_adaptation(pretrain_model, transfer_data_module, run)
-        
+        adapted_model = self.run_domain_adaptation(
+            pretrain_model, transfer_data_module, run)
+
         # Phase 3: Fine-tune on target data with frozen backbone
         print("\n=== PHASE 3: FINE-TUNING ON TARGET DATA ===")
-        fine_tuned_model = self.run_fine_tuning(adapted_model, ca_data_module, run)
+        fine_tuned_model = self.run_fine_tuning(
+            adapted_model, ca_data_module, run)
 
         # Evaluate final model
         return self.evaluate_model(fine_tuned_model, ca_data_module, run)
@@ -159,7 +167,7 @@ class DomainAdaptationRunner:
         """Create a data module with appropriate configuration."""
         # Get the appropriate domain config
         domain_config = self.config.CH_CONFIG if is_source else self.config.CA_CONFIG
-        
+
         dm = HydroDataModule(
             time_series_df=ts_data,
             static_df=static_data,
@@ -168,7 +176,8 @@ class DomainAdaptationRunner:
             batch_size=self.config.BATCH_SIZE,
             input_length=self.config.INPUT_LENGTH,
             output_length=self.config.OUTPUT_LENGTH,
-            num_workers=min(self.config.MAX_WORKERS, multiprocessing.cpu_count()),
+            num_workers=min(self.config.MAX_WORKERS,
+                            multiprocessing.cpu_count()),
             features=self.config.FORCING_FEATURES + [self.config.TARGET],
             static_features=self.config.STATIC_FEATURES,
             target=self.config.TARGET,
@@ -178,11 +187,11 @@ class DomainAdaptationRunner:
             max_missing_pct=domain_config["MAX_MISSING_PCT"],
             domain_id=domain_id  # Add domain identifier
         )
-        
+
         # Explicitly prepare and set up the data module
         dm.prepare_data()
         dm.setup(stage="fit")
-        
+
         return dm
 
     def run_pretraining(self, data_module, run):
@@ -192,7 +201,8 @@ class DomainAdaptationRunner:
             input_len=self.config.INPUT_LENGTH,
             output_len=self.config.OUTPUT_LENGTH,
             input_size=len(self.config.FORCING_FEATURES) + 1,  # +1 for target
-            static_size=len(self.config.STATIC_FEATURES) - 1,  # -1 for gauge_id
+            static_size=len(self.config.STATIC_FEATURES) -
+            1,  # -1 for gauge_id
             hidden_size=self.config.HIDDEN_SIZE,
             learning_rate=self.config.PRETRAIN_LR,
             dropout=self.config.DROPOUT
@@ -210,7 +220,7 @@ class DomainAdaptationRunner:
     def run_domain_adaptation(self, pretrain_model, transfer_data_module, run):
         """Run domain adaptation phase with adversarial training."""
         print("CONFIGURING MODEL FOR DOMAIN ADAPTATION")
-        
+
         # Create model config
         from src.models.TSMixer import TSMixerConfig
         model_config = TSMixerConfig(
@@ -221,33 +231,33 @@ class DomainAdaptationRunner:
             hidden_size=self.config.HIDDEN_SIZE,
             dropout=self.config.DROPOUT
         )
-        
+
         # Create domain adaptation model
         model = LitTSMixerDomainAdaptation(
             config=model_config,
             lambda_adv=self.config.LAMBDA_ADV,
             domain_loss_weight=self.config.DOMAIN_LOSS_WEIGHT,
-            learning_rate=self.config.FINETUNE_LR,  
+            learning_rate=self.config.FINETUNE_LR,
             group_identifier=self.config.GROUP_IDENTIFIER
         )
-        
+
         # Load pretrained weights
         model.load_from_pretrained(pretrain_model.state_dict())
-        
+
         # Train with domain adaptation
         trainer = self.create_trainer("domain_adapt", run)
         trainer.fit(model, transfer_data_module)
-        
+
         # Save model
         save_path = self.model_dir / f"tsmixer_da_adapted_{run}.pt"
         torch.save(model.state_dict(), save_path)
-        
+
         return model
 
     def run_fine_tuning(self, adapted_model, target_data_module, run):
         """Fine-tune on target data with frozen backbone."""
         print("CONFIGURING MODEL FOR FINE-TUNING")
-        
+
         # Create model config
         from src.models.TSMixer import TSMixerConfig
         model_config = TSMixerConfig(
@@ -258,39 +268,36 @@ class DomainAdaptationRunner:
             hidden_size=self.config.HIDDEN_SIZE,
             dropout=self.config.DROPOUT
         )
-        
+
         # Create a new model for fine-tuning (prevents issues with optimizer state)
         model = LitTSMixerDomainAdaptation(
             config=model_config,
-            lambda_adv=0.0,  
-            domain_loss_weight=0.0,  
-            learning_rate=self.config.FINETUNE_LR,  
+            lambda_adv=0.0,
+            domain_loss_weight=0.0,
+            learning_rate=self.config.FINETUNE_LR,
             group_identifier=self.config.GROUP_IDENTIFIER
         )
-        
+
         # Load adapted weights
         model.load_state_dict(adapted_model.state_dict())
-        
+
         # Freeze backbone
         model.freeze_backbone()
-        
+
         # Train with fine-tuning
         trainer = self.create_trainer("finetune", run)
         trainer.fit(model, target_data_module)
-        
+
         # Save model
         save_path = self.model_dir / f"tsmixer_da_finetuned_{run}.pt"
         torch.save(model.state_dict(), save_path)
-        
+
         return model
 
     def create_trainer(self, stage, run):
         """Create a PyTorch Lightning trainer with appropriate callbacks."""
-        # Adjust max epochs based on stage
         max_epochs = self.config.MAX_EPOCHS
-        if stage == "domain_adapt":
-            max_epochs = max_epochs // 2  # Shorter training for adaptation phase
-        
+
         return pl.Trainer(
             max_epochs=max_epochs,
             accelerator=self.config.ACCELERATOR,
@@ -336,7 +343,8 @@ class DomainAdaptationRunner:
             self.results_dir / f"da_challenger_overall_metrics_{run}.csv", index=True
         )
 
-        basin_summary = evaluator.summarize_metrics(basin_metrics, per_basin=True)
+        basin_summary = evaluator.summarize_metrics(
+            basin_metrics, per_basin=True)
         basin_summary.to_csv(
             self.results_dir / f"da_challenger_basin_metrics_{run}.csv", index=True
         )
@@ -371,11 +379,14 @@ class DomainAdaptationRunner:
                 return
 
             # Calculate and save summary statistics
-            summary_stats = overall_metrics_df.groupby(level=0).agg(['mean', 'std', 'min', 'max'])
-            summary_stats.to_csv(self.results_dir / "da_challenger_aggregate_metrics.csv")
-            
-            print(f"Successfully saved aggregate metrics for {len(all_results)} runs")
-            
+            summary_stats = overall_metrics_df.groupby(
+                level=0).agg(['mean', 'std', 'min', 'max'])
+            summary_stats.to_csv(self.results_dir /
+                                 "da_challenger_aggregate_metrics.csv")
+
+            print(
+                f"Successfully saved aggregate metrics for {len(all_results)} runs")
+
         except Exception as e:
             print(f"Error while saving aggregated results: {str(e)}")
 

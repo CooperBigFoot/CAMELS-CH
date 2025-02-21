@@ -101,7 +101,8 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         for key, value in pretrained_state_dict.items():
             # Map keys from LitTSMixer to LitTSMixerDomainAdaptation format
             if key.startswith('model.'):
-                model_state_dict[key] = value
+                new_key = key[6:]  # Remove 'model.' prefix
+                model_state_dict[new_key] = value
 
         # Load compatible weights
         missing_keys, unexpected_keys = self.model.load_state_dict(
@@ -120,9 +121,11 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         return self.model(x, static)
 
     def extract_features(self, x, static):
-        # TODO: Potential domain leackage through static features. If model performs poorly
-        # on target domain, consider removing static features from adversarial training.
-        features = self.model.backbone(x, static)
+        # Modified to remove static features from adversarial training.
+        # Instead of using the provided static input, we pass zeros so that
+        # only dynamic (temporal) features are used by the domain discriminator.
+        zeros_static = torch.zeros_like(static)
+        features = self.model.backbone(x, zeros_static)
         return features.flatten(start_dim=1)
 
     def training_step(self, batch, batch_idx):
