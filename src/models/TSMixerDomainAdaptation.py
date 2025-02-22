@@ -1,9 +1,11 @@
-import torch.nn as nn
 import torch
+import torch.nn as nn
 from torch.optim import Adam
-from .TSMixer import TSMixer
 import pytorch_lightning as pl
 from torch.nn import MSELoss
+from .TSMixer import TSMixer
+
+# Gradient reversal utility for adversarial training
 
 
 class GradientReversalFunction(torch.autograd.Function):
@@ -20,9 +22,11 @@ class GradientReversalFunction(torch.autograd.Function):
 def grad_reverse(x, lambda_=1.0):
     return GradientReversalFunction.apply(x, lambda_)
 
+# Domain discriminator network for domain adaptation
+
 
 class DomainDiscriminator(nn.Module):
-    def __init__(self, feature_dim, hidden_dim=64):
+    def __init__(self, feature_dim, hidden_dim=16):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(feature_dim, hidden_dim),
@@ -33,6 +37,8 @@ class DomainDiscriminator(nn.Module):
 
     def forward(self, x):
         return self.net(x)
+
+# LightningModule with domain adaptation functionality
 
 
 class LitTSMixerDomainAdaptation(pl.LightningModule):
@@ -95,164 +101,132 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
 
     def load_from_pretrained(self, pretrained_state_dict):
         """Load the entire model weights from a pretrained TSMixer model."""
-        # Create a new state dict with keys matching this model's structure
         model_state_dict = {}
-
         for key, value in pretrained_state_dict.items():
-            # Map keys from LitTSMixer to LitTSMixerDomainAdaptation format
             if key.startswith('model.'):
                 new_key = key[6:]  # Remove 'model.' prefix
                 model_state_dict[new_key] = value
-
-        # Load compatible weights
         missing_keys, unexpected_keys = self.model.load_state_dict(
             model_state_dict, strict=False)
-
         if missing_keys:
             print(
                 f"Warning: Missing keys when loading pretrained model: {missing_keys}")
         if unexpected_keys:
             print(
                 f"Warning: Unexpected keys when loading pretrained model: {unexpected_keys}")
-
-        print(f"Loaded model weights from pretrained model")
+        print("Loaded model weights from pretrained model")
 
     def forward(self, x, static):
         return self.model(x, static)
 
     def extract_features(self, x, static):
-        # Modified to remove static features from adversarial training.
-        # Instead of using the provided static input, we pass zeros so that
-        # only dynamic (temporal) features are used by the domain discriminator.
+        # Remove static features from adversarial training by passing zeros
         zeros_static = torch.zeros_like(static)
         features = self.model.backbone(x, zeros_static)
         return features.flatten(start_dim=1)
 
     def training_step(self, batch, batch_idx):
-        x, y, static = batch["X"], batch["y"].unsqueeze(-1), batch["static"]
-        domain_labels = batch["domain_id"]
+        # Unpack the tuple from CombinedLoader
 
-        # Ensure domain_labels is a tensor and has correct shape
-        if not isinstance(domain_labels, torch.Tensor):
-            domain_labels = torch.tensor(domain_labels, device=self.device)
+        data_dict, _, _ = batch  # (data_dict, 0, 0)
+        source_batch = data_dict["source"]
+        target_batch = data_dict["target"]
 
-        # Squeeze out extra dimensions and convert to float
-        domain_labels = domain_labels.squeeze().float()
+        # Combine data from both domains
+        combined_X = torch.cat([source_batch["X"], target_batch["X"]])
+        combined_static = torch.cat(
+            [source_batch["static"], target_batch["static"]])
+        combined_domain = torch.cat([
+            torch.zeros(len(source_batch["X"])),  # Source domain = 0
+            torch.ones(len(target_batch["X"]))      # Target domain = 1
+        ]).unsqueeze(1)
 
-        # Create source mask - source domain has label 0
-        # Shape will be [batch_size]
-        source_mask = (domain_labels == 0.0).bool()
+        # Forward pass for task prediction (source domain only)
+        y_pred = self(source_batch["X"], source_batch["static"])
+        task_loss = self.mse_criterion(
+            y_pred, source_batch["y"].unsqueeze(-1))
 
-        # Task loss (source only, this allows for non-autoregressive training later)
-        task_loss = torch.tensor(0.0, device=self.device)
-        if source_mask.any():
-            # Get source samples using unsqueezed mask for proper broadcasting
-            # x shape: [batch_size, seq_len, features]
-            # source_mask shape: [batch_size]
-            x_source = x[source_mask, :, :]
-            y_source = y[source_mask]
-            static_source = static[source_mask]
-
-            # Calculate task loss on source samples
-            y_pred = self(x_source, static_source)
-            task_loss = self.mse_criterion(y_pred, y_source)
-
-        # Domain loss (all samples)
-        features = self.extract_features(x, static)
+        # Forward pass for domain prediction (both domains)
+        features = self.extract_features(combined_X, combined_static)
         features_rev = grad_reverse(features, self.hparams.lambda_adv)
         domain_preds = self.domain_discriminator(features_rev)
+        domain_loss = self.domain_criterion(domain_preds, combined_domain)
 
-        # Ensure domain labels match prediction shape for loss calculation
-        domain_labels = domain_labels.view_as(domain_preds)
-        domain_loss = self.domain_criterion(domain_preds, domain_labels)
-
-        # Combined loss
+        # Total loss is a combination of task and domain losses
         total_loss = task_loss + self.hparams.domain_loss_weight * domain_loss
 
-        # Log metrics
         self.log_dict({
             "train_loss": total_loss,
             "train_task_loss": task_loss,
             "train_domain_loss": domain_loss,
-        }, prog_bar=True)
-
+        })
         return total_loss
 
     def validation_step(self, batch, batch_idx):
-        x, y, static = batch["X"], batch["y"].unsqueeze(-1), batch["static"]
-        domain_labels = batch["domain_id"]
+        # Handle both CombinedLoader tuple and standard DataLoader dict formats
 
-        # Convert domain labels if needed
-        if not isinstance(domain_labels, torch.Tensor):
-            domain_labels = torch.tensor(
-                domain_labels, device=self.device).float()
+        data_dict, _, _ = batch  # CombinedLoader format
+        source_batch = data_dict.get("source", {})
+        target_batch = data_dict.get("target", {})
 
-        # Forward pass
-        y_pred = self(x, static)
+        metrics = {}
 
-        # Task loss
-        task_loss = self.mse_criterion(y_pred, y)
+        # 1. Task Loss (source only)
+        if "X" in source_batch and len(source_batch["X"]) > 0:
+            source_pred = self(source_batch["X"], source_batch["static"])
+            source_loss = self.mse_criterion(
+                source_pred, source_batch["y"].unsqueeze(-1))
+            metrics["val_loss"] = source_loss
 
-        # Domain predictions
-        features = self.extract_features(x, static)
-        domain_preds = self.domain_discriminator(features)
+        # 2. Domain Classification (only if both domains present)
+        if "X" in source_batch and "X" in target_batch:
+            combined_X = torch.cat([source_batch["X"], target_batch["X"]])
+            combined_static = torch.cat(
+                [source_batch["static"], target_batch["static"]])
+            true_domains = torch.cat([
+                torch.zeros(len(source_batch["X"])),
+                torch.ones(len(target_batch["X"]))
+            ]).unsqueeze(1).to(self.device)
 
-        # Domain accuracy
-        domain_acc = ((domain_preds > 0.5).float() ==
-                      domain_labels).float().mean()
+            features = self.extract_features(combined_X, combined_static)
+            domain_preds = self.domain_discriminator(features)
+            domain_acc = ((domain_preds > 0.5).float()
+                          == true_domains).float().mean()
+            metrics["val_domain_acc"] = domain_acc
 
-        # Log metrics
-        self.log_dict({
-            "val_loss": task_loss,
-            "val_domain_acc": domain_acc
-        }, prog_bar=True)
-
-        return task_loss
+        self.log_dict(metrics, prog_bar=True)
+        return metrics.get("val_loss", torch.tensor(0.0))
 
     def test_step(self, batch, batch_idx):
-        """Test step focused only on prediction performance, not domain adaptation.
-        Matches format expected by TSForecastEvaluator."""
-        x, y, static = batch["X"], batch["y"], batch["static"]
-
-        # Get predictions
+        # Copied straight from TSMixer, testing is not domain-adapted
+        x, y = batch["X"], batch["y"].unsqueeze(-1)
+        static = batch["static"]
         y_hat = self(x, static)
 
-        # Store predictions, observations and gauge IDs for evaluation
         output = {
-            # Remove last dimension for evaluator
             "predictions": y_hat.squeeze(-1),
-            # Remove last dimension for evaluator
             "observations": y.squeeze(-1),
-            "basin_ids": batch[self.group_identifier]  # Keep track of basins
+            "basin_ids": batch["gauge_id"],
         }
 
-        # Log MSE loss for monitoring
-        test_loss = self.mse_criterion(y_hat, y.unsqueeze(-1))
-        self.log("test_loss", test_loss)
-
-        # Store output for later collection
         self.test_outputs.append(output)
-
         return output
 
     def on_test_epoch_start(self) -> None:
-        """Initialize storage for test results"""
+        """Initialize storage for test results."""
         self.test_outputs = []
 
     def on_test_epoch_end(self) -> None:
-        """Aggregate test results for evaluation"""
+        """Aggregate test results for evaluation."""
         if not self.test_outputs:
             print("Warning: No test outputs collected")
             return
 
-        # Collect all outputs
         self.test_results = {
             "predictions": torch.cat([x["predictions"] for x in self.test_outputs]),
             "observations": torch.cat([x["observations"] for x in self.test_outputs]),
             "basin_ids": [bid for x in self.test_outputs for bid in x["basin_ids"]],
         }
-
-        # Don't clear test_outputs until we've successfully created test_results
         self.test_outputs = []
 
     def configure_optimizers(self):

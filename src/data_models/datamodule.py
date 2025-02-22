@@ -515,223 +515,49 @@ class HydroDataModule(pl.LightningDataModule):
 
 
 class HydroTransferDataModule(pl.LightningDataModule):
-    """DataModule for transfer learning with batch mixing strategy."""
+    """
+    A PyTorch Lightning DataModule for transfer learning in hydrological modeling.
+    This module combines source and target data modules for training, validation,
+    and testing.
+    """
 
     def __init__(
         self,
         source_datamodule: HydroDataModule,
         target_datamodule: HydroDataModule,
         num_workers: int = 4,
+        mode: str ="min_size",
     ):
         super().__init__()
-        # Validate input types
-        if not isinstance(source_datamodule, HydroDataModule):
-            raise TypeError(
-                "source_datamodule must be a HydroDataModule instance")
-        if not isinstance(target_datamodule, HydroDataModule):
-            raise TypeError(
-                "target_datamodule must be a HydroDataModule instance")
-        # Ensure batch sizes match
-        if source_datamodule.batch_size != target_datamodule.batch_size:
-            raise ValueError(
-                f"Source batch_size ({source_datamodule.batch_size}) must match target batch_size ({target_datamodule.batch_size})"
-            )
-
         self.source_dm = source_datamodule
         self.target_dm = target_datamodule
-        self.batch_size = source_datamodule.batch_size
         self.num_workers = num_workers
+        self.mode = mode
 
-    def train_dataloader(self) -> DataLoader:
+        # Validate datasets
+        self._validate_datasets()
 
-        # Verify that the datasets are not empty
-        if len(self.source_dm.train_dataset) == 0:
-            raise ValueError("Source training dataset is empty")
-        if len(self.target_dm.train_dataset) == 0:
-            raise ValueError("Target training dataset is empty")
+    def _validate_datasets(self):
+        """Ensure datasets have matching features and domains"""
+        if self.source_dm.features != self.target_dm.features:
+            raise ValueError("Source and target features must match")
 
-        mixing_dataset = MixingDataset(
-            self.source_dm.train_dataset,
-            self.target_dm.train_dataset,
-            self.batch_size
-        )
+        if self.source_dm.static_features != self.target_dm.static_features:
+            raise ValueError("Static features must match between domains")
 
-        return DataLoader(
-            mixing_dataset,
-            batch_size=None,
-            num_workers=self.num_workers,
-            pin_memory=True,
-            persistent_workers=self.num_workers > 0,
-        )
+    def _create_combined_loader(self, stage: str) -> CombinedLoader:
+        """Create combined loader for either train/val/test"""
+        loaders = {
+            "source": getattr(self.source_dm, f"{stage}_dataloader")(),
+            "target": getattr(self.target_dm, f"{stage}_dataloader")()
+        }
+        return CombinedLoader(loaders, mode=self.mode)
 
-    def val_dataloader(self) -> DataLoader:
-        # Verify that the datasets are not None and not empty
-        if self.source_dm.val_dataset is None or self.target_dm.val_dataset is None:
-            raise RuntimeError(
-                "Source or target validation dataset is not initialized.")
-        if len(self.source_dm.val_dataset) == 0:
-            raise ValueError("Source validation dataset is empty")
-        if len(self.target_dm.val_dataset) == 0:
-            raise ValueError("Target validation dataset is empty")
+    def train_dataloader(self) -> CombinedLoader:
+        return self._create_combined_loader("train")
 
-        mixing_dataset = MixingDataset(
-            self.source_dm.val_dataset,
-            self.target_dm.val_dataset,
-            self.batch_size
-        )
+    def val_dataloader(self) -> CombinedLoader:
+        return self._create_combined_loader("val")
 
-        return DataLoader(
-            mixing_dataset,
-            batch_size=None,
-            num_workers=self.num_workers,
-            pin_memory=True,
-            persistent_workers=self.num_workers > 0,
-        )
-
-    def test_dataloader(self) -> DataLoader:
-
-        # Verify that the datasets are not empty
-        if len(self.source_dm.test_dataset) == 0:
-            raise ValueError("Source test dataset is empty")
-        if len(self.target_dm.test_dataset) == 0:
-            raise ValueError("Target test dataset is empty")
-
-        mixing_dataset = MixingDataset(
-            self.source_dm.test_dataset,
-            self.target_dm.test_dataset,
-            self.batch_size
-        )
-
-        return DataLoader(
-            mixing_dataset,
-            batch_size=None,
-            num_workers=self.num_workers,
-            pin_memory=True,
-            persistent_workers=self.num_workers > 0,
-        )
-
-
-class MixingDataset(IterableDataset):
-    """
-    Custom IterableDataset to mix batches from two DataLoaders.
-
-    This version partitions data among workers to mitigate inaccuracies in __len__
-    when using multiple workers. Each worker only yields its assigned batches.
-    """
-
-    def __init__(self, source_dataset, target_dataset, batch_size: int):
-        """
-        Args:
-            source_dataset: Dataset from the source domain.
-            target_dataset: Dataset from the target domain.
-            batch_size: Batch size used for creating DataLoaders.
-        """
-        self.source_dataset = source_dataset
-        self.target_dataset = target_dataset
-        self.batch_size = batch_size
-
-    def _mix_batch_elements(self, elem1, elem2):
-        """
-        Mix elements from two batches based on their type.
-
-        For tensors, concatenates along the first dimension;
-        for lists or strings, performs list concatenation.
-        """
-        if isinstance(elem1, torch.Tensor):
-            if elem1.numel() == 1:
-                return torch.cat([elem1.view(-1), elem2.view(-1)], dim=0)
-            return torch.cat([elem1, elem2], dim=0)
-        elif isinstance(elem1, list):
-            return elem1 + elem2
-        elif isinstance(elem1, str):
-            return [elem1, elem2]
-        else:
-            return elem1
-
-    def _split_batch(self, batch, split_idx):
-        """
-        Split a batch into two parts at the given index.
-
-        Handles tensors and lists; for unsplittable types, the same value is returned for both splits.
-        """
-        split1, split2 = {}, {}
-        for key, value in batch.items():
-            if isinstance(value, torch.Tensor):
-                split1[key] = value[:split_idx]
-                split2[key] = value[split_idx:]
-            elif isinstance(value, list):
-                split1[key] = value[:split_idx]
-                split2[key] = value[split_idx:]
-            else:
-                split1[key] = value
-                split2[key] = value
-        return split1, split2
-
-    def __iter__(self):
-        worker_info = torch.utils.data.get_worker_info()
-        if worker_info is None:
-            worker_id = 0
-            num_workers = 1
-        else:
-            worker_id = worker_info.id
-            num_workers = worker_info.num_workers
-
-        source_dl = DataLoader(
-            self.source_dataset,
-            batch_size=self.batch_size,
-            shuffle=True
-        )
-        target_dl = DataLoader(
-            self.target_dataset,
-            batch_size=self.batch_size,
-            shuffle=True
-        )
-
-        source_iter = iter(source_dl)
-        target_iter = iter(target_dl)
-        batch_index = 0
-
-        for batch_a, batch_b in zip(source_iter, target_iter):
-            if batch_index % num_workers != worker_id:
-                batch_index += 1
-                continue
-            batch_index += 1
-
-            current_batch_size = len(batch_a['X'])
-            split = (current_batch_size + 1) // 2
-
-            # Split batches
-            a1, a2 = self._split_batch(batch_a, split)
-            b1, b2 = self._split_batch(batch_b, split)
-
-            # Create mixed batches
-            mixed1 = {k: self._mix_batch_elements(a1[k], b2[k]) for k in a1}
-            mixed2 = {k: self._mix_batch_elements(b1[k], a2[k]) for k in b1}
-
-            # Ensure domain_ids are proper tensors
-            for batch in [mixed1, mixed2]:
-                if 'domain_id' in batch:
-                    batch['domain_id'] = batch['domain_id'].float()
-
-            yield mixed1
-            yield mixed2
-
-    def __len__(self):
-        """
-        Returns an approximate length of the dataset (number of batches per worker).
-
-        The total number of mixed batches is estimated as twice the number of batches available
-        from the smaller of the two datasets, divided by the number of workers.
-        """
-        # Calculate total batches available in each domain.
-        total_source_batches = len(self.source_dataset) // self.batch_size
-        total_target_batches = len(self.target_dataset) // self.batch_size
-        # Each pair of batches produces 2 mixed batches.
-        total_mixed_batches = 2 * \
-            min(total_source_batches, total_target_batches)
-
-        worker_info = torch.utils.data.get_worker_info()
-        if worker_info is not None:
-            return total_mixed_batches // worker_info.num_workers
-        else:
-            return total_mixed_batches
+    def test_dataloader(self) -> CombinedLoader:
+        return self._create_combined_loader("test")

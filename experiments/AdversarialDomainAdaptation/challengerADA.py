@@ -1,26 +1,24 @@
+import sys
 from pathlib import Path
 import gc
-import sys
-
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-
-
-import multiprocessing
-from src.models.evaluators import TSForecastEvaluator
-from src.models.TSMixerDomainAdaptation import LitTSMixerDomainAdaptation
-from src.models.TSMixer import LitTSMixer
-from src.data_models.datamodule import HydroDataModule, HydroTransferDataModule
-from src.data_models.caravanify import Caravanify, CaravanifyConfig
-from experiments.AdversarialDomainAdaptation.configADA import ExperimentConfig
-import numpy as np
-import pandas as pd
+import torch
+import pytorch_lightning as pl
 from pytorch_lightning.callbacks import (
     ModelCheckpoint,
     EarlyStopping,
     LearningRateMonitor,
 )
-import pytorch_lightning as pl
-import torch
+import pandas as pd
+import numpy as np
+from experiments.AdversarialDomainAdaptation.configADA import ExperimentConfig
+from src.data_models.caravanify import Caravanify, CaravanifyConfig
+from src.data_models.datamodule import HydroDataModule, HydroTransferDataModule
+from src.models.TSMixer import LitTSMixer
+from src.models.TSMixerDomainAdaptation import LitTSMixerDomainAdaptation
+from src.models.evaluators import TSForecastEvaluator
+import multiprocessing
+
 
 class DomainAdaptationRunner:
     def __init__(self, config: ExperimentConfig):
@@ -53,7 +51,7 @@ class DomainAdaptationRunner:
         )
 
         self.ch_caravan = Caravanify(ch_config)
-        ch_basins = self.ch_caravan.get_all_gauge_ids()
+        ch_basins = self.ch_caravan.get_all_gauge_ids()[:3]
         print(f"Loading {len(ch_basins)} CH basins")
         self.ch_caravan.load_stations(ch_basins)
 
@@ -69,7 +67,7 @@ class DomainAdaptationRunner:
         )
 
         self.ca_caravan = Caravanify(ca_config)
-        ca_basins = self.ca_caravan.get_all_gauge_ids()
+        ca_basins = self.ca_caravan.get_all_gauge_ids()[:3]
         print(f"Loading {len(ca_basins)} CA basins")
         self.ca_caravan.load_stations(ca_basins)
 
@@ -237,7 +235,7 @@ class DomainAdaptationRunner:
             config=model_config,
             lambda_adv=self.config.LAMBDA_ADV,
             domain_loss_weight=self.config.DOMAIN_LOSS_WEIGHT,
-            learning_rate=self.config.FINETUNE_LR,
+            learning_rate=self.config.PRETRAIN_LR,
             group_identifier=self.config.GROUP_IDENTIFIER
         )
 
@@ -255,44 +253,51 @@ class DomainAdaptationRunner:
         return model
 
     def run_fine_tuning(self, adapted_model, target_data_module, run):
-        """Fine-tune on target data with frozen backbone."""
-        print("CONFIGURING MODEL FOR FINE-TUNING")
+        """Fine-tune on target data with frozen backbone using a regular LitTSMixer."""
 
-        # Create model config
-        from src.models.TSMixer import TSMixerConfig
-        model_config = TSMixerConfig(
+        # Create a standard LitTSMixer model (without domain adaptation components)
+        fine_tune_model = LitTSMixer(
             input_len=self.config.INPUT_LENGTH,
-            input_size=len(self.config.FORCING_FEATURES) + 1,
             output_len=self.config.OUTPUT_LENGTH,
+            input_size=len(self.config.FORCING_FEATURES) + 1,
             static_size=len(self.config.STATIC_FEATURES) - 1,
             hidden_size=self.config.HIDDEN_SIZE,
+            learning_rate=self.config.FINETUNE_LR,
             dropout=self.config.DROPOUT
         )
 
-        # Create a new model for fine-tuning (prevents issues with optimizer state)
-        model = LitTSMixerDomainAdaptation(
-            config=model_config,
-            lambda_adv=0.0,
-            domain_loss_weight=0.0,
-            learning_rate=self.config.FINETUNE_LR,
-            group_identifier=self.config.GROUP_IDENTIFIER
-        )
+        # Extract TSMixer weights from the domain-adapted model
+        adapted_tsmixer_state_dict = {}
+        for key, value in adapted_model.state_dict().items():
+            if key.startswith('model.'):
+                new_key = key.replace('model.', '')
+                adapted_tsmixer_state_dict[new_key] = value
 
-        # Load adapted weights
-        model.load_state_dict(adapted_model.state_dict())
+        # Transfer weights to the fine-tuning model
+        missing_keys, unexpected_keys = fine_tune_model.model.load_state_dict(
+            adapted_tsmixer_state_dict, strict=False)
+
+        if missing_keys:
+            print(
+                f"Warning: Missing keys when transferring weights: {missing_keys}")
+        if unexpected_keys:
+            print(
+                f"Warning: Unexpected keys when transferring weights: {unexpected_keys}")
+
+        print("Transferred weights from domain-adapted model to fine-tuning model")
 
         # Freeze backbone
-        model.freeze_backbone()
+        fine_tune_model.freeze_backbone()
 
         # Train with fine-tuning
         trainer = self.create_trainer("finetune", run)
-        trainer.fit(model, target_data_module)
+        trainer.fit(fine_tune_model, target_data_module)
 
         # Save model
         save_path = self.model_dir / f"tsmixer_da_finetuned_{run}.pt"
-        torch.save(model.state_dict(), save_path)
+        torch.save(fine_tune_model.state_dict(), save_path)
 
-        return model
+        return fine_tune_model
 
     def create_trainer(self, stage, run):
         """Create a PyTorch Lightning trainer with appropriate callbacks."""

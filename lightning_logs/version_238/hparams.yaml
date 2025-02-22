@@ -1,0 +1,13 @@
+config: !!python/object:src.models.TSMixer.TSMixerConfig
+  dropout: 0.1
+  hidden_size: 32
+  input_len: 64
+  input_size: 10
+  num_layers: 3
+  output_len: 10
+  static_embedding_size: 64
+  static_size: 10
+domain_loss_weight: 0.5
+group_identifier: gauge_id
+lambda_adv: 1.0
+learning_rate: 0.001
