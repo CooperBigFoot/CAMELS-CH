@@ -75,27 +75,11 @@ class ResBlock(nn.Module):
 
 
 class TSMixerBackbone(nn.Module):
-    """Feature extraction backbone for TSMixer.
-
-    The backbone is responsible for:
-    1. Projecting static features to the right dimension
-    2. Combining static and dynamic features
-    3. Processing through multiple residual blocks
-
-    This component can be frozen during fine-tuning to preserve learned feature representations.
-    """
-
     def __init__(self, configs: TSMixerConfig):
         super().__init__()
-
-        # Project static features to embedding dimension
         self.static_proj = nn.Linear(
             configs.static_size, configs.static_embedding_size)
-
-        # Combined dimension after concatenating dynamic and static features
         self.input_dim = configs.input_size + configs.static_embedding_size
-
-        # Stack of residual blocks
         self.layers = nn.ModuleList([
             ResBlock(
                 input_dim=self.input_dim,
@@ -105,21 +89,47 @@ class TSMixerBackbone(nn.Module):
             ) for _ in range(configs.num_layers)
         ])
 
-    def forward(self, x: torch.Tensor, static: torch.Tensor) -> torch.Tensor:
-        batch_size = x.size(0)
+        # Cache tensor for efficiency
+        self._zero_static_cache = None
+        self._last_batch_size = None
+        self._last_device = None
 
-        # Project and expand static features
-        static_emb = self.static_proj(static)  # [B, static_embedding_size]
-        # [B, input_len, static_embedding_size]
+    def _get_zero_static(self, batch_size: int, device: torch.device) -> torch.Tensor:
+        """Get cached zero tensor for static embeddings or create new one if needed."""
+        if (self._zero_static_cache is None or
+            batch_size != self._last_batch_size or
+                device != self._last_device):
+            self._zero_static_cache = torch.zeros(
+                batch_size,
+                self.static_proj.out_features,
+                device=device
+            )
+            self._last_batch_size = batch_size
+            self._last_device = device
+        return self._zero_static_cache
+
+    def forward(self, x: torch.Tensor, static: torch.Tensor, zero_static: bool = False) -> torch.Tensor:
+        """
+        Forward pass through the backbone network.
+
+        Args:
+            x: Dynamic input features [batch_size, seq_len, input_size]
+            static: Static features [batch_size, static_size] 
+            zero_static: If True, zero out static embeddings for domain adaptation
+        """
+        if zero_static:
+            # Use cached zero tensor for efficiency
+            static_emb = self._get_zero_static(x.size(0), x.device)
+        else:
+            static_emb = self.static_proj(static)
+
+        # Expand static features across time dimension
         static_emb = static_emb.unsqueeze(1).expand(-1, x.size(1), -1)
 
-        # Combine dynamic and static features
-        x = torch.cat([x, static_emb], dim=-1)  # [B, input_len, input_dim]
-
-        # Process through mixing layers
+        # Combine features and process through mixing layers
+        x = torch.cat([x, static_emb], dim=-1)
         for layer in self.layers:
             x = layer(x)
-
         return x
 
 

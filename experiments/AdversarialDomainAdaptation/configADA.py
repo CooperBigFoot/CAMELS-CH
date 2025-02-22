@@ -10,7 +10,7 @@ import os
 class ExperimentConfig:
     # Base configuration
     GROUP_IDENTIFIER: str = "gauge_id"
-    BATCH_SIZE: int = 512
+    BATCH_SIZE: int = 1024
     INPUT_LENGTH: int = 64
     OUTPUT_LENGTH: int = 10
     MAX_EPOCHS: int = 30
@@ -26,7 +26,7 @@ class ExperimentConfig:
 
     # Model configuration
     HIDDEN_SIZE: int = 32
-    DROPOUT: float = 0.1
+    DROPOUT: float = 0.3
 
     # Dataset configuration
     TARGET: str = "streamflow"

@@ -237,7 +237,7 @@ class DomainAdaptationRunner:
             config=model_config,
             lambda_adv=self.config.LAMBDA_ADV,
             domain_loss_weight=self.config.DOMAIN_LOSS_WEIGHT,
-            learning_rate=self.config.FINETUNE_LR,
+            learning_rate=self.config.FINETUNE_LR * 5,
             group_identifier=self.config.GROUP_IDENTIFIER
         )
 
@@ -342,18 +342,18 @@ class DomainAdaptationRunner:
 
         # Save results
         results_df.to_csv(
-            self.results_dir / f"da_challenger_detailed_results_{run}.csv", index=True
+            self.results_dir / f"da_challenger_v2_detailed_results_{run}.csv", index=True
         )
 
         overall_summary = evaluator.summarize_metrics(overall_metrics)
         overall_summary.to_csv(
-            self.results_dir / f"da_challenger_overall_metrics_{run}.csv", index=True
+            self.results_dir / f"da_challenger_v2_overall_metrics_{run}.csv", index=True
         )
 
         basin_summary = evaluator.summarize_metrics(
             basin_metrics, per_basin=True)
         basin_summary.to_csv(
-            self.results_dir / f"da_challenger_basin_metrics_{run}.csv", index=True
+            self.results_dir / f"da_challenger_v2_basin_metrics_{run}.csv", index=True
         )
 
         return {
@@ -389,7 +389,7 @@ class DomainAdaptationRunner:
             summary_stats = overall_metrics_df.groupby(
                 level=0).agg(['mean', 'std', 'min', 'max'])
             summary_stats.to_csv(self.results_dir /
-                                 "da_challenger_aggregate_metrics.csv")
+                                 "da_challenger_v2_aggregate_metrics.csv")
 
             print(
                 f"Successfully saved aggregate metrics for {len(all_results)} runs")

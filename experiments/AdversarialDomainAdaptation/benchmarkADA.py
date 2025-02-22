@@ -28,8 +28,8 @@ class BenchmarkRunner:
     def setup_directories(self):
         """Create necessary directories for experiment outputs."""
         self.results_dir = Path("experiments/AdversarialDomainAdaptation/results")
-        self.model_dir = Path("experiments/AdversarialDomainAdaptation/saved_models")
-        self.checkpoint_dir = Path("experiments/AdversarialDomainAdaptation/checkpoints")
+        self.model_dir = Path("experiments/AdversarialDomainAdaptation/saved_models/benchmark")
+        self.checkpoint_dir = Path("experiments/AdversarialDomainAdaptation/checkpoints/benchmark")
 
         for directory in [self.results_dir, self.model_dir, self.checkpoint_dir]:
             directory.mkdir(parents=True, exist_ok=True)
