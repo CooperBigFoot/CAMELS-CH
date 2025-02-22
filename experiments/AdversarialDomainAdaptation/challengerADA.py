@@ -41,6 +41,8 @@ class DomainAdaptationRunner:
         """Load and prepare datasets for both domains."""
         # CH Dataset
         print("CONFIGURING CH DATASET FOR PRETRAINING")
+
+        print(f"Using {self.config.MAX_WORKERS} workers")
         ch_config = CaravanifyConfig(
             attributes_dir=self.config.CH_CONFIG["ATTRIBUTE_DIR"],
             timeseries_dir=self.config.CH_CONFIG["TIMESERIES_DIR"],
@@ -140,8 +142,8 @@ class DomainAdaptationRunner:
         transfer_data_module = HydroTransferDataModule(
             source_datamodule=ch_data_module,
             target_datamodule=ca_data_module,
-            num_workers=min(self.config.MAX_WORKERS,
-                            multiprocessing.cpu_count())
+            num_workers=self.config.MAX_WORKERS,
+                            
         )
 
         # Phase 1: Pretrain on source data
@@ -360,7 +362,7 @@ class DomainAdaptationRunner:
             "results_df": results_df,
         }
 
-    def cleanup(self):
+    def  cleanup(self):
         """Clean up resources after each run."""
         torch.cuda.empty_cache()
         gc.collect()

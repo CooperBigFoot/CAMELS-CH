@@ -3,19 +3,20 @@ import numpy as np
 import torch
 from dataclasses import dataclass
 from typing import Dict, Any
+import os
 
 
 @dataclass
 class ExperimentConfig:
     # Base configuration
     GROUP_IDENTIFIER: str = "gauge_id"
-    BATCH_SIZE: int = 128
+    BATCH_SIZE: int = 512
     INPUT_LENGTH: int = 64
     OUTPUT_LENGTH: int = 10
     MAX_EPOCHS: int = 30
     ACCELERATOR: str = "cuda" if torch.cuda.is_available() else "cpu"
     NUM_RUNS: int = 5
-    MAX_WORKERS: int = 4
+    MAX_WORKERS: int = os.cpu_count()
 
     # Learning rates with scheduling
     FINETUNE_LR: float = 1e-4
@@ -70,8 +71,8 @@ class ExperimentConfig:
 
         # Central Asia configuration
         self.CA_CONFIG = {
-            "ATTRIBUTE_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CA/post_processed/attributes",
-            "TIMESERIES_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CA/post_processed/timeseries/csv",
+            "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/CA/post_processed/attributes",
+            "TIMESERIES_DIR": "/workspace/CARAVANIFY/CA/post_processed/timeseries/csv",
             "GAUGE_ID_PREFIX": "CA",
             "MIN_TRAIN_YEARS": 8,
             "VAL_YEARS": 2,
@@ -81,8 +82,8 @@ class ExperimentConfig:
 
         # Switzerland configuration
         self.CH_CONFIG = {
-            "ATTRIBUTE_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CH/post_processed/attributes",
-            "TIMESERIES_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CH/post_processed/timeseries/csv",
+            "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/CH/post_processed/attributes",
+            "TIMESERIES_DIR": "/workspace/CARAVANIFY/CH/post_processed/timeseries/csv",
             "GAUGE_ID_PREFIX": "CH",
             "MIN_TRAIN_YEARS": 20,
             "VAL_YEARS": 10,
