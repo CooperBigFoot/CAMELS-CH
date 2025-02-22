@@ -51,7 +51,7 @@ class DomainAdaptationRunner:
         )
 
         self.ch_caravan = Caravanify(ch_config)
-        ch_basins = self.ch_caravan.get_all_gauge_ids()[:3]
+        ch_basins = self.ch_caravan.get_all_gauge_ids()
         print(f"Loading {len(ch_basins)} CH basins")
         self.ch_caravan.load_stations(ch_basins)
 
@@ -67,7 +67,7 @@ class DomainAdaptationRunner:
         )
 
         self.ca_caravan = Caravanify(ca_config)
-        ca_basins = self.ca_caravan.get_all_gauge_ids()[:3]
+        ca_basins = self.ca_caravan.get_all_gauge_ids()
         print(f"Loading {len(ca_basins)} CA basins")
         self.ca_caravan.load_stations(ca_basins)
 
@@ -235,7 +235,7 @@ class DomainAdaptationRunner:
             config=model_config,
             lambda_adv=self.config.LAMBDA_ADV,
             domain_loss_weight=self.config.DOMAIN_LOSS_WEIGHT,
-            learning_rate=self.config.PRETRAIN_LR,
+            learning_rate=self.config.FINETUNE_LR,
             group_identifier=self.config.GROUP_IDENTIFIER
         )
 

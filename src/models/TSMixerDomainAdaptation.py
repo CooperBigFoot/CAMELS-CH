@@ -120,10 +120,14 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         return self.model(x, static)
 
     def extract_features(self, x, static):
-        # Remove static features from adversarial training by passing zeros
-        zeros_static = torch.zeros_like(static)
-        features = self.model.backbone(x, zeros_static)
+        # Use the original static features during adversarial training
+        features = self.model.backbone(x, static)
         return features.flatten(start_dim=1)
+
+        # # Remove static features from adversarial training by passing zeros
+        # zeros_static = torch.zeros_like(static)
+        # features = self.model.backbone(x, zeros_static)
+        # return features.flatten(start_dim=1)
 
     def training_step(self, batch, batch_idx):
         # Unpack the tuple from CombinedLoader
@@ -140,6 +144,8 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
             torch.zeros(len(source_batch["X"])),  # Source domain = 0
             torch.ones(len(target_batch["X"]))      # Target domain = 1
         ]).unsqueeze(1)
+
+        combined_domain = combined_domain.to(self.device)
 
         # Forward pass for task prediction (source domain only)
         y_pred = self(source_batch["X"], source_batch["static"])
