@@ -12,8 +12,8 @@ class ExperimentConfig:
     BATCH_SIZE: int = 128
     INPUT_LENGTH: int = 64
     OUTPUT_LENGTH: int = 10
-    MAX_EPOCHS: int = 50
-    ACCELERATOR: str = "cuda"
+    MAX_EPOCHS: int = 30
+    ACCELERATOR: str = "cuda" if torch.cuda.is_available() else "cpu"
     NUM_RUNS: int = 5
     MAX_WORKERS: int = 4
 
@@ -38,7 +38,7 @@ class ExperimentConfig:
 
     # Adversarial configs
     LAMBDA_ADV: int = 1.0
-    DOMAIN_LOSS_WEIGHT: float = 0.3
+    DOMAIN_LOSS_WEIGHT: float = 0.1
 
     def __post_init__(self):
         # Initialize feature lists
@@ -70,8 +70,8 @@ class ExperimentConfig:
 
         # Central Asia configuration
         self.CA_CONFIG = {
-            "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/CA/post_processed/attributes",
-            "TIMESERIES_DIR": "/workspace/CARAVANIFY/CA/post_processed/timeseries/csv",
+            "ATTRIBUTE_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CA/post_processed/attributes",
+            "TIMESERIES_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CA/post_processed/timeseries/csv",
             "GAUGE_ID_PREFIX": "CA",
             "MIN_TRAIN_YEARS": 8,
             "VAL_YEARS": 2,
@@ -81,8 +81,8 @@ class ExperimentConfig:
 
         # Switzerland configuration
         self.CH_CONFIG = {
-            "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/CH/post_processed/attributes",
-            "TIMESERIES_DIR": "/workspace/CARAVANIFY/CH/post_processed/timeseries/csv",
+            "ATTRIBUTE_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CH/post_processed/attributes",
+            "TIMESERIES_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CH/post_processed/timeseries/csv",
             "GAUGE_ID_PREFIX": "CH",
             "MIN_TRAIN_YEARS": 20,
             "VAL_YEARS": 10,

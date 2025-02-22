@@ -1,9 +1,0 @@
-dropout: 0.002370059826544535
-hidden_size: 32
-input_len: 171
-input_size: 10
-learning_rate: 0.0006156120426825539
-num_layers: 3
-output_len: 10
-static_embedding_size: 64
-static_size: 10
