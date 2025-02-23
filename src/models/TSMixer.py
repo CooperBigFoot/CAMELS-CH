@@ -137,8 +137,6 @@ class TSMixerHead(nn.Module):
     """Prediction head for TSMixer.
 
     Takes processed features from the backbone and produces final predictions.
-    This component remains trainable during fine-tuning to adapt to new tasks
-    while preserving learned feature representations.
     """
 
     def __init__(self, input_dim: int, input_len: int, hidden_size: int, output_len: int):

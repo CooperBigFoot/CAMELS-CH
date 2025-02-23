@@ -119,24 +119,23 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
     def forward(self, x, static):
         return self.model(x, static)
 
+    def extract_features(self, x: torch.Tensor, static: torch.Tensor) -> torch.Tensor:
+        """
+        Extract domain-invariant features for adversarial training.
 
-def extract_features(self, x: torch.Tensor, static: torch.Tensor) -> torch.Tensor:
-    """
-    Extract domain-invariant features for adversarial training.
+        The static features are explicitly zeroed out to ensure the domain classifier
+        learns only from the dynamic features, preventing any static catchment 
+        characteristics from influencing domain discrimination.
 
-    The static features are explicitly zeroed out to ensure the domain classifier
-    learns only from the dynamic features, preventing any static catchment 
-    characteristics from influencing domain discrimination.
+        Args:
+            x: Dynamic input features [batch_size, seq_len, input_size]
+            static: Static features [batch_size, static_size] (not used when zeroed)
 
-    Args:
-        x: Dynamic input features [batch_size, seq_len, input_size]
-        static: Static features [batch_size, static_size] (not used when zeroed)
-
-    Returns:
-        Flattened feature representations [batch_size, flattened_dim]
-    """
-    features = self.model.backbone(x, static, zero_static=True)
-    return features.flatten(start_dim=1)
+        Returns:
+            Flattened feature representations [batch_size, flattened_dim]
+        """
+        features = self.model.backbone(x, static, zero_static=True)
+        return features.flatten(start_dim=1)
 
     def training_step(self, batch, batch_idx):
         # Unpack the tuple from CombinedLoader

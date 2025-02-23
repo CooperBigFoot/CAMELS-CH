@@ -8,6 +8,8 @@ import os
 
 @dataclass
 class ExperimentConfig:
+
+    EXPERIMENT_NAME: str = "v3"
     # Base configuration
     GROUP_IDENTIFIER: str = "gauge_id"
     BATCH_SIZE: int = 1024
@@ -39,7 +41,7 @@ class ExperimentConfig:
 
     # Adversarial configs
     LAMBDA_ADV: int = 1.0
-    DOMAIN_LOSS_WEIGHT: float = 0.1
+    DOMAIN_LOSS_WEIGHT: float = 0.3
 
     def __post_init__(self):
         # Initialize feature lists

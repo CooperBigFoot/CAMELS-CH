@@ -2,22 +2,24 @@ import sys
 from pathlib import Path
 import gc
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-import torch
-import pytorch_lightning as pl
+
+import multiprocessing
+from src.models.evaluators import TSForecastEvaluator
+from src.models.TSMixerDomainAdaptation import LitTSMixerDomainAdaptation
+from src.models.TSMixer import LitTSMixer
+from src.data_models.datamodule import HydroDataModule, HydroTransferDataModule
+from src.data_models.caravanify import Caravanify, CaravanifyConfig
+from experiments.AdversarialDomainAdaptation.configADA import ExperimentConfig
+import numpy as np
+import pandas as pd
 from pytorch_lightning.callbacks import (
     ModelCheckpoint,
     EarlyStopping,
     LearningRateMonitor,
 )
-import pandas as pd
-import numpy as np
-from experiments.AdversarialDomainAdaptation.configADA import ExperimentConfig
-from src.data_models.caravanify import Caravanify, CaravanifyConfig
-from src.data_models.datamodule import HydroDataModule, HydroTransferDataModule
-from src.models.TSMixer import LitTSMixer
-from src.models.TSMixerDomainAdaptation import LitTSMixerDomainAdaptation
-from src.models.evaluators import TSForecastEvaluator
-import multiprocessing
+import pytorch_lightning as pl
+import torch
+
 
 
 class DomainAdaptationRunner:
@@ -28,11 +30,11 @@ class DomainAdaptationRunner:
     def setup_directories(self):
         """Create necessary directories for experiment outputs."""
         self.results_dir = Path(
-            "experiments/AdversarialDomainAdaptation/results")
+            f"experiments/AdversarialDomainAdaptation/results/{self.config.EXPERIMENT_NAME}")
         self.model_dir = Path(
-            "experiments/AdversarialDomainAdaptation/saved_models")
+            f"experiments/AdversarialDomainAdaptation/saved_models/{self.config.EXPERIMENT_NAME}")
         self.checkpoint_dir = Path(
-            "experiments/AdversarialDomainAdaptation/checkpoints")
+            f"experiments/AdversarialDomainAdaptation/checkpoints/{self.config.EXPERIMENT_NAME}")
 
         for directory in [self.results_dir, self.model_dir, self.checkpoint_dir]:
             directory.mkdir(parents=True, exist_ok=True)
@@ -53,7 +55,7 @@ class DomainAdaptationRunner:
         )
 
         self.ch_caravan = Caravanify(ch_config)
-        ch_basins = self.ch_caravan.get_all_gauge_ids()
+        ch_basins = self.ch_caravan.get_all_gauge_ids()[:2]
         print(f"Loading {len(ch_basins)} CH basins")
         self.ch_caravan.load_stations(ch_basins)
 
@@ -69,7 +71,7 @@ class DomainAdaptationRunner:
         )
 
         self.ca_caravan = Caravanify(ca_config)
-        ca_basins = self.ca_caravan.get_all_gauge_ids()
+        ca_basins = self.ca_caravan.get_all_gauge_ids()[:2]
         print(f"Loading {len(ca_basins)} CA basins")
         self.ca_caravan.load_stations(ca_basins)
 
@@ -143,7 +145,7 @@ class DomainAdaptationRunner:
             source_datamodule=ch_data_module,
             target_datamodule=ca_data_module,
             num_workers=self.config.MAX_WORKERS,
-                            
+
         )
 
         # Phase 1: Pretrain on source data
@@ -237,7 +239,7 @@ class DomainAdaptationRunner:
             config=model_config,
             lambda_adv=self.config.LAMBDA_ADV,
             domain_loss_weight=self.config.DOMAIN_LOSS_WEIGHT,
-            learning_rate=self.config.FINETUNE_LR * 5,
+            learning_rate=self.config.PRETRAIN_LR / 5,
             group_identifier=self.config.GROUP_IDENTIFIER
         )
 
@@ -342,18 +344,18 @@ class DomainAdaptationRunner:
 
         # Save results
         results_df.to_csv(
-            self.results_dir / f"da_challenger_v2_detailed_results_{run}.csv", index=True
+            self.results_dir / f"da_challenger_{self.config.EXPERIMENT_NAME}_detailed_results_{run}.csv", index=True
         )
 
         overall_summary = evaluator.summarize_metrics(overall_metrics)
         overall_summary.to_csv(
-            self.results_dir / f"da_challenger_v2_overall_metrics_{run}.csv", index=True
+            self.results_dir / f"da_challenger_{self.config.EXPERIMENT_NAME}_overall_metrics_{run}.csv", index=True
         )
 
         basin_summary = evaluator.summarize_metrics(
             basin_metrics, per_basin=True)
         basin_summary.to_csv(
-            self.results_dir / f"da_challenger_v2_basin_metrics_{run}.csv", index=True
+            self.results_dir / f"da_challenger_{self.config.EXPERIMENT_NAME}_basin_metrics_{run}.csv", index=True
         )
 
         return {
@@ -362,7 +364,7 @@ class DomainAdaptationRunner:
             "results_df": results_df,
         }
 
-    def  cleanup(self):
+    def cleanup(self):
         """Clean up resources after each run."""
         torch.cuda.empty_cache()
         gc.collect()
@@ -389,7 +391,7 @@ class DomainAdaptationRunner:
             summary_stats = overall_metrics_df.groupby(
                 level=0).agg(['mean', 'std', 'min', 'max'])
             summary_stats.to_csv(self.results_dir /
-                                 "da_challenger_v2_aggregate_metrics.csv")
+                                 "da_challenger_test_aggregate_metrics.csv")
 
             print(
                 f"Successfully saved aggregate metrics for {len(all_results)} runs")
