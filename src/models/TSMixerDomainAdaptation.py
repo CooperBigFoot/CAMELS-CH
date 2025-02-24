@@ -274,7 +274,7 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
             "train_loss": total_loss,
             "train_task_loss": task_loss,
             "train_domain_loss": domain_loss,
-        })
+        }, batch_size=len(combined_X))  # Add explicit batch size
 
         return total_loss
 
@@ -321,7 +321,7 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
                           == true_domains).float().mean()
             metrics["val_domain_acc"] = domain_acc
 
-        self.log_dict(metrics, prog_bar=True)
+        self.log_dict(metrics, prog_bar=True, batch_size=len(combined_X))
         return metrics.get("val_loss", torch.tensor(0.0))
 
     def test_step(self, batch, batch_idx):

@@ -351,7 +351,7 @@ class HydroDataModule(pl.LightningDataModule):
                 # Handle case where transform returns numpy array
                 if isinstance(transformed, np.ndarray):
                     for i, col in enumerate(features_to_process):
-                        self.processed_static[col] = transformed[:, i]
+                        self.processed_static.loc[:, col] = transformed[:, i]
                 else:
                     # Handle DataFrame/Series case
                     for col in features_to_process:
@@ -526,7 +526,7 @@ class HydroTransferDataModule(pl.LightningDataModule):
         source_datamodule: HydroDataModule,
         target_datamodule: HydroDataModule,
         num_workers: int = 4,
-        mode: str ="min_size",
+        mode: str = "min_size",
     ):
         super().__init__()
         self.source_dm = source_datamodule
