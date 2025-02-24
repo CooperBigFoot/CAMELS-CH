@@ -22,7 +22,7 @@ class TSMixerConfig:
         output_len: int,
         static_size: int,
         hidden_size: int = 64,
-        static_embedding_size: int = 64,
+        static_embedding_size: int = 10,
         num_layers: int = 3,
         dropout: float = 0.1,
     ):
@@ -62,6 +62,7 @@ class ResBlock(nn.Module):
         self.channel = nn.Sequential(
             nn.Linear(input_dim, hidden_size),
             nn.ReLU(),
+            nn.Dropout(dropout),
             nn.Linear(hidden_size, input_dim),
             nn.Dropout(dropout),
         )

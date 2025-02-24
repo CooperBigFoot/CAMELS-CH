@@ -12,8 +12,8 @@ class ExperimentConfig:
     EXPERIMENT_NAME: str = "v3"
     # Base configuration
     GROUP_IDENTIFIER: str = "gauge_id"
-    BATCH_SIZE: int = 32
-    INPUT_LENGTH: int = 64
+    BATCH_SIZE: int = 1024
+    INPUT_LENGTH: int = 128
     OUTPUT_LENGTH: int = 10
     MAX_EPOCHS: int = 1
     ACCELERATOR: str = "cuda" if torch.cuda.is_available() else "cpu"
@@ -21,8 +21,8 @@ class ExperimentConfig:
     MAX_WORKERS: int = os.cpu_count()
 
     # Learning rates with scheduling
-    FINETUNE_LR: float = 1e-4
-    PRETRAIN_LR: float = 3e-3
+    FINETUNE_LR: float = 1e-5
+    PRETRAIN_LR: float = 3e-4
     LR_SCHEDULER_PATIENCE: int = 3
     LR_SCHEDULER_FACTOR: float = 0.5
 
@@ -87,8 +87,8 @@ class ExperimentConfig:
             "ATTRIBUTE_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CH/post_processed/attributes",
             "TIMESERIES_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CH/post_processed/timeseries/csv",
             "GAUGE_ID_PREFIX": "CH",
-            "MIN_TRAIN_YEARS": 20,
-            "VAL_YEARS": 10,
+            "MIN_TRAIN_YEARS": 23,
+            "VAL_YEARS": 7,
             "TEST_YEARS": 0,
             "MAX_MISSING_PCT": 10,
         }
