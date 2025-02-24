@@ -5,8 +5,6 @@ import pytorch_lightning as pl
 from torch.nn import MSELoss
 from .TSMixer import TSMixer
 
-# Gradient reversal utility for adversarial training
-
 
 class GradientReversalFunction(torch.autograd.Function):
     @staticmethod
@@ -22,8 +20,6 @@ class GradientReversalFunction(torch.autograd.Function):
 def grad_reverse(x, lambda_=1.0):
     return GradientReversalFunction.apply(x, lambda_)
 
-# Domain discriminator network for domain adaptation
-
 
 class DomainDiscriminator(nn.Module):
     def __init__(self, feature_dim, hidden_dim=16):
@@ -38,13 +34,13 @@ class DomainDiscriminator(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-# LightningModule with domain adaptation functionality
-
 
 class LitTSMixerDomainAdaptation(pl.LightningModule):
-    def __init__(self, config, lambda_adv=1.0, domain_loss_weight=1.0, learning_rate=1e-3, group_identifier="basin_id"):
+    def __init__(self, config, lambda_adv=1.0, domain_loss_weight=1.0, learning_rate=1e-3, group_identifier="gauge_id"):
         super().__init__()
         self.save_hyperparameters()
+
+        self.group_identifier = group_identifier
 
         # Original TSMixer components
         self.config = config
@@ -220,7 +216,7 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         output = {
             "predictions": y_hat.squeeze(-1),
             "observations": y.squeeze(-1),
-            "basin_ids": batch["gauge_id"],
+            "basin_ids": batch[self.group_identifier],
         }
 
         self.test_outputs.append(output)

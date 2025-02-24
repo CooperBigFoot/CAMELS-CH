@@ -191,12 +191,15 @@ class LitTSMixer(pl.LightningModule):
         input_size: int,
         static_size: int,
         hidden_size: int = 64,
-        static_embedding_size: int = 64,
+        static_embedding_size: int = 10,
         num_layers: int = 3,
         dropout: float = 0.1,
         learning_rate: float = 1e-3,
+        group_identifier: str = "gauge_id",
     ):
         super().__init__()
+
+        self.group_identifier = group_identifier
 
         # Create config and model
         self.config = TSMixerConfig(
@@ -286,7 +289,7 @@ class LitTSMixer(pl.LightningModule):
         output = {
             "predictions": y_hat.squeeze(-1),
             "observations": y.squeeze(-1),
-            "basin_ids": batch["gauge_id"],
+            "basin_ids": batch[self.group_identifier],
         }
 
         self.test_outputs.append(output)
