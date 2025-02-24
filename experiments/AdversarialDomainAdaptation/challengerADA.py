@@ -3,23 +3,23 @@ from pathlib import Path
 import gc
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-import multiprocessing
-from src.models.evaluators import TSForecastEvaluator
-from src.models.TSMixerDomainAdaptation import LitTSMixerDomainAdaptation
-from src.models.TSMixer import LitTSMixer
-from src.data_models.datamodule import HydroDataModule, HydroTransferDataModule
-from src.data_models.caravanify import Caravanify, CaravanifyConfig
-from experiments.AdversarialDomainAdaptation.configADA import ExperimentConfig
-import numpy as np
-import pandas as pd
+
+import torch
+import pytorch_lightning as pl
 from pytorch_lightning.callbacks import (
     ModelCheckpoint,
     EarlyStopping,
     LearningRateMonitor,
 )
-import pytorch_lightning as pl
-import torch
-
+import pandas as pd
+import numpy as np
+from experiments.AdversarialDomainAdaptation.configADA import ExperimentConfig
+from src.data_models.caravanify import Caravanify, CaravanifyConfig
+from src.data_models.datamodule import HydroDataModule, HydroTransferDataModule
+from src.models.TSMixer import LitTSMixer
+from src.models.TSMixerDomainAdaptation import LitTSMixerDomainAdaptation
+from src.models.evaluators import TSForecastEvaluator
+import multiprocessing
 
 
 class DomainAdaptationRunner:
@@ -55,7 +55,7 @@ class DomainAdaptationRunner:
         )
 
         self.ch_caravan = Caravanify(ch_config)
-        ch_basins = self.ch_caravan.get_all_gauge_ids()
+        ch_basins = self.ch_caravan.get_all_gauge_ids()[:2]
         print(f"Loading {len(ch_basins)} CH basins")
         self.ch_caravan.load_stations(ch_basins)
 
@@ -71,7 +71,7 @@ class DomainAdaptationRunner:
         )
 
         self.ca_caravan = Caravanify(ca_config)
-        ca_basins = self.ca_caravan.get_all_gauge_ids()
+        ca_basins = self.ca_caravan.get_all_gauge_ids()[:2]
         print(f"Loading {len(ca_basins)} CA basins")
         self.ca_caravan.load_stations(ca_basins)
 
@@ -145,7 +145,6 @@ class DomainAdaptationRunner:
             source_datamodule=ch_data_module,
             target_datamodule=ca_data_module,
             num_workers=self.config.MAX_WORKERS,
-
         )
 
         # Phase 1: Pretrain on source data
@@ -199,16 +198,9 @@ class DomainAdaptationRunner:
     def run_pretraining(self, data_module, run):
         """Run pretraining phase on source data only."""
         print("SETTING UP MODEL FOR PRETRAINING")
-        model = LitTSMixer(
-            input_len=self.config.INPUT_LENGTH,
-            output_len=self.config.OUTPUT_LENGTH,
-            input_size=len(self.config.FORCING_FEATURES) + 1,  # +1 for target
-            static_size=len(self.config.STATIC_FEATURES) -
-            1,  # -1 for gauge_id
-            hidden_size=self.config.HIDDEN_SIZE,
-            learning_rate=self.config.PRETRAIN_LR,
-            dropout=self.config.DROPOUT
-        )
+
+        # Use the config object to create the model
+        model = LitTSMixer(self.config.get_tsmixer_config())
 
         trainer = self.create_trainer("pretrain", run)
         trainer.fit(model, data_module)
@@ -223,25 +215,9 @@ class DomainAdaptationRunner:
         """Run domain adaptation phase with adversarial training."""
         print("CONFIGURING MODEL FOR DOMAIN ADAPTATION")
 
-        # Create model config
-        from src.models.TSMixer import TSMixerConfig
-        model_config = TSMixerConfig(
-            input_len=self.config.INPUT_LENGTH,
-            input_size=len(self.config.FORCING_FEATURES) + 1,
-            output_len=self.config.OUTPUT_LENGTH,
-            static_size=len(self.config.STATIC_FEATURES) - 1,
-            hidden_size=self.config.HIDDEN_SIZE,
-            dropout=self.config.DROPOUT
-        )
-
-        # Create domain adaptation model
+        # Create domain adaptation model using the config
         model = LitTSMixerDomainAdaptation(
-            config=model_config,
-            lambda_adv=self.config.LAMBDA_ADV,
-            domain_loss_weight=self.config.DOMAIN_LOSS_WEIGHT,
-            learning_rate=self.config.PRETRAIN_LR / 5,
-            group_identifier=self.config.GROUP_IDENTIFIER
-        )
+            self.config.get_domain_adaptation_config())
 
         # Load pretrained weights
         model.load_from_pretrained(pretrain_model.state_dict())
@@ -259,16 +235,8 @@ class DomainAdaptationRunner:
     def run_fine_tuning(self, adapted_model, target_data_module, run):
         """Fine-tune on target data with frozen backbone using a regular LitTSMixer."""
 
-        # Create a standard LitTSMixer model (without domain adaptation components)
-        fine_tune_model = LitTSMixer(
-            input_len=self.config.INPUT_LENGTH,
-            output_len=self.config.OUTPUT_LENGTH,
-            input_size=len(self.config.FORCING_FEATURES) + 1,
-            static_size=len(self.config.STATIC_FEATURES) - 1,
-            hidden_size=self.config.HIDDEN_SIZE,
-            learning_rate=self.config.FINETUNE_LR,
-            dropout=self.config.DROPOUT
-        )
+        # Create a standard LitTSMixer model with fine-tuning configuration
+        fine_tune_model = LitTSMixer(self.config.get_finetune_config())
 
         # Extract TSMixer weights from the domain-adapted model
         adapted_tsmixer_state_dict = {}

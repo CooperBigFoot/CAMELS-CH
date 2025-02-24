@@ -2,12 +2,15 @@ import random
 import numpy as np
 import torch
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import os
+from src.models.TSMixer import TSMixerConfig
+from src.models.TSMixerDomainAdaptation import TSMixerDomainAdaptationConfig
 
 
 @dataclass
 class ExperimentConfig:
+    """Configuration for domain adaptation experiments."""
 
     EXPERIMENT_NAME: str = "v3"
     # Base configuration
@@ -29,6 +32,8 @@ class ExperimentConfig:
     # Model configuration
     HIDDEN_SIZE: int = 32
     DROPOUT: float = 0.3
+    NUM_LAYERS: int = 10
+    STATIC_EMBEDDING_SIZE: int = 10
 
     # Dataset configuration
     TARGET: str = "streamflow"
@@ -40,8 +45,9 @@ class ExperimentConfig:
     CH_CONFIG: Dict[str, Any] = None
 
     # Adversarial configs
-    LAMBDA_ADV: int = 1.0
+    LAMBDA_ADV: float = 1.0
     DOMAIN_LOSS_WEIGHT: float = 0.3
+    DISCRIMINATOR_HIDDEN_DIM: int = 16
 
     def __post_init__(self):
         # Initialize feature lists
@@ -121,6 +127,49 @@ class ExperimentConfig:
             torch.cuda.manual_seed_all(seed)
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
+
+    def get_tsmixer_config(self) -> TSMixerConfig:
+        """Generate a TSMixerConfig from experiment parameters."""
+        return TSMixerConfig(
+            input_len=self.INPUT_LENGTH,
+            input_size=len(self.FORCING_FEATURES) + 1,  # +1 for target
+            output_len=self.OUTPUT_LENGTH,
+            static_size=len(self.STATIC_FEATURES) - 1,  # -1 for gauge_id
+            hidden_size=self.HIDDEN_SIZE,
+            static_embedding_size=self.STATIC_EMBEDDING_SIZE,
+            num_layers=self.NUM_LAYERS,
+            dropout=self.DROPOUT,
+            learning_rate=self.PRETRAIN_LR,
+            group_identifier=self.GROUP_IDENTIFIER,
+            lr_scheduler_patience=self.LR_SCHEDULER_PATIENCE,
+            lr_scheduler_factor=self.LR_SCHEDULER_FACTOR,
+        )
+
+    def get_domain_adaptation_config(self) -> TSMixerDomainAdaptationConfig:
+        """Generate a TSMixerDomainAdaptationConfig from experiment parameters."""
+        return TSMixerDomainAdaptationConfig(
+            input_len=self.INPUT_LENGTH,
+            input_size=len(self.FORCING_FEATURES) + 1,  # +1 for target
+            output_len=self.OUTPUT_LENGTH,
+            static_size=len(self.STATIC_FEATURES) - 1,  # -1 for gauge_id
+            hidden_size=self.HIDDEN_SIZE,
+            static_embedding_size=self.STATIC_EMBEDDING_SIZE,
+            num_layers=self.NUM_LAYERS,
+            dropout=self.DROPOUT,
+            learning_rate=self.PRETRAIN_LR / 5,  # Reduced learning rate for adaptation
+            group_identifier=self.GROUP_IDENTIFIER,
+            lr_scheduler_patience=self.LR_SCHEDULER_PATIENCE,
+            lr_scheduler_factor=self.LR_SCHEDULER_FACTOR,
+            lambda_adv=self.LAMBDA_ADV,
+            domain_loss_weight=self.DOMAIN_LOSS_WEIGHT,
+            discriminator_hidden_dim=self.DISCRIMINATOR_HIDDEN_DIM,
+        )
+
+    def get_finetune_config(self) -> TSMixerConfig:
+        """Generate a TSMixerConfig for fine-tuning."""
+        config = self.get_tsmixer_config()
+        config.learning_rate = self.FINETUNE_LR
+        return config
 
     def get_preprocessing_config(self, domain: str) -> Dict:
         """Get domain-specific preprocessing configuration."""

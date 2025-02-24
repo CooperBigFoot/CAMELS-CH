@@ -11,7 +11,7 @@ import pytorch_lightning as pl
 from torch.nn import MSELoss
 from torch.optim import Adam
 import numpy as np
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Any, Union, List
 
 
 class TSMixerConfig:
@@ -30,9 +30,29 @@ class TSMixerConfig:
         static_size: int,
         hidden_size: int = 64,
         static_embedding_size: int = 10,
-        num_layers: int = 3,
+        num_layers: int = 5,
         dropout: float = 0.1,
+        learning_rate: float = 1e-3,
+        group_identifier: str = "gauge_id",
+        lr_scheduler_patience: int = 2,
+        lr_scheduler_factor: float = 0.5,
     ):
+        """Initialize TSMixer configuration.
+
+        Args:
+            input_len: Length of input sequence (time steps)
+            input_size: Number of input features per time step
+            output_len: Length of output sequence to predict
+            static_size: Number of static features
+            hidden_size: Size of hidden layers in network
+            static_embedding_size: Size of static feature embeddings
+            num_layers: Number of ResBlock layers
+            dropout: Dropout rate
+            learning_rate: Initial learning rate
+            group_identifier: Column name for the group/basin identifier
+            lr_scheduler_patience: Patience for learning rate scheduler
+            lr_scheduler_factor: Factor by which to reduce learning rate
+        """
         self.input_len = input_len
         self.input_size = input_size
         self.output_len = output_len
@@ -41,6 +61,46 @@ class TSMixerConfig:
         self.static_embedding_size = static_embedding_size
         self.num_layers = num_layers
         self.dropout = dropout
+        self.learning_rate = learning_rate
+        self.group_identifier = group_identifier
+        self.lr_scheduler_patience = lr_scheduler_patience
+        self.lr_scheduler_factor = lr_scheduler_factor
+
+    @classmethod
+    def from_dict(cls, config_dict: Dict[str, Any]) -> "TSMixerConfig":
+        """Create a config object from a dictionary.
+
+        Args:
+            config_dict: Dictionary containing configuration parameters
+
+        Returns:
+            TSMixerConfig object initialized with provided parameters
+        """
+        return cls(**config_dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert config to dictionary.
+
+        Returns:
+            Dictionary containing all configuration parameters
+        """
+        return self.__dict__.copy()
+
+    def update(self, **kwargs) -> "TSMixerConfig":
+        """Update config parameters.
+
+        Args:
+            **kwargs: Key-value pairs of parameters to update
+
+        Returns:
+            Self with updated parameters
+        """
+        for key, value in kwargs.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+            else:
+                raise ValueError(f"Unknown configuration parameter: {key}")
+        return self
 
 
 class ResBlock(nn.Module):
@@ -98,18 +158,18 @@ class ResBlock(nn.Module):
 
 
 class TSMixerBackbone(nn.Module):
-    def __init__(self, configs: TSMixerConfig):
+    def __init__(self, config: TSMixerConfig):
         super().__init__()
         self.static_proj = nn.Linear(
-            configs.static_size, configs.static_embedding_size)
-        self.input_dim = configs.input_size + configs.static_embedding_size
+            config.static_size, config.static_embedding_size)
+        self.input_dim = config.input_size + config.static_embedding_size
         self.layers = nn.ModuleList([
             ResBlock(
                 input_dim=self.input_dim,
-                hidden_size=configs.hidden_size,
-                dropout=configs.dropout,
-                input_len=configs.input_len,
-            ) for _ in range(configs.num_layers)
+                hidden_size=config.hidden_size,
+                dropout=config.dropout,
+                input_len=config.input_len,
+            ) for _ in range(config.num_layers)
         ])
 
         # Cache tensor for efficiency
@@ -181,16 +241,17 @@ class TSMixerHead(nn.Module):
 class TSMixer(nn.Module):
     """Complete TSMixer model with separate backbone and head components."""
 
-    def __init__(self, configs: TSMixerConfig):
+    def __init__(self, config: TSMixerConfig):
         super().__init__()
 
-        self.backbone = TSMixerBackbone(configs)
+        self.backbone = TSMixerBackbone(config)
         self.head = TSMixerHead(
             input_dim=self.backbone.input_dim,
-            input_len=configs.input_len,
-            hidden_size=configs.hidden_size,
-            output_len=configs.output_len
+            input_len=config.input_len,
+            hidden_size=config.hidden_size,
+            output_len=config.output_len
         )
+        self.config = config
 
     def forward(self, x: torch.Tensor, static: torch.Tensor) -> torch.Tensor:
         features = self.backbone(x, static)
@@ -209,37 +270,28 @@ class LitTSMixer(pl.LightningModule):
 
     def __init__(
         self,
-        input_len: int,
-        output_len: int,
-        input_size: int,
-        static_size: int,
-        hidden_size: int = 64,
-        static_embedding_size: int = 10,
-        num_layers: int = 3,
-        dropout: float = 0.1,
-        learning_rate: float = 1e-3,
-        group_identifier: str = "gauge_id",
+        config: Union[TSMixerConfig, Dict[str, Any]],
     ):
+        """Initialize the Lightning Module with a TSMixerConfig.
+
+        Args:
+            config: Either a TSMixerConfig object or a dictionary of config parameters
+        """
         super().__init__()
 
-        self.group_identifier = group_identifier
+        # Handle different config input types
+        if isinstance(config, dict):
+            self.config = TSMixerConfig.from_dict(config)
+        else:
+            self.config = config
 
-        # Create config and model
-        self.config = TSMixerConfig(
-            input_len=input_len,
-            output_len=output_len,
-            input_size=input_size,
-            static_size=static_size,
-            hidden_size=hidden_size,
-            static_embedding_size=static_embedding_size,
-            num_layers=num_layers,
-            dropout=dropout,
-        )
+        # Create the TSMixer model using the config
         self.model = TSMixer(self.config)
 
-        # Save parameters and setup
-        self.save_hyperparameters()
-        self.learning_rate = learning_rate
+        # Save all hyperparameters from config for reproducibility
+        self.save_hyperparameters(self.config.to_dict())
+
+        # Set up criteria and tracking variables
         self.mse_criterion = MSELoss()
         self.test_outputs = []
 
@@ -247,28 +299,24 @@ class LitTSMixer(pl.LightningModule):
         """Freeze backbone parameters for fine-tuning."""
         for param in self.model.backbone.parameters():
             param.requires_grad = False
-
         print("Backbone parameters frozen")
 
     def unfreeze_backbone(self):
         """Unfreeze backbone parameters."""
         for param in self.model.backbone.parameters():
             param.requires_grad = True
-
         print("Backbone parameters unfrozen")
 
     def freeze_head(self):
         """Freeze prediction head parameters."""
         for param in self.model.head.parameters():
             param.requires_grad = False
-
         print("Head parameters frozen")
 
     def unfreeze_head(self):
         """Unfreeze prediction head parameters."""
         for param in self.model.head.parameters():
             param.requires_grad = True
-
         print("Head parameters unfrozen")
 
     def forward(self, x: torch.Tensor, static: torch.Tensor) -> torch.Tensor:
@@ -312,7 +360,7 @@ class LitTSMixer(pl.LightningModule):
         output = {
             "predictions": y_hat.squeeze(-1),
             "observations": y.squeeze(-1),
-            "basin_ids": batch[self.group_identifier],
+            "basin_ids": batch[self.config.group_identifier],
         }
 
         self.test_outputs.append(output)
@@ -336,13 +384,13 @@ class LitTSMixer(pl.LightningModule):
         self.test_outputs = []
 
     def configure_optimizers(self) -> Dict:
-        optimizer = Adam(self.parameters(), lr=self.learning_rate)
+        optimizer = Adam(self.parameters(), lr=self.config.learning_rate)
         scheduler = {
             "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer,
                 mode="min",
-                patience=2,
-                factor=0.5
+                patience=self.config.lr_scheduler_patience,
+                factor=self.config.lr_scheduler_factor
             ),
             "monitor": "val_loss",
         }

@@ -3,7 +3,9 @@ import torch.nn as nn
 from torch.optim import Adam
 import pytorch_lightning as pl
 from torch.nn import MSELoss
-from .TSMixer import TSMixer
+from typing import Dict, Any, Union, List, Optional, Tuple
+
+from .TSMixer import TSMixer, TSMixerConfig
 
 
 class GradientReversalFunction(torch.autograd.Function):
@@ -35,26 +37,112 @@ class DomainDiscriminator(nn.Module):
         return self.net(x)
 
 
+class TSMixerDomainAdaptationConfig(TSMixerConfig):
+    """Configuration for TSMixer with domain adaptation capabilities.
+
+    Extends the base TSMixerConfig with domain adaptation specific parameters.
+    """
+
+    def __init__(
+        self,
+        input_len: int,
+        input_size: int,
+        output_len: int,
+        static_size: int,
+        hidden_size: int = 64,
+        static_embedding_size: int = 10,
+        num_layers: int = 5,
+        dropout: float = 0.1,
+        learning_rate: float = 1e-3,
+        group_identifier: str = "gauge_id",
+        lr_scheduler_patience: int = 2,
+        lr_scheduler_factor: float = 0.5,
+        lambda_adv: float = 1.0,
+        domain_loss_weight: float = 1.0,
+        discriminator_hidden_dim: int = 16
+    ):
+        """Initialize TSMixerDomainAdaptation configuration.
+
+        Args:
+            input_len: Length of input sequence (time steps)
+            input_size: Number of input features per time step
+            output_len: Length of output sequence to predict
+            static_size: Number of static features
+            hidden_size: Size of hidden layers in network
+            static_embedding_size: Size of static feature embeddings
+            num_layers: Number of ResBlock layers
+            dropout: Dropout rate
+            learning_rate: Initial learning rate
+            group_identifier: Column name for the group/basin identifier
+            lr_scheduler_patience: Patience for learning rate scheduler
+            lr_scheduler_factor: Factor by which to reduce learning rate
+            lambda_adv: Weight for gradient reversal scaling
+            domain_loss_weight: Weight for domain loss in total loss function
+            discriminator_hidden_dim: Hidden dimension size for domain discriminator
+        """
+        super().__init__(
+            input_len=input_len,
+            input_size=input_size,
+            output_len=output_len,
+            static_size=static_size,
+            hidden_size=hidden_size,
+            static_embedding_size=static_embedding_size,
+            num_layers=num_layers,
+            dropout=dropout,
+            learning_rate=learning_rate,
+            group_identifier=group_identifier,
+            lr_scheduler_patience=lr_scheduler_patience,
+            lr_scheduler_factor=lr_scheduler_factor
+        )
+
+        self.lambda_adv = lambda_adv
+        self.domain_loss_weight = domain_loss_weight
+        self.discriminator_hidden_dim = discriminator_hidden_dim
+
+
 class LitTSMixerDomainAdaptation(pl.LightningModule):
-    def __init__(self, config, lambda_adv=1.0, domain_loss_weight=1.0, learning_rate=1e-3, group_identifier="gauge_id"):
+    """PyTorch Lightning implementation of TSMixer with domain adaptation.
+
+    This class extends the base TSMixer model with domain adaptation capabilities
+    through adversarial training with a domain discriminator.
+    """
+
+    def __init__(
+        self,
+        config: Union[TSMixerDomainAdaptationConfig, Dict[str, Any]],
+    ):
+        """Initialize the domain adaptation model.
+
+        Args:
+            config: Either a TSMixerDomainAdaptationConfig object or a dictionary of config parameters
+        """
         super().__init__()
-        self.save_hyperparameters()
 
-        self.group_identifier = group_identifier
+        # Handle different config input types
+        if isinstance(config, dict):
+            # Create domain adaptation config if dictionary provided
+            self.config = TSMixerDomainAdaptationConfig.from_dict(config)
+        else:
+            self.config = config
 
-        # Original TSMixer components
-        self.config = config
-        self.model = TSMixer(config)
-        self.mse_criterion = MSELoss()
+        # Create base TSMixer model
+        self.model = TSMixer(self.config)
 
         # Domain adaptation components
-        feature_dim = config.input_len * \
-            (config.input_size + config.static_embedding_size)
-        self.domain_discriminator = DomainDiscriminator(feature_dim)
+        feature_dim = self.config.input_len * \
+            (self.config.input_size + self.config.static_embedding_size)
+        self.domain_discriminator = DomainDiscriminator(
+            feature_dim=feature_dim,
+            hidden_dim=self.config.discriminator_hidden_dim
+        )
+
+        # Loss functions
+        self.mse_criterion = MSELoss()
         self.domain_criterion = nn.BCELoss()
 
-        self.learning_rate = learning_rate
-        self.group_identifier = group_identifier
+        # Save hyperparameters and initialize tracking variables
+        self.save_hyperparameters(self.config.to_dict())
+        self.test_outputs = []
 
     def freeze_backbone(self):
         """Freeze backbone parameters for fine-tuning."""
@@ -112,12 +200,20 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
                 f"Warning: Unexpected keys when loading pretrained model: {unexpected_keys}")
         print("Loaded model weights from pretrained model")
 
-    def forward(self, x, static):
+    def forward(self, x: torch.Tensor, static: torch.Tensor) -> torch.Tensor:
+        """Forward pass for time series prediction.
+
+        Args:
+            x: Dynamic input features [batch_size, seq_len, input_size]
+            static: Static features [batch_size, static_size]
+
+        Returns:
+            Model predictions [batch_size, output_len, 1]
+        """
         return self.model(x, static)
 
     def extract_features(self, x: torch.Tensor, static: torch.Tensor) -> torch.Tensor:
-        """
-        Extract domain-invariant features for adversarial training.
+        """Extract domain-invariant features for adversarial training.
 
         The static features are explicitly zeroed out to ensure the domain classifier
         learns only from the dynamic features, preventing any static catchment 
@@ -134,8 +230,19 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         return features.flatten(start_dim=1)
 
     def training_step(self, batch, batch_idx):
-        # Unpack the tuple from CombinedLoader
+        """Training step for domain adaptation.
 
+        Processes both source and target domain data, computing task loss on source
+        domain and domain adversarial loss on both domains.
+
+        Args:
+            batch: Combined batch containing source and target domain data
+            batch_idx: Index of current batch
+
+        Returns:
+            Combined loss value
+        """
+        # Unpack the tuple from CombinedLoader
         data_dict, _, _ = batch  # (data_dict, 0, 0)
         source_batch = data_dict["source"]
         target_batch = data_dict["target"]
@@ -146,10 +253,8 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
             [source_batch["static"], target_batch["static"]])
         combined_domain = torch.cat([
             torch.zeros(len(source_batch["X"])),  # Source domain = 0
-            torch.ones(len(target_batch["X"]))      # Target domain = 1
-        ]).unsqueeze(1)
-
-        combined_domain = combined_domain.to(self.device)
+            torch.ones(len(target_batch["X"]))    # Target domain = 1
+        ]).unsqueeze(1).to(self.device)
 
         # Forward pass for task prediction (source domain only)
         y_pred = self(source_batch["X"], source_batch["static"])
@@ -158,23 +263,35 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
 
         # Forward pass for domain prediction (both domains)
         features = self.extract_features(combined_X, combined_static)
-        features_rev = grad_reverse(features, self.hparams.lambda_adv)
+        features_rev = grad_reverse(features, self.config.lambda_adv)
         domain_preds = self.domain_discriminator(features_rev)
         domain_loss = self.domain_criterion(domain_preds, combined_domain)
 
         # Total loss is a combination of task and domain losses
-        total_loss = task_loss + self.hparams.domain_loss_weight * domain_loss
+        total_loss = task_loss + self.config.domain_loss_weight * domain_loss
 
         self.log_dict({
             "train_loss": total_loss,
             "train_task_loss": task_loss,
             "train_domain_loss": domain_loss,
         })
+
         return total_loss
 
     def validation_step(self, batch, batch_idx):
-        # Handle both CombinedLoader tuple and standard DataLoader dict formats
+        """Validation step for domain adaptation.
 
+        Evaluates both task performance on source domain and domain discrimination
+        across both domains.
+
+        Args:
+            batch: Combined batch containing source and target domain data
+            batch_idx: Index of current batch
+
+        Returns:
+            Dictionary with validation metrics
+        """
+        # Handle both CombinedLoader tuple and standard DataLoader dict formats
         data_dict, _, _ = batch  # CombinedLoader format
         source_batch = data_dict.get("source", {})
         target_batch = data_dict.get("target", {})
@@ -208,7 +325,15 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         return metrics.get("val_loss", torch.tensor(0.0))
 
     def test_step(self, batch, batch_idx):
-        # Copied straight from TSMixer, testing is not domain-adapted
+        """Test step for evaluating model performance.
+
+        Args:
+            batch: Batch of test data
+            batch_idx: Index of current batch
+
+        Returns:
+            Dictionary with test outputs
+        """
         x, y = batch["X"], batch["y"].unsqueeze(-1)
         static = batch["static"]
         y_hat = self(x, static)
@@ -216,7 +341,7 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         output = {
             "predictions": y_hat.squeeze(-1),
             "observations": y.squeeze(-1),
-            "basin_ids": batch[self.group_identifier],
+            "basin_ids": batch[self.config.group_identifier],
         }
 
         self.test_outputs.append(output)
@@ -240,13 +365,18 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         self.test_outputs = []
 
     def configure_optimizers(self):
-        optimizer = Adam(self.parameters(), lr=self.learning_rate)
+        """Configure optimizer and learning rate scheduler.
+
+        Returns:
+            Dictionary with optimizer and scheduler configuration
+        """
+        optimizer = Adam(self.parameters(), lr=self.config.learning_rate)
         scheduler = {
             "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer,
                 mode="min",
-                patience=3,
-                factor=0.5
+                patience=self.config.lr_scheduler_patience,
+                factor=self.config.lr_scheduler_factor
             ),
             "monitor": "val_loss",
         }

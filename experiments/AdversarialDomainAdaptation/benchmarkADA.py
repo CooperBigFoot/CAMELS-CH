@@ -27,9 +27,12 @@ class BenchmarkRunner:
 
     def setup_directories(self):
         """Create necessary directories for experiment outputs."""
-        self.results_dir = Path("experiments/AdversarialDomainAdaptation/results")
-        self.model_dir = Path("experiments/AdversarialDomainAdaptation/saved_models/benchmark")
-        self.checkpoint_dir = Path("experiments/AdversarialDomainAdaptation/checkpoints/benchmark")
+        self.results_dir = Path(
+            "experiments/AdversarialDomainAdaptation/results")
+        self.model_dir = Path(
+            "experiments/AdversarialDomainAdaptation/saved_models/benchmark")
+        self.checkpoint_dir = Path(
+            "experiments/AdversarialDomainAdaptation/checkpoints/benchmark")
 
         for directory in [self.results_dir, self.model_dir, self.checkpoint_dir]:
             directory.mkdir(parents=True, exist_ok=True)
@@ -58,7 +61,8 @@ class BenchmarkRunner:
         self.ca_ts_data = self.ca_caravan.get_time_series()[
             ts_columns + ["date"] + [self.config.GROUP_IDENTIFIER]
         ]
-        self.ca_static_data = self.ca_caravan.get_static_attributes()[static_columns]
+        self.ca_static_data = self.ca_caravan.get_static_attributes()[
+            static_columns]
 
     def run_experiment(self):
         """Run the complete experiment with multiple runs."""
@@ -101,7 +105,8 @@ class BenchmarkRunner:
             batch_size=self.config.BATCH_SIZE,
             input_length=self.config.INPUT_LENGTH,
             output_length=self.config.OUTPUT_LENGTH,
-            num_workers=min(self.config.MAX_WORKERS, multiprocessing.cpu_count()),
+            num_workers=min(self.config.MAX_WORKERS,
+                            multiprocessing.cpu_count()),
             features=self.config.FORCING_FEATURES + [self.config.TARGET],
             static_features=self.config.STATIC_FEATURES,
             target=self.config.TARGET,
@@ -118,14 +123,9 @@ class BenchmarkRunner:
     def train_model(self, data_module, run):
         """Train the model."""
         print("SETTING UP MODEL FOR TRAINING")
-        model = LitTSMixer(
-            input_len=self.config.INPUT_LENGTH,
-            output_len=self.config.OUTPUT_LENGTH,
-            input_size=len(self.config.FORCING_FEATURES) + 1,  # +1 for target
-            static_size=len(self.config.STATIC_FEATURES) - 1,  # -1 for gauge_id
-            hidden_size=self.config.HIDDEN_SIZE,
-            learning_rate=self.config.PRETRAIN_LR, 
-        )
+
+        # Create the model using configuration object
+        model = LitTSMixer(self.config.get_tsmixer_config())
 
         trainer = self.create_trainer("train", run)
         trainer.fit(model, data_module)
@@ -166,7 +166,7 @@ class BenchmarkRunner:
         trainer.test(model, data_module)
 
         evaluator = TSForecastEvaluator(
-            data_module, horizons=list(range(1, self.config.OUTPUT_LENGTH + 1))
+            data_module, horizons=list(range(1, model.config.output_len + 1))
         )
 
         results_df, overall_metrics, basin_metrics = evaluator.evaluate(
@@ -183,7 +183,8 @@ class BenchmarkRunner:
             self.results_dir / f"benchmark_overall_metrics_{run}.csv", index=True
         )
 
-        basin_summary = evaluator.summarize_metrics(basin_metrics, per_basin=True)
+        basin_summary = evaluator.summarize_metrics(
+            basin_metrics, per_basin=True)
         basin_summary.to_csv(
             self.results_dir / f"benchmark_basin_metrics_{run}.csv", index=True
         )
@@ -218,11 +219,14 @@ class BenchmarkRunner:
                 return
 
             # Calculate and save summary statistics
-            summary_stats = overall_metrics_df.groupby(level=0).agg(['mean', 'std', 'min', 'max'])
-            summary_stats.to_csv(self.results_dir / "benchmark_aggregate_metrics.csv")
-            
-            print(f"Successfully saved aggregate metrics for {len(all_results)} runs")
-            
+            summary_stats = overall_metrics_df.groupby(
+                level=0).agg(['mean', 'std', 'min', 'max'])
+            summary_stats.to_csv(self.results_dir /
+                                 "benchmark_aggregate_metrics.csv")
+
+            print(
+                f"Successfully saved aggregate metrics for {len(all_results)} runs")
+
         except Exception as e:
             print(f"Error while saving aggregated results: {str(e)}")
 
