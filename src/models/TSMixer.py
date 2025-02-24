@@ -1,3 +1,10 @@
+"""
+TSMixer Model Implementation. The architecture is based on Figure 6 from the paper:
+
+    TITLE: TSMixer: An All-MLP Architecture for Time Series Forecasting
+    https://arxiv.org/abs/2303.06053
+"""
+
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
@@ -50,7 +57,7 @@ class ResBlock(nn.Module):
     def __init__(self, input_dim: int, hidden_size: int, dropout: float, input_len: int):
         super().__init__()
 
-        # Temporal mixing - operates on sequence length
+        # Temporal mixing: mixing along the time dimension
         self.temporal = nn.Sequential(
             nn.Linear(input_len, hidden_size),
             nn.ReLU(),
@@ -58,7 +65,7 @@ class ResBlock(nn.Module):
             nn.Dropout(dropout),
         )
 
-        # Channel mixing - operates on feature dimension
+        # Channel (feature) mixing: mixing along the feature dimension
         self.channel = nn.Sequential(
             nn.Linear(input_dim, hidden_size),
             nn.ReLU(),
@@ -67,11 +74,26 @@ class ResBlock(nn.Module):
             nn.Dropout(dropout),
         )
 
+        # 2D layer norms: normalize over both time and feature dimensions.
+        # For an input of shape [batch, input_len, input_dim],
+        # normalized_shape should be (input_len, input_dim).
+        self.norm_time = nn.LayerNorm(normalized_shape=(input_len, input_dim))
+        self.norm_channel = nn.LayerNorm(
+            normalized_shape=(input_len, input_dim))
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Temporal mixing with residual connection
         x = x + self.temporal(x.transpose(1, 2)).transpose(1, 2)
+
+        # Layer normalization after temporal mixing
+        x = self.norm_time(x)
+
         # Channel mixing with residual connection
         x = x + self.channel(x)
+
+        # Layer normalization after channel mixing
+        x = self.norm_channel(x)
+
         return x
 
 
