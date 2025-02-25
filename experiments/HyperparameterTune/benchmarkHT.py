@@ -56,8 +56,7 @@ class BenchmarkTuner:
         """Optuna objective function for hyperparameter optimization."""
         # Suggest hyperparameters
         input_length = trial.suggest_int("input_length", 30, 120)
-        hidden_size = trial.suggest_int("hidden_size", 32, 128
-                                        )
+        hidden_size = trial.suggest_int("hidden_size", 32, 128)
         num_layers = trial.suggest_int("num_layers", 2, 10)
         learning_rate = trial.suggest_float(
             "learning_rate", 1e-5, 1e-3, log=True)
