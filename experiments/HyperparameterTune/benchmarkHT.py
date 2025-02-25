@@ -3,17 +3,17 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-
-import optuna
-import pandas as pd
-import torch
-import pytorch_lightning as pl
-from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor
-import numpy as np
-from experiments.HyperparameterTune.configHT import ExperimentConfig
-from src.data_models.caravanify import Caravanify, CaravanifyConfig
+from src.models.TSMixer import LitTSMixer, TSMixerConfig
 from src.data_models.datamodule import HydroDataModule
-from src.models.TSMixer import LitTSMixer
+from src.data_models.caravanify import Caravanify, CaravanifyConfig
+from experiments.HyperparameterTune.configHT import ExperimentConfig
+import numpy as np
+from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor
+import pytorch_lightning as pl
+import torch
+import pandas as pd
+import optuna
+
 
 class BenchmarkTuner:
     def __init__(self, config: ExperimentConfig):
@@ -55,10 +55,11 @@ class BenchmarkTuner:
     def objective(self, trial: optuna.Trial) -> float:
         """Optuna objective function for hyperparameter optimization."""
         # Suggest hyperparameters
-        batch_size = trial.suggest_int("batch_size", 16, 256)
-        input_length = trial.suggest_int("input_length", 30, 365)
-        hidden_size = trial.suggest_int("hidden_size", 32, 256)
-        learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-3, log=True)
+        input_length = trial.suggest_int("input_length", 30, 120)
+        hidden_size = trial.suggest_int("hidden_size", 32, 128)
+        num_layers = trial.suggest_int("num_layers", 2, 10)
+        learning_rate = trial.suggest_float(
+            "learning_rate", 1e-5, 1e-3, log=True)
         dropout = trial.suggest_float("dropout", 0.0, 0.5)
 
         # Create data module with trial hyperparameters
@@ -68,7 +69,7 @@ class BenchmarkTuner:
             static_df=self.ca_static_data,
             group_identifier=self.config.GROUP_IDENTIFIER,
             preprocessing_config=preprocessing_configs,
-            batch_size=batch_size,
+            batch_size=self.config.BATCH_SIZE,
             input_length=input_length,
             output_length=self.config.OUTPUT_LENGTH,
             num_workers=self.config.MAX_WORKERS,
@@ -81,16 +82,25 @@ class BenchmarkTuner:
             max_missing_pct=self.config.CA_CONFIG["MAX_MISSING_PCT"],
         )
 
-        # Create model with trial hyperparameters
-        model = LitTSMixer(
+        # Create TSMixerConfig
+        tsmixer_config = TSMixerConfig(
             input_len=input_length,
+            input_size=len(self.config.FORCING_FEATURES) +
+            1,  # Add 1 for target
             output_len=self.config.OUTPUT_LENGTH,
-            input_size=len(self.config.FORCING_FEATURES) + 1,
-            static_size=len(self.config.STATIC_FEATURES) - 1,
+            static_size=len(self.config.STATIC_FEATURES) -
+            1,  # Subtract 1 for gauge_id
             hidden_size=hidden_size,
+            num_layers=num_layers,
             dropout=dropout,
-            learning_rate=learning_rate
+            learning_rate=learning_rate,
+            group_identifier=self.config.GROUP_IDENTIFIER,
+            lr_scheduler_patience=self.config.LR_SCHEDULER_PATIENCE,
+            lr_scheduler_factor=self.config.LR_SCHEDULER_FACTOR,
         )
+
+        # Create model with TSMixerConfig
+        model = LitTSMixer(config=tsmixer_config)
 
         # Configure trainer
         trainer = pl.Trainer(
@@ -98,10 +108,10 @@ class BenchmarkTuner:
             accelerator=self.config.ACCELERATOR,
             devices=1,
             callbacks=[
-                EarlyStopping(monitor="val_loss", patience=3, mode="min"),
+                EarlyStopping(monitor="val_loss", patience=5, mode="min"),
                 LearningRateMonitor(logging_interval="epoch"),
             ],
-            enable_progress_bar=True,  # Reduce output clutter
+            enable_progress_bar=True,
         )
 
         # Train and get best validation loss
@@ -120,7 +130,7 @@ class BenchmarkTuner:
         # Create study
         study = optuna.create_study(
             direction="minimize",
-            study_name="benchmark_optimization",
+            study_name="tsmixer_optimization",
             sampler=optuna.samplers.TPESampler(seed=42),
         )
 
@@ -149,7 +159,7 @@ class BenchmarkTuner:
 
         # Save to CSV
         results_df.to_csv(
-            self.results_dir / "benchmark_optimization_results.csv", index=False
+            self.results_dir / "tsmixer_optimization_results.csv", index=False
         )
 
         # Save best parameters separately
@@ -158,8 +168,29 @@ class BenchmarkTuner:
         best_results = {"best_value": best_value, **best_params}
 
         pd.DataFrame([best_results]).to_csv(
-            self.results_dir / "benchmark_best_parameters.csv", index=False
+            self.results_dir / "tsmixer_best_parameters.csv", index=False
         )
+
+        # Save optimization visualization
+        try:
+            import matplotlib.pyplot as plt
+
+            # Plot optimization history
+            fig = optuna.visualization.plot_optimization_history(study)
+            fig.write_image(str(self.results_dir / "optimization_history.png"))
+
+            # Plot parameter importance
+            param_importance = optuna.visualization.plot_param_importances(
+                study)
+            param_importance.write_image(
+                str(self.results_dir / "param_importances.png"))
+
+            # Plot contour plots for top parameters
+            contour = optuna.visualization.plot_contour(study)
+            contour.write_image(str(self.results_dir / "param_contours.png"))
+
+        except (ImportError, AttributeError) as e:
+            print(f"Could not create visualization: {e}")
 
 
 if __name__ == "__main__":
@@ -174,7 +205,7 @@ if __name__ == "__main__":
     tuner = BenchmarkTuner(config)
     tuner.load_data()
     # Adjust number of trials as needed
-    study = tuner.run_optimization(n_trials=30)
+    study = tuner.run_optimization(n_trials=50)
 
     print("\nBest trial:")
     print(f"  Value: {study.best_trial.value:.5f}")

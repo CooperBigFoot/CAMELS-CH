@@ -2,34 +2,37 @@ import random
 import numpy as np
 import torch
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 
 @dataclass
 class ExperimentConfig:
     # Base configuration
     GROUP_IDENTIFIER: str = "gauge_id"
-    BATCH_SIZE: int = 128
+    BATCH_SIZE: int = 1024
     INPUT_LENGTH: int = 100
     OUTPUT_LENGTH: int = 10
-    MAX_EPOCHS: int = 30
+    MAX_EPOCHS: int = 50  
     ACCELERATOR: str = "cuda"
     NUM_RUNS: int = 5
-    MAX_WORKERS: int = 4  
+    MAX_WORKERS: int = 4
 
     # Learning rates with scheduling
     PRETRAIN_LR: float = 1e-3
     FINETUNE_LR: float = 1e-4
-    LR_SCHEDULER_PATIENCE: int = 3
+    LR_SCHEDULER_PATIENCE: int = 5  
     LR_SCHEDULER_FACTOR: float = 0.5
 
-    # Model configuration
+    # TSMixer specific configuration
     HIDDEN_SIZE: int = 64
+    NUM_LAYERS: int = 5
+    DROPOUT: float = 0.1
+    STATIC_EMBEDDING_SIZE: int = 10
 
     # Dataset configuration
     TARGET: str = "streamflow"
-    STATIC_FEATURES: list = None
-    FORCING_FEATURES: list = None
+    STATIC_FEATURES: List[str] = None
+    FORCING_FEATURES: List[str] = None
 
     # Domain specific configs
     CA_CONFIG: Dict[str, Any] = None
@@ -96,6 +99,8 @@ class ExperimentConfig:
             raise ValueError("Max workers must be positive")
         if self.INPUT_LENGTH <= 0:
             raise ValueError("Input length must be positive")
+        if self.NUM_LAYERS <= 0:
+            raise ValueError("Number of layers must be positive")
 
     def get_run_seed(self, run_index: int) -> int:
         """Generate a unique seed for each experimental run."""
@@ -113,6 +118,24 @@ class ExperimentConfig:
             torch.cuda.manual_seed_all(seed)
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
+
+    def get_model_config(self) -> Dict:
+        """Get TSMixer model configuration."""
+        return {
+            "input_len": self.INPUT_LENGTH,
+            # +1 for target feature
+            "input_size": len(self.FORCING_FEATURES) + 1,
+            "output_len": self.OUTPUT_LENGTH,
+            "static_size": len(self.STATIC_FEATURES) - 1,  # -1 for gauge_id
+            "hidden_size": self.HIDDEN_SIZE,
+            "static_embedding_size": self.STATIC_EMBEDDING_SIZE,
+            "num_layers": self.NUM_LAYERS,
+            "dropout": self.DROPOUT,
+            "learning_rate": self.PRETRAIN_LR,
+            "group_identifier": self.GROUP_IDENTIFIER,
+            "lr_scheduler_patience": self.LR_SCHEDULER_PATIENCE,
+            "lr_scheduler_factor": self.LR_SCHEDULER_FACTOR,
+        }
 
     def get_preprocessing_config(self, domain: str) -> Dict:
         """Get domain-specific preprocessing configuration."""
