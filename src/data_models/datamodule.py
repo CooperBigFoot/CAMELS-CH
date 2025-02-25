@@ -10,7 +10,7 @@ from sklearn.base import clone
 from sklearn.pipeline import Pipeline
 from src.data_models.dataset import HydroDataset
 from src.data_models.preprocessing import check_data_quality
-from src.preprocessing.transformers import GroupedTransformer
+from src.preprocessing.grouped import GroupedTransformer
 
 
 class HydroDataModule(pl.LightningDataModule):

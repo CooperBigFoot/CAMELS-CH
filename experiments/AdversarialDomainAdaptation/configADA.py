@@ -16,7 +16,7 @@ class ExperimentConfig:
     # Base configuration
     GROUP_IDENTIFIER: str = "gauge_id"
     BATCH_SIZE: int = 1024
-    INPUT_LENGTH: int = 128
+    INPUT_LENGTH: int = 40
     OUTPUT_LENGTH: int = 10
     MAX_EPOCHS: int = 40
     ACCELERATOR: str = "cuda" if torch.cuda.is_available() else "cpu"
@@ -25,14 +25,14 @@ class ExperimentConfig:
 
     # Learning rates with scheduling
     FINETUNE_LR: float = 5e-5
-    PRETRAIN_LR: float = 1e-4
+    PRETRAIN_LR: float = 7e-4
     LR_SCHEDULER_PATIENCE: int = 5
     LR_SCHEDULER_FACTOR: float = 0.5
 
     # Model configuration
-    HIDDEN_SIZE: int = 32
-    DROPOUT: float = 0.3
-    NUM_LAYERS: int = 10
+    HIDDEN_SIZE: int = 80
+    DROPOUT: float = 0.12
+    NUM_LAYERS: int = 2
     STATIC_EMBEDDING_SIZE: int = 10
 
     # Dataset configuration

@@ -1,7 +1,7 @@
 from typing import List, Dict, Optional, Union
 import numpy as np
 import pandas as pd
-from ..base import HydroTransformer
+from .base import HydroTransformer
 
 
 class LogTransformer(HydroTransformer):
