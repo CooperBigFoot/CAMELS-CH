@@ -129,8 +129,7 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         self.model = TSMixer(self.config)
 
         # Domain adaptation components
-        feature_dim = self.config.input_len * \
-            (self.config.input_size + self.config.static_embedding_size)
+        feature_dim = self.config.input_len * self.config.input_size
         self.domain_discriminator = DomainDiscriminator(
             feature_dim=feature_dim,
             hidden_dim=self.config.discriminator_hidden_dim
@@ -227,7 +226,10 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
             Flattened feature representations [batch_size, flattened_dim]
         """
         features = self.model.backbone(x, static, zero_static=True)
-        return features.flatten(start_dim=1)
+
+        flattened = features.flatten(start_dim=1)
+
+        return flattened
 
     def training_step(self, batch, batch_idx):
         """Training step for domain adaptation.

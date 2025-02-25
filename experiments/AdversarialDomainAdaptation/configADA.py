@@ -12,7 +12,7 @@ from src.models.TSMixerDomainAdaptation import TSMixerDomainAdaptationConfig
 class ExperimentConfig:
     """Configuration for domain adaptation experiments."""
 
-    EXPERIMENT_NAME: str = "v3"
+    EXPERIMENT_NAME: str = "v4"
     # Base configuration
     GROUP_IDENTIFIER: str = "gauge_id"
     BATCH_SIZE: int = 1024
@@ -20,13 +20,13 @@ class ExperimentConfig:
     OUTPUT_LENGTH: int = 10
     MAX_EPOCHS: int = 40
     ACCELERATOR: str = "cuda" if torch.cuda.is_available() else "cpu"
-    NUM_RUNS: int = 5
+    NUM_RUNS: int = 1
     MAX_WORKERS: int = os.cpu_count()
 
     # Learning rates with scheduling
-    FINETUNE_LR: float = 1e-5
-    PRETRAIN_LR: float = 3e-4
-    LR_SCHEDULER_PATIENCE: int = 3
+    FINETUNE_LR: float = 5e-5
+    PRETRAIN_LR: float = 1e-4
+    LR_SCHEDULER_PATIENCE: int = 5
     LR_SCHEDULER_FACTOR: float = 0.5
 
     # Model configuration
@@ -45,9 +45,9 @@ class ExperimentConfig:
     CH_CONFIG: Dict[str, Any] = None
 
     # Adversarial configs
-    LAMBDA_ADV: float = 1.0
-    DOMAIN_LOSS_WEIGHT: float = 0.3
-    DISCRIMINATOR_HIDDEN_DIM: int = 16
+    LAMBDA_ADV: float = 2.0
+    DOMAIN_LOSS_WEIGHT: float = 0.5
+    DISCRIMINATOR_HIDDEN_DIM: int = HIDDEN_SIZE / 2
 
     def __post_init__(self):
         # Initialize feature lists
