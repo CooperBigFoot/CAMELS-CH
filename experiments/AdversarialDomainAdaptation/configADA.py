@@ -47,7 +47,7 @@ class ExperimentConfig:
     # Adversarial configs
     LAMBDA_ADV: float = 2.0
     DOMAIN_LOSS_WEIGHT: float = 0.5
-    DISCRIMINATOR_HIDDEN_DIM: int = HIDDEN_SIZE / 2
+    DISCRIMINATOR_HIDDEN_DIM: int = int(HIDDEN_SIZE / 2)
 
     def __post_init__(self):
         # Initialize feature lists
