@@ -1,26 +1,22 @@
 """
-TSMixer Model Implementation. The architecture is based on Figure 6 from the paper:
+Based on the paper: "TSMixer: An All-MLP Architecture for Time Series Forecasting"
+https://arxiv.org/abs/2303.06053
 
-    TITLE: TSMixer: An All-MLP Architecture for Time Series Forecasting
-    https://arxiv.org/abs/2303.06053
+TSMixer Model Implementation. The architecture is based on Figure 6 from the paper:
 """
 
+
+from typing import Dict, Optional, Tuple, Any, Union, List
+import numpy as np
+from torch.optim import Adam
+from torch.nn import MSELoss
+import pytorch_lightning as pl
 import torch
 import torch.nn as nn
-import pytorch_lightning as pl
-from torch.nn import MSELoss
-from torch.optim import Adam
-import numpy as np
-from typing import Dict, Optional, Tuple, Any, Union, List
 
 
 class TSMixerConfig:
-    """Configuration class for TSMixer model.
-
-    This class handles all hyperparameters needed to define the model architecture.
-    Having a separate config class makes it easier to experiment with different 
-    architectures and save/load model configurations.
-    """
+    """Configuration class for TSMixer model."""
 
     def __init__(
         self,
@@ -37,22 +33,7 @@ class TSMixerConfig:
         lr_scheduler_patience: int = 2,
         lr_scheduler_factor: float = 0.5,
     ):
-        """Initialize TSMixer configuration.
-
-        Args:
-            input_len: Length of input sequence (time steps)
-            input_size: Number of input features per time step
-            output_len: Length of output sequence to predict
-            static_size: Number of static features
-            hidden_size: Size of hidden layers in network
-            static_embedding_size: Size of static feature embeddings
-            num_layers: Number of ResBlock layers
-            dropout: Dropout rate
-            learning_rate: Initial learning rate
-            group_identifier: Column name for the group/basin identifier
-            lr_scheduler_patience: Patience for learning rate scheduler
-            lr_scheduler_factor: Factor by which to reduce learning rate
-        """
+        """Initialize TSMixer configuration."""
         self.input_len = input_len
         self.input_size = input_size
         self.output_len = output_len
@@ -68,33 +49,15 @@ class TSMixerConfig:
 
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> "TSMixerConfig":
-        """Create a config object from a dictionary.
-
-        Args:
-            config_dict: Dictionary containing configuration parameters
-
-        Returns:
-            TSMixerConfig object initialized with provided parameters
-        """
+        """Create a config object from a dictionary."""
         return cls(**config_dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert config to dictionary.
-
-        Returns:
-            Dictionary containing all configuration parameters
-        """
+        """Convert config to dictionary."""
         return self.__dict__.copy()
 
     def update(self, **kwargs) -> "TSMixerConfig":
-        """Update config parameters.
-
-        Args:
-            **kwargs: Key-value pairs of parameters to update
-
-        Returns:
-            Self with updated parameters
-        """
+        """Update config parameters."""
         for key, value in kwargs.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -103,30 +66,13 @@ class TSMixerConfig:
         return self
 
 
-class ResBlock(nn.Module):
-    """Residual block combining temporal and feature mixing.
+class FeatureMixingBlock(nn.Module):
+    """Feature mixing block that processes each time step across features."""
 
-    This block is the core component of TSMixer, performing two types of mixing:
-    1. Temporal mixing: Processes each feature across time steps
-    2. Channel mixing: Processes each time step across features
-
-    Both mixing operations use residual connections to help with gradient flow
-    and maintain the original signal strength.
-    """
-
-    def __init__(self, input_dim: int, hidden_size: int, dropout: float, input_len: int):
+    def __init__(self, input_dim: int, hidden_size: int, dropout: float):
         super().__init__()
 
-        # Temporal mixing: mixing along the time dimension
-        self.temporal = nn.Sequential(
-            nn.Linear(input_len, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, input_len),
-            nn.Dropout(dropout),
-        )
-
-        # Channel (feature) mixing: mixing along the feature dimension
-        self.channel = nn.Sequential(
+        self.mixing = nn.Sequential(
             nn.Linear(input_dim, hidden_size),
             nn.ReLU(),
             nn.Dropout(dropout),
@@ -134,93 +80,145 @@ class ResBlock(nn.Module):
             nn.Dropout(dropout),
         )
 
-        # 2D layer norms: normalize over both time and feature dimensions.
-        # For an input of shape [batch, input_len, input_dim],
-        # normalized_shape should be (input_len, input_dim).
-        self.norm_time = nn.LayerNorm(normalized_shape=(input_len, input_dim))
-        self.norm_channel = nn.LayerNorm(
-            normalized_shape=(input_len, input_dim))
+        self.norm = nn.LayerNorm(input_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Temporal mixing with residual connection
-        x = x + self.temporal(x.transpose(1, 2)).transpose(1, 2)
+        return self.norm(x + self.mixing(x))
 
-        # Layer normalization after temporal mixing
-        x = self.norm_time(x)
 
-        # Channel mixing with residual connection
-        x = x + self.channel(x)
+class TimeMixingBlock(nn.Module):
+    """Time mixing block that processes each feature across time."""
 
-        # Layer normalization after channel mixing
-        x = self.norm_channel(x)
+    def __init__(self, input_len: int, hidden_size: int, dropout: float):
+        super().__init__()
+
+        self.mixing = nn.Sequential(
+            nn.Linear(input_len, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, input_len),
+            nn.Dropout(dropout),
+        )
+
+        self.norm = nn.LayerNorm(input_len)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Transpose to apply mixing along time dimension
+        x_t = x.transpose(1, 2)
+        mixed = x_t + self.mixing(x_t)
+        # Transpose back to original shape
+        return self.norm(mixed).transpose(1, 2)
+
+
+class ResBlock(nn.Module):
+    """Residual block combining temporal and feature mixing."""
+
+    def __init__(self, input_dim: int, hidden_size: int, dropout: float, input_len: int):
+        super().__init__()
+
+        # Temporal mixing: mixing along the time dimension
+        self.temporal = TimeMixingBlock(input_len, hidden_size, dropout)
+
+        # Channel (feature) mixing: mixing along the feature dimension
+        self.channel = FeatureMixingBlock(input_dim, hidden_size, dropout)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Temporal mixing
+        x = self.temporal(x)
+
+        # Channel mixing
+        x = self.channel(x)
 
         return x
 
 
+class ConditionalFeatureMixing(nn.Module):
+    """Applies conditional feature mixing using static features to modulate dynamic features."""
+
+    def __init__(self, input_size: int, static_size: int, static_embedding_size: int, hidden_size: int):
+        super().__init__()
+
+        # Projections for static features
+        self.static_proj = nn.Linear(static_size, static_embedding_size)
+
+        # Gate projection for modulation
+        self.gate_proj = nn.Linear(static_embedding_size, input_size)
+
+        # Feature mixing after modulation
+        self.feature_mixing = nn.Sequential(
+            nn.Linear(input_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, input_size)
+        )
+
+        self.norm = nn.LayerNorm(input_size)
+
+    def forward(self, x_dynamic: torch.Tensor, static: torch.Tensor) -> torch.Tensor:
+        # Project static features
+        static_emb = self.static_proj(static)
+
+        # Expand static features across time dimension
+        static_expanded = static_emb.unsqueeze(
+            1).expand(-1, x_dynamic.size(1), -1)
+
+        # Create modulation gate
+        gate = torch.sigmoid(self.gate_proj(static_expanded))
+
+        # Apply modulation to dynamic features
+        x_conditioned = x_dynamic * gate
+
+        # Apply feature mixing
+        mixed = self.feature_mixing(x_conditioned)
+
+        # Apply residual connection and normalization
+        return self.norm(x_conditioned + mixed)
+
+
 class TSMixerBackbone(nn.Module):
+    """Enhanced TSMixerBackbone with conditional feature mixing."""
+
     def __init__(self, config: TSMixerConfig):
         super().__init__()
-        self.static_proj = nn.Linear(
-            config.static_size, config.static_embedding_size)
-        self.input_dim = config.input_size + config.static_embedding_size
+
+        # Conditional feature mixing to integrate static features
+        self.conditional_mixing = ConditionalFeatureMixing(
+            input_size=config.input_size,
+            static_size=config.static_size,
+            static_embedding_size=config.static_embedding_size,
+            hidden_size=config.hidden_size
+        )
+
+        # Main mixing layers
         self.layers = nn.ModuleList([
             ResBlock(
-                input_dim=self.input_dim,
+                input_dim=config.input_size,
                 hidden_size=config.hidden_size,
                 dropout=config.dropout,
                 input_len=config.input_len,
             ) for _ in range(config.num_layers)
         ])
 
-        # Cache tensor for efficiency
-        self._zero_static_cache = None
-        self._last_batch_size = None
-        self._last_device = None
-
-    def _get_zero_static(self, batch_size: int, device: torch.device) -> torch.Tensor:
-        """Get cached zero tensor for static embeddings or create new one if needed."""
-        if (self._zero_static_cache is None or
-            batch_size != self._last_batch_size or
-                device != self._last_device):
-            self._zero_static_cache = torch.zeros(
-                batch_size,
-                self.static_proj.out_features,
-                device=device
-            )
-            self._last_batch_size = batch_size
-            self._last_device = device
-        return self._zero_static_cache
-
     def forward(self, x: torch.Tensor, static: torch.Tensor, zero_static: bool = False) -> torch.Tensor:
         """
-        Forward pass through the backbone network.
+        Forward pass with conditional feature mixing.
 
         Args:
             x: Dynamic input features [batch_size, seq_len, input_size]
-            static: Static features [batch_size, static_size] 
-            zero_static: If True, zero out static embeddings for domain adaptation
+            static: Static features [batch_size, static_size]
+            zero_static: If True, bypass static feature conditioning
         """
-        if zero_static:
-            # Use cached zero tensor for efficiency
-            static_emb = self._get_zero_static(x.size(0), x.device)
-        else:
-            static_emb = self.static_proj(static)
+        if not zero_static:
+            # Apply conditional feature mixing
+            x = self.conditional_mixing(x, static)
 
-        # Expand static features across time dimension
-        static_emb = static_emb.unsqueeze(1).expand(-1, x.size(1), -1)
-
-        # Combine features and process through mixing layers
-        x = torch.cat([x, static_emb], dim=-1)
+        # Process through mixing layers
         for layer in self.layers:
             x = layer(x)
+
         return x
 
 
 class TSMixerHead(nn.Module):
-    """Prediction head for TSMixer.
-
-    Takes processed features from the backbone and produces final predictions.
-    """
+    """Prediction head for TSMixer."""
 
     def __init__(self, input_dim: int, input_len: int, hidden_size: int, output_len: int):
         super().__init__()
@@ -246,7 +244,7 @@ class TSMixer(nn.Module):
 
         self.backbone = TSMixerBackbone(config)
         self.head = TSMixerHead(
-            input_dim=self.backbone.input_dim,
+            input_dim=config.input_size,
             input_len=config.input_len,
             hidden_size=config.hidden_size,
             output_len=config.output_len
@@ -259,24 +257,13 @@ class TSMixer(nn.Module):
 
 
 class LitTSMixer(pl.LightningModule):
-    """PyTorch Lightning Module implementation of TSMixer.
-
-    This class handles:
-    1. Training, validation, and testing loops
-    2. Optimization configuration
-    3. Fine-tuning controls
-    4. Metric logging
-    """
+    """PyTorch Lightning Module implementation of TSMixer."""
 
     def __init__(
         self,
         config: Union[TSMixerConfig, Dict[str, Any]],
     ):
-        """Initialize the Lightning Module with a TSMixerConfig.
-
-        Args:
-            config: Either a TSMixerConfig object or a dictionary of config parameters
-        """
+        """Initialize the Lightning Module with a TSMixerConfig."""
         super().__init__()
 
         # Handle different config input types
