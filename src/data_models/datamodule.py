@@ -342,7 +342,7 @@ class HydroDataModule(pl.LightningDataModule):
 
                 # Update static features columns
                 for col in features_to_process:
-                    self.processed_static[col] = transformed[col]
+                    self.processed_static.loc[:, col] = transformed[col]
             else:
                 static_data = self.processed_static[features_to_process]
                 pipeline.fit(static_data)
@@ -355,7 +355,7 @@ class HydroDataModule(pl.LightningDataModule):
                 else:
                     # Handle DataFrame/Series case
                     for col in features_to_process:
-                        self.processed_static[col] = transformed[col]
+                        self.processed_static.loc[:, col] = transformed[col]
 
             self.fitted_pipelines["static"] = pipeline
 

@@ -74,7 +74,17 @@ class HydroTransformer(BaseEstimator, TransformerMixin):
         """
         self._validate_input(X)
 
-        # Store feature names for get_feature_names_out
+        # Store sklearn-specific attributes
+        if isinstance(X, pd.DataFrame):
+            self.n_features_in_ = X.shape[1]
+            # Use numpy array for sklearn compatibility
+            self.feature_names_in_ = np.array(X.columns.tolist())
+        else:
+            self.n_features_in_ = X.shape[1]
+            self.feature_names_in_ = np.array(
+                [f"feature_{i}" for i in range(X.shape[1])])
+
+        # Original code
         if isinstance(X, pd.DataFrame):
             all_columns = X.columns.tolist()
         else:
