@@ -115,13 +115,32 @@ class TSForecastEvaluator:
         date_format: str = '%Y-%m-%d',
         y_label: str = "Streamflow",
         color_observed: str = 'blue',
-        color_forecast: str = 'red',  # Changed to red for better contrast
-        alpha_forecast: float = 1.0,  # Increased opacity
-        line_style_forecast: str = '--',  # Added dashed line style for forecasts
-        line_width_forecast: float = 2.0,  # Increased line width
+        color_forecast: str = 'red',
+        alpha_forecast: float = 1.0,
+        line_style_forecast: str = '--',
+        line_width_forecast: float = 2.0,
         debug: bool = False,
     ) -> tuple:
-        """Create a rolling forecast plot for a specific basin and horizon."""
+        """Create a rolling forecast plot for a specific basin and horizon.
+
+        Args:
+            horizon: Forecast horizon in days
+            group_identifier: Identifier for the group (e.g., basin ID)
+            datamodule: Data module containing the dataset and inverse transformation methods
+            fig_size: Size of the figure
+            title: Title of the plot
+            date_format: Date format for x-axis
+            y_label: Y-axis label
+            color_observed: Color for observed data
+            color_forecast: Color for forecast data
+            alpha_forecast: Alpha transparency for forecast line
+            line_style_forecast: Line style for forecast line
+            line_width_forecast: Line width for forecast line
+            debug: If True, print debug information
+
+        Returns:
+            Tuple of figure and axis objects
+        """
 
         # Validate horizon
         if horizon not in self.horizons:
@@ -205,41 +224,18 @@ class TSForecastEvaluator:
             print(f"Extracted {len(test_dates)} test dates")
             print(f"First date: {test_dates[0]}, Last date: {test_dates[-1]}")
 
-        # Create rolling windows (non-overlapping segments)
-        windows = []
-        window_dates = []
-        i = 0
-        while i < len(group_preds):
-            # Extract window of length horizon
-            end_idx = min(i + horizon, len(group_preds))
-            window_preds = group_preds[i:end_idx]
-            window_obs = group_obs[i:end_idx]
-            window_date = test_dates[i:end_idx]
-
-            if len(window_preds) > 0:
-                windows.append((window_preds, window_obs))
-                window_dates.append(window_date)
-
-            # Move forward by exactly horizon length
-            i += horizon
-
         # Create plot with Seaborn style
         sns.set_style("whitegrid")
         fig, ax = plt.subplots(figsize=fig_size)
 
         # Plot all observations as a continuous line
-        ax.plot(test_dates, group_obs,
-                color=color_observed, label='Observed', linewidth=2, zorder=10)
+        ax.plot(test_dates, group_obs, color=color_observed,
+                label='Observed', linewidth=2, zorder=10)
 
-        # Plot each forecast window as a separate line segment with distinctive style
-        for i, ((window_preds, window_obs), window_date) in enumerate(zip(windows, window_dates)):
-            if len(window_date) > 0:
-                ax.plot(window_date, window_preds,
-                        color=color_forecast, alpha=alpha_forecast,
-                        label='Forecast' if i == 0 else "",
-                        linestyle=line_style_forecast,
-                        linewidth=line_width_forecast,
-                        zorder=15)
+        # Plot predictions as a single line
+        ax.plot(test_dates, group_preds, color=color_forecast, alpha=alpha_forecast,
+                label='Forecast', linestyle=line_style_forecast,
+                linewidth=line_width_forecast, zorder=15)
 
         # Set title and labels
         if title is None:
