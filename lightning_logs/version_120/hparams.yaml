@@ -1,0 +1,16 @@
+discriminator_hidden_dim: 40
+domain_loss_weight: 0.5
+dropout: 0.12
+group_identifier: gauge_id
+hidden_size: 80
+initial_lambda: 0.0
+input_len: 40
+input_size: 10
+lambda_adv: 2.0
+learning_rate: 0.00014
+lr_scheduler_factor: 0.5
+lr_scheduler_patience: 5
+num_layers: 2
+output_len: 10
+static_embedding_size: 10
+static_size: 10
