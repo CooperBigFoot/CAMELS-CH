@@ -2,6 +2,10 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Tuple, Union
 import torch
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from matplotlib.ticker import MaxNLocator
+import seaborn as sns
 
 
 class TSForecastEvaluator:
@@ -100,6 +104,167 @@ class TSForecastEvaluator:
             for horizon, horizon_metrics in metrics.items():
                 rows.append({"horizon": horizon, **horizon_metrics})
             return pd.DataFrame(rows).set_index("horizon")
+
+    def plot_rolling_forecast(
+        self,
+        horizon: int,
+        group_identifier: str,
+        datamodule,
+        fig_size: tuple = (12, 6),
+        title: str = None,
+        date_format: str = '%Y-%m-%d',
+        y_label: str = "Streamflow",
+        color_observed: str = 'blue',
+        color_forecast: str = 'red',  # Changed to red for better contrast
+        alpha_forecast: float = 1.0,  # Increased opacity
+        line_style_forecast: str = '--',  # Added dashed line style for forecasts
+        line_width_forecast: float = 2.0,  # Increased line width
+        debug: bool = False,
+    ) -> tuple:
+        """Create a rolling forecast plot for a specific basin and horizon."""
+
+        # Validate horizon
+        if horizon not in self.horizons:
+            raise ValueError(
+                f"Horizon {horizon} not in available horizons: {self.horizons}")
+
+        # Extract test results data
+        basin_ids = np.array(self.test_results["basin_ids"]).flatten()
+        preds = self.test_results["predictions"].cpu().numpy()
+        obs = self.test_results["observations"].cpu().numpy()
+
+        # Find all indices for the requested group_identifier
+        mask = np.array([bid == group_identifier for bid in basin_ids])
+        if not np.any(mask):
+            available_ids = np.unique(basin_ids)
+            raise ValueError(
+                f"Group identifier '{group_identifier}' not found in test results. Available IDs: {available_ids}")
+
+        if debug:
+            print(f"Found {np.sum(mask)} matches for {group_identifier}")
+
+        group_indices = np.where(mask)[0]
+
+        # Get horizon-specific data
+        horizon_idx = self.horizons.index(horizon)
+
+        # Extract predictions and observations for this group and horizon
+        group_preds = preds[mask, horizon_idx]
+        group_obs = obs[mask, horizon_idx]
+
+        if debug:
+            print(
+                f"Extracted {len(group_preds)} predictions and {len(group_obs)} observations")
+            print(
+                f"Predictions range: [{np.min(group_preds)}, {np.max(group_preds)}]")
+            print(
+                f"Observations range: [{np.min(group_obs)}, {np.max(group_obs)}]")
+
+        # Apply inverse transformation
+        basin_ids_expanded = np.repeat([group_identifier], len(group_preds))
+        group_preds = datamodule.inverse_transform_predictions(
+            group_preds, basin_ids_expanded)
+        group_obs = datamodule.inverse_transform_predictions(
+            group_obs, basin_ids_expanded)
+
+        if debug:
+            print(f"After inverse transform:")
+            print(
+                f"Predictions range: [{np.min(group_preds)}, {np.max(group_preds)}]")
+            print(
+                f"Observations range: [{np.min(group_obs)}, {np.max(group_obs)}]")
+
+        # Get the dataset's sorted dataframe
+        if not hasattr(datamodule, 'test_dataset') or datamodule.test_dataset is None:
+            raise ValueError(
+                "Datamodule missing test_dataset. Ensure the datamodule has been properly set up.")
+
+        df_sorted = datamodule.test_dataset.df_sorted
+        if df_sorted is None or df_sorted.empty:
+            raise ValueError("Dataset's sorted dataframe is empty or missing.")
+
+        # Generate dates for the test period
+        basin_data = df_sorted[df_sorted[datamodule.group_identifier]
+                               == group_identifier]
+        if basin_data.empty:
+            raise ValueError(
+                f"No data found for {group_identifier} in test dataset")
+
+        if debug:
+            print(
+                f"Found {len(basin_data)} rows for basin {group_identifier} in dataset")
+
+        # Get all dates for this basin and sort them
+        all_dates = basin_data['date'].sort_values().reset_index(drop=True)
+
+        # We need to determine which dates correspond to our test predictions
+        # Since the test set is typically at the end, we'll use the last N dates
+        test_dates = all_dates.tail(len(group_preds)).values
+
+        if debug:
+            print(f"Extracted {len(test_dates)} test dates")
+            print(f"First date: {test_dates[0]}, Last date: {test_dates[-1]}")
+
+        # Create rolling windows (non-overlapping segments)
+        windows = []
+        window_dates = []
+        i = 0
+        while i < len(group_preds):
+            # Extract window of length horizon
+            end_idx = min(i + horizon, len(group_preds))
+            window_preds = group_preds[i:end_idx]
+            window_obs = group_obs[i:end_idx]
+            window_date = test_dates[i:end_idx]
+
+            if len(window_preds) > 0:
+                windows.append((window_preds, window_obs))
+                window_dates.append(window_date)
+
+            # Move forward by exactly horizon length
+            i += horizon
+
+        # Create plot with Seaborn style
+        sns.set_style("whitegrid")
+        fig, ax = plt.subplots(figsize=fig_size)
+
+        # Plot all observations as a continuous line
+        ax.plot(test_dates, group_obs,
+                color=color_observed, label='Observed', linewidth=2, zorder=10)
+
+        # Plot each forecast window as a separate line segment with distinctive style
+        for i, ((window_preds, window_obs), window_date) in enumerate(zip(windows, window_dates)):
+            if len(window_date) > 0:
+                ax.plot(window_date, window_preds,
+                        color=color_forecast, alpha=alpha_forecast,
+                        label='Forecast' if i == 0 else "",
+                        linestyle=line_style_forecast,
+                        linewidth=line_width_forecast,
+                        zorder=15)
+
+        # Set title and labels
+        if title is None:
+            title = f"{horizon}-day Forecast for {group_identifier}"
+        ax.set_title(title, fontsize=14)
+        ax.set_xlabel('Date', fontsize=12)
+        ax.set_ylabel(y_label, fontsize=12)
+
+        # Format x-axis
+        ax.xaxis.set_major_formatter(mdates.DateFormatter(date_format))
+        plt.xticks(rotation=45)
+
+        # Add legend with distinctive appearance
+        ax.legend(loc='upper right', frameon=True, framealpha=0.9, fontsize=10)
+
+        # Clean up the plot
+        sns.despine()
+
+        # Format y-axis to avoid scientific notation
+        ax.yaxis.set_major_locator(MaxNLocator(nbins=6, integer=False))
+
+        # Tight layout for better appearance
+        fig.tight_layout()
+
+        return fig, ax
 
     # Existing static metric calculation methods remain unchanged
     @staticmethod

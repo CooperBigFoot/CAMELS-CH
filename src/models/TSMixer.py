@@ -348,6 +348,7 @@ class LitTSMixer(pl.LightningModule):
             "predictions": y_hat.squeeze(-1),
             "observations": y.squeeze(-1),
             "basin_ids": batch[self.config.group_identifier],
+            "slice_idx": batch.get("slice_idx", []),
         }
 
         self.test_outputs.append(output)
@@ -366,6 +367,7 @@ class LitTSMixer(pl.LightningModule):
             "predictions": torch.cat([x["predictions"] for x in self.test_outputs]),
             "observations": torch.cat([x["observations"] for x in self.test_outputs]),
             "basin_ids": [bid for x in self.test_outputs for bid in x["basin_ids"]],
+            "slice_idx": [idx for x in self.test_outputs for idx in x["slice_idx"]],
         }
 
         self.test_outputs = []

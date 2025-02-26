@@ -44,7 +44,7 @@ class HydroDataset(Dataset):
         self.features = sorted(features)  # Sort for consistency
         self.target = target
         self.group_identifier = group_identifier
-        self.domain_id = domain_id  
+        self.domain_id = domain_id
 
         # Process static features
         if static_features:
@@ -55,13 +55,13 @@ class HydroDataset(Dataset):
             self.static_features = []
 
         # Sort time series data for consistency
-        self.df_sorted = time_series_df.sort_values(
+        self._df_sorted = time_series_df.sort_values(
             [self.group_identifier, "date"])
 
         # Handle static features
         if static_df is not None and self.static_features:
             # Validate static data coverage
-            ts_gauge_ids = set(self.df_sorted[self.group_identifier].unique())
+            ts_gauge_ids = set(self._df_sorted[self.group_identifier].unique())
             static_gauge_ids = set(static_df[self.group_identifier].unique())
             missing = ts_gauge_ids - static_gauge_ids
             if missing:
@@ -86,7 +86,7 @@ class HydroDataset(Dataset):
         # NEW: to store original indices
         self.index_data: Dict[str, np.ndarray] = {}
 
-        for gauge_id, group in self.df_sorted.groupby(self.group_identifier):
+        for gauge_id, group in self._df_sorted.groupby(self.group_identifier):
             # Convert features and target to tensors
             feat_tensor = torch.tensor(
                 group[self.features].to_numpy(dtype=np.float32)
@@ -192,7 +192,12 @@ class HydroDataset(Dataset):
             "static": static,
             "domain_id": domain_tensor,
             self.group_identifier: gauge_id,
-            "slice_idx": slice_idx,  
+            "slice_idx": slice_idx,
         }
 
         return return_dict
+
+    @property
+    def df_sorted(self) -> pd.DataFrame:
+        """Return the sorted DataFrame."""
+        return self._df_sorted
