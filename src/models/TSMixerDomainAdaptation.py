@@ -5,6 +5,7 @@ import pytorch_lightning as pl
 from torch.nn import MSELoss
 import math
 from typing import Dict, Any, Union, List, Optional, Tuple
+import numpy as np
 
 from .TSMixer import TSMixer, TSMixerConfig
 
@@ -59,10 +60,10 @@ class TSMixerDomainAdaptationConfig(TSMixerConfig):
         lr_scheduler_patience: int = 2,
         lr_scheduler_factor: float = 0.5,
         lambda_adv: float = 1.0,
+        initial_lambda: float = 0.0,
         domain_loss_weight: float = 1.0,
         discriminator_hidden_dim: int = 16,
-        lambda_schedule_type: str = "exponential",
-        lambda_init_value: float = 0.0,        
+
     ):
         """Initialize TSMixerDomainAdaptation configuration.
 
@@ -82,8 +83,7 @@ class TSMixerDomainAdaptationConfig(TSMixerConfig):
             lambda_adv: Weight for gradient reversal scaling (final value)
             domain_loss_weight: Weight for domain loss in total loss function
             discriminator_hidden_dim: Hidden dimension size for domain discriminator
-            lambda_schedule_type: Type of lambda scheduling ("constant", "linear", "exp", "sigmoid")
-            lambda_init_value: Initial value for lambda_adv
+
         """
         super().__init__(
             input_len=input_len,
@@ -101,10 +101,9 @@ class TSMixerDomainAdaptationConfig(TSMixerConfig):
         )
 
         self.lambda_adv = lambda_adv
+        self.initial_lambda = initial_lambda
         self.domain_loss_weight = domain_loss_weight
         self.discriminator_hidden_dim = discriminator_hidden_dim
-        self.lambda_schedule_type = lambda_schedule_type
-        self.lambda_init_value = lambda_init_value
 
 
 class LitTSMixerDomainAdaptation(pl.LightningModule):
@@ -141,13 +140,11 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
             feature_dim=feature_dim,
             hidden_dim=self.config.discriminator_hidden_dim
         )
+        self.current_lambda = self.config.initial_lambda
 
         # Loss functions
         self.mse_criterion = MSELoss()
         self.domain_criterion = nn.BCELoss()
-
-        # Current lambda value that will be updated each epoch
-        self.current_lambda = self.config.lambda_init_value
 
         # Save hyperparameters and initialize tracking variables
         self.save_hyperparameters(self.config.to_dict())
@@ -239,35 +236,40 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         flattened = features.flatten(start_dim=1)
         return flattened
 
+    @staticmethod
+    def get_lambda_value(progress: float) -> float:
+        """
+        Calculate lambda value based on training progress.
+
+        Args:
+            progress: Training progress from 0 to 1
+
+        Returns:
+            Current lambda value according to the paper's schedule
+
+        Source:
+            https://www.jmlr.org/papers/volume17/15-239/15-239.pdf
+        """
+        return 2 / (1 + np.exp(-10 * progress)) - 1
+
     def _get_scheduled_lambda(self) -> float:
         """Calculate lambda value based on current epoch and schedule type."""
-        if self.config.lambda_schedule_type == "constant":
-            return self.config.lambda_adv
 
-        # Get progress through training (0 to 1)
         if not hasattr(self.trainer, "max_epochs") or self.trainer.max_epochs is None:
-            # If max_epochs not set, use constant schedule
+            print("Warning: trainer.max_epochs not set, using constant lambda")
             return self.config.lambda_adv
 
         current_epoch = self.trainer.current_epoch
         max_epochs = self.trainer.max_epochs
-        p = min(current_epoch / max_epochs, 1.0)
+        progress = current_epoch / max_epochs
 
-        # Calculate lambda based on schedule type
-        if self.config.lambda_schedule_type == "linear":
-            return self.config.lambda_init_value + p * (self.config.lambda_adv - self.config.lambda_init_value)
-        elif self.config.lambda_schedule_type == "exp":
-            return self.config.lambda_init_value + (self.config.lambda_adv - self.config.lambda_init_value) * (1 - math.exp(-5 * p))
-        elif self.config.lambda_schedule_type == "sigmoid":
-            sigmoid_p = 1 / (1 + math.exp(-10 * (p - 0.5)))
-            return self.config.lambda_init_value + (self.config.lambda_adv - self.config.lambda_init_value) * sigmoid_p
-        else:
-            return self.config.lambda_adv  
+        return self.get_lambda_value(progress) * self.config.lambda_adv
 
     def on_train_epoch_start(self) -> None:
         """Update lambda value at the beginning of each epoch."""
+        prev_lambda = self.current_lambda
         self.current_lambda = self._get_scheduled_lambda()
-       
+
         self.log("lambda_adv", self.current_lambda, prog_bar=True)
 
     def training_step(self, batch, batch_idx):
