@@ -159,25 +159,6 @@ preprocessing_config = {
 }
 ```
 
-## Quality Check Configuration
-
-The preprocessing module provides quality checking functions:
-
-```python
-from data_models.preprocessing import check_data_quality
-
-filtered_df, quality_report = check_data_quality(
-    df=time_series_df,
-    required_columns=["streamflow", "precipitation", "temperature"],
-    max_missing_pct=10.0,  # Maximum allowed percentage of missing values
-    max_gap_length=30,     # Maximum allowed gap length in days
-    min_train_years=10,    # Minimum required years for training
-    val_years=1,           # Fixed validation period in years
-    test_years=2,          # Fixed test period in years
-    group_identifier="gauge_id"
-)
-```
-
 ## Examples of Available Transformers
 
 - **StandardScaleTransformer**: Standardize features by removing mean and scaling to unit variance
