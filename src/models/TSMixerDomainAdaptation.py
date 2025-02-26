@@ -6,6 +6,10 @@ from torch.nn import MSELoss
 import math
 from typing import Dict, Any, Union, List, Optional, Tuple
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.manifold import TSNE
+
 
 from .TSMixer import TSMixer, TSMixerConfig
 
@@ -428,3 +432,113 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
             "lr_scheduler": scheduler,
             "monitor": "val_loss",
         }
+
+    def visualize_domain_adaptation(self,
+                                    source_dataloader,
+                                    target_dataloader,
+                                    max_samples=500,
+                                    device=None,
+                                    perplexity=30,
+                                    figsize=(6, 6),
+                                    title="Domain Adaptation Visualization"):
+        """
+        Visualize domain adaptation by projecting features to 2D using t-SNE.
+
+        Args:
+            source_dataloader: DataLoader for source domain data
+            target_dataloader: DataLoader for target domain data  
+            max_samples: Maximum number of samples to collect from each domain
+            device: Device to run the model on (defaults to model's device)
+            perplexity: t-SNE perplexity parameter
+            figsize: Figure size as (width, height)
+            title: Plot title
+
+        Returns:
+            matplotlib Figure with t-SNE visualization
+        """
+        # Set model to evaluation mode
+        self.eval()
+
+        # Set device
+        if device is None:
+            device = next(self.parameters()).device
+
+        # Collect features
+        source_features = []
+        target_features = []
+        source_count = 0
+        target_count = 0
+
+        # Extract source domain features
+        with torch.no_grad():
+            for batch in source_dataloader:
+                if source_count >= max_samples:
+                    break
+
+                # Extract features from batch
+                x, static = batch["X"].to(device), batch["static"].to(device)
+                batch_size = x.size(0)
+                features = self.extract_features(x, static)
+                source_features.append(features.cpu())
+                source_count += batch_size
+
+        # Extract target domain features
+        with torch.no_grad():
+            for batch in target_dataloader:
+                if target_count >= max_samples:
+                    break
+
+                # Extract features from batch
+                x, static = batch["X"].to(device), batch["static"].to(device)
+                batch_size = x.size(0)
+                features = self.extract_features(x, static)
+                target_features.append(features.cpu())
+                target_count += batch_size
+
+        # Concatenate features and create domain labels
+        if source_features and target_features:
+            source_features = torch.cat(source_features, dim=0)[:max_samples]
+            target_features = torch.cat(target_features, dim=0)[:max_samples]
+
+            source_domains = torch.zeros(source_features.size(0))
+            target_domains = torch.ones(target_features.size(0))
+
+            # Combine features and domain labels
+            all_features = torch.cat(
+                [source_features, target_features], dim=0).numpy()
+            all_domains = torch.cat(
+                [source_domains, target_domains], dim=0).numpy()
+
+            # Apply t-SNE for dimensionality reduction
+            tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42)
+            features_2d = tsne.fit_transform(all_features)
+
+            # Create visualization
+            plt.figure(figsize=figsize)
+
+            # Plot points
+            plt.scatter(
+                features_2d[all_domains == 0, 0],
+                features_2d[all_domains == 0, 1],
+                c='blue', label='Source', alpha=0.7, s=30
+            )
+            plt.scatter(
+                features_2d[all_domains == 1, 0],
+                features_2d[all_domains == 1, 1],
+                c='red', label='Target', alpha=0.7, s=30
+            )
+
+            # Add labels and title
+            plt.title(title, fontsize=14)
+            plt.xlabel('t-SNE Component 1', fontsize=12)
+            plt.ylabel('t-SNE Component 2', fontsize=12)
+            plt.legend(fontsize=12)
+
+            # Improve layout
+            plt.tight_layout()
+            sns.despine()
+
+            return plt.gcf()
+        else:
+            print("No features collected. Check your dataloaders.")
+            return None
