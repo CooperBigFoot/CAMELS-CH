@@ -347,7 +347,7 @@ class BenchmarkRunner:
             summary_stats = overall_metrics_df.groupby(level=0).agg(
                 ["mean", "std", "min", "max"]
             )
-            summary_stats.to_csv(self.results_dir / f"benchmark_aggregate_metrics.csv")
+            summary_stats.to_csv(self.results_dir / "benchmark_aggregate_metrics.csv")
 
             print(f"Successfully saved aggregate metrics for {len(all_results)} runs")
 

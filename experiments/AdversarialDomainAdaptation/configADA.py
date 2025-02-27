@@ -2,7 +2,7 @@ import random
 import numpy as np
 import torch
 from dataclasses import dataclass
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import os
 from src.models.TSMixer import TSMixerConfig
 from src.models.TSMixerDomainAdaptation import TSMixerDomainAdaptationConfig

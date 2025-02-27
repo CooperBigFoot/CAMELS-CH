@@ -338,7 +338,7 @@ class ChallengerRunner:
             summary_stats = overall_metrics_df.groupby(level=0).agg(
                 ["mean", "std", "min", "max"]
             )
-            summary_stats.to_csv(self.results_dir / f"challenger_aggregate_metrics.csv")
+            summary_stats.to_csv(self.results_dir / "challenger_aggregate_metrics.csv")
 
             print(f"Successfully saved aggregate metrics for {len(all_results)} runs")
 

@@ -13,7 +13,6 @@ from pytorch_lightning.callbacks import (
     LearningRateMonitor,
 )
 import pandas as pd
-import numpy as np
 from experiments.AdversarialDomainAdaptation.configADA import ExperimentConfig
 from src.data_models.caravanify import Caravanify, CaravanifyConfig
 from src.data_models.datamodule import HydroDataModule, HydroTransferDataModule

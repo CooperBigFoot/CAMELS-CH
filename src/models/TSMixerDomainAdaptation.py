@@ -202,7 +202,7 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         model_state_dict = {}
         for key, value in pretrained_state_dict.items():
             if key.startswith("model."):
-                new_key = key[6:]  # Remove 'model.' prefix
+                new_key = key[6:]
                 model_state_dict[new_key] = value
         missing_keys, unexpected_keys = self.model.load_state_dict(
             model_state_dict, strict=False
@@ -303,7 +303,8 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
 
         # Combine data from both domains for domain adaptation
         combined_X = torch.cat([source_batch["X"], target_batch["X"]])
-        combined_static = torch.cat([source_batch["static"], target_batch["static"]])
+        combined_static = torch.cat(
+            [source_batch["static"], target_batch["static"]])
         combined_domain = (
             torch.cat(
                 [
@@ -402,7 +403,8 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
 
             # Update validation loss to include target domain if using target labels
             if self.config.use_target_labels:
-                metrics["val_loss"] = (metrics["val_source_loss"] + target_loss) / 2
+                metrics["val_loss"] = (
+                    metrics["val_source_loss"] + target_loss) / 2
 
         # 3. Domain Classification (only if both domains present)
         if "X" in source_batch and "X" in target_batch:
@@ -423,7 +425,8 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
 
             features = self.extract_features(combined_X, combined_static)
             domain_preds = self.domain_discriminator(features)
-            domain_acc = ((domain_preds > 0.5).float() == true_domains).float().mean()
+            domain_acc = ((domain_preds > 0.5).float()
+                          == true_domains).float().mean()
             metrics["val_domain_acc"] = domain_acc
 
         # Log all metrics
@@ -572,8 +575,10 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
             target_domains = torch.ones(target_features.size(0))
 
             # Combine features and domain labels
-            all_features = torch.cat([source_features, target_features], dim=0).numpy()
-            all_domains = torch.cat([source_domains, target_domains], dim=0).numpy()
+            all_features = torch.cat(
+                [source_features, target_features], dim=0).numpy()
+            all_domains = torch.cat(
+                [source_domains, target_domains], dim=0).numpy()
 
             # Apply t-SNE for dimensionality reduction
             tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42)
