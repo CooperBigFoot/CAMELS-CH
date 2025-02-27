@@ -225,7 +225,6 @@ class TSForecastEvaluator:
             print(f"First date: {test_dates[0]}, Last date: {test_dates[-1]}")
 
         # Create plot with Seaborn style
-        sns.set_style("whitegrid")
         fig, ax = plt.subplots(figsize=fig_size)
 
         # Plot all observations as a continuous line
@@ -240,16 +239,17 @@ class TSForecastEvaluator:
         # Set title and labels
         if title is None:
             title = f"{horizon}-day Forecast for {group_identifier}"
+
         ax.set_title(title, fontsize=14)
-        ax.set_xlabel('Date', fontsize=12)
+        ax.set_xlabel('', fontsize=12)
         ax.set_ylabel(y_label, fontsize=12)
 
         # Format x-axis
         ax.xaxis.set_major_formatter(mdates.DateFormatter(date_format))
-        plt.xticks(rotation=45)
 
         # Add legend with distinctive appearance
         ax.legend(loc='upper right', frameon=True, framealpha=0.9, fontsize=10)
+        ax.grid(True, linestyle='--', alpha=0.7)
 
         # Clean up the plot
         sns.despine()

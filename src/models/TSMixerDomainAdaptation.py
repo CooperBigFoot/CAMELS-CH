@@ -36,7 +36,7 @@ class DomainDiscriminator(nn.Module):
             nn.Linear(feature_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, 1),
-            nn.Sigmoid()
+            nn.Sigmoid(),
         )
 
     def forward(self, x):
@@ -67,7 +67,8 @@ class TSMixerDomainAdaptationConfig(TSMixerConfig):
         initial_lambda: float = 0.0,
         domain_loss_weight: float = 1.0,
         discriminator_hidden_dim: int = 16,
-
+        use_target_labels: bool = False,
+        target_loss_weight: float = 1.0,
     ):
         """Initialize TSMixerDomainAdaptation configuration.
 
@@ -87,6 +88,8 @@ class TSMixerDomainAdaptationConfig(TSMixerConfig):
             lambda_adv: Weight for gradient reversal scaling (final value)
             domain_loss_weight: Weight for domain loss in total loss function
             discriminator_hidden_dim: Hidden dimension size for domain discriminator
+            use_target_labels: Whether to use target labels for training
+            target_loss_weight: Weight for target loss in total loss function
 
         """
         super().__init__(
@@ -101,13 +104,16 @@ class TSMixerDomainAdaptationConfig(TSMixerConfig):
             learning_rate=learning_rate,
             group_identifier=group_identifier,
             lr_scheduler_patience=lr_scheduler_patience,
-            lr_scheduler_factor=lr_scheduler_factor
+            lr_scheduler_factor=lr_scheduler_factor,
         )
 
         self.lambda_adv = lambda_adv
         self.initial_lambda = initial_lambda
         self.domain_loss_weight = domain_loss_weight
         self.discriminator_hidden_dim = discriminator_hidden_dim
+
+        self.use_target_labels = use_target_labels
+        self.target_loss_weight = target_loss_weight
 
 
 class LitTSMixerDomainAdaptation(pl.LightningModule):
@@ -141,8 +147,7 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         # Domain adaptation components
         feature_dim = self.config.input_len * self.config.input_size
         self.domain_discriminator = DomainDiscriminator(
-            feature_dim=feature_dim,
-            hidden_dim=self.config.discriminator_hidden_dim
+            feature_dim=feature_dim, hidden_dim=self.config.discriminator_hidden_dim
         )
         self.current_lambda = self.config.initial_lambda
 
@@ -182,8 +187,8 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         """Extract backbone-specific weights from a full model state dict."""
         backbone_state_dict = {}
         for key, value in state_dict.items():
-            if key.startswith('model.backbone.'):
-                backbone_key = key.replace('model.backbone.', '')
+            if key.startswith("model.backbone."):
+                backbone_key = key.replace("model.backbone.", "")
                 backbone_state_dict[backbone_key] = value
         return backbone_state_dict
 
@@ -197,17 +202,20 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         """Load the entire model weights from a pretrained TSMixer model."""
         model_state_dict = {}
         for key, value in pretrained_state_dict.items():
-            if key.startswith('model.'):
+            if key.startswith("model."):
                 new_key = key[6:]  # Remove 'model.' prefix
                 model_state_dict[new_key] = value
         missing_keys, unexpected_keys = self.model.load_state_dict(
-            model_state_dict, strict=False)
+            model_state_dict, strict=False
+        )
         if missing_keys:
             print(
-                f"Warning: Missing keys when loading pretrained model: {missing_keys}")
+                f"Warning: Missing keys when loading pretrained model: {missing_keys}"
+            )
         if unexpected_keys:
             print(
-                f"Warning: Unexpected keys when loading pretrained model: {unexpected_keys}")
+                f"Warning: Unexpected keys when loading pretrained model: {unexpected_keys}"
+            )
         print("Loaded model weights from pretrained model")
 
     def forward(self, x: torch.Tensor, static: torch.Tensor) -> torch.Tensor:
@@ -226,7 +234,7 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         """Extract domain-invariant features for adversarial training.
 
         The static features are explicitly zeroed out to ensure the domain classifier
-        learns only from the dynamic features, preventing any static catchment 
+        learns only from the dynamic features, preventing any static catchment
         characteristics from influencing domain discrimination.
 
         Args:
@@ -271,7 +279,6 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
 
     def on_train_epoch_start(self) -> None:
         """Update lambda value at the beginning of each epoch."""
-        prev_lambda = self.current_lambda
         self.current_lambda = self._get_scheduled_lambda()
 
         self.log("lambda_adv", self.current_lambda, prog_bar=True)
@@ -280,7 +287,8 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         """Training step for domain adaptation.
 
         Processes both source and target domain data, computing task loss on source
-        domain and domain adversarial loss on both domains.
+        domain and optionally on target domain if use_target_labels is True.
+        Also computes domain adversarial loss on both domains.
 
         Args:
             batch: Combined batch containing source and target domain data
@@ -294,21 +302,47 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         source_batch = data_dict["source"]
         target_batch = data_dict["target"]
 
-        # Combine data from both domains
+        # Combine data from both domains for domain adaptation
         combined_X = torch.cat([source_batch["X"], target_batch["X"]])
-        combined_static = torch.cat(
-            [source_batch["static"], target_batch["static"]])
-        combined_domain = torch.cat([
-            torch.zeros(len(source_batch["X"])),  # Source domain = 0
-            torch.ones(len(target_batch["X"]))    # Target domain = 1
-        ]).unsqueeze(1).to(self.device)
+        combined_static = torch.cat([source_batch["static"], target_batch["static"]])
+        combined_domain = (
+            torch.cat(
+                [
+                    torch.zeros(len(source_batch["X"])),  # Source domain = 0
+                    torch.ones(len(target_batch["X"])),  # Target domain = 1
+                ]
+            )
+            .unsqueeze(1)
+            .to(self.device)
+        )
 
-        # Forward pass for task prediction (source domain only)
-        y_pred = self(source_batch["X"], source_batch["static"])
-        task_loss = self.mse_criterion(
-            y_pred, source_batch["y"].unsqueeze(-1))
+        # Source domain task prediction
+        source_pred = self(source_batch["X"], source_batch["static"])
+        source_task_loss = self.mse_criterion(
+            source_pred, source_batch["y"].unsqueeze(-1)
+        )
 
-        # Forward pass for domain prediction (both domains)
+        # Total task loss starts with source loss
+        task_loss = source_task_loss
+
+        # Add target task loss if enabled
+        if self.config.use_target_labels:
+            target_pred = self(target_batch["X"], target_batch["static"])
+            target_task_loss = self.mse_criterion(
+                target_pred, target_batch["y"].unsqueeze(-1)
+            )
+
+            # Log separate target loss
+            self.log(
+                "train_target_task_loss",
+                target_task_loss,
+                batch_size=len(target_batch["X"]),
+            )
+
+            # Add weighted target loss to total task loss
+            task_loss = task_loss + self.config.target_loss_weight * target_task_loss
+
+        # Domain adaptation through adversarial training
         features = self.extract_features(combined_X, combined_static)
         features_rev = grad_reverse(features, self.current_lambda)
         domain_preds = self.domain_discriminator(features_rev)
@@ -317,19 +351,23 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         # Total loss is a combination of task and domain losses
         total_loss = task_loss + self.config.domain_loss_weight * domain_loss
 
-        self.log_dict({
-            "train_loss": total_loss,
-            "train_task_loss": task_loss,
-            "train_domain_loss": domain_loss,
-        }, batch_size=len(combined_X))  # Add explicit batch size
+        # Log metrics
+        self.log_dict(
+            {
+                "train_loss": total_loss,
+                "train_source_task_loss": source_task_loss,
+                "train_domain_loss": domain_loss,
+            },
+            batch_size=len(combined_X),
+        )
 
         return total_loss
 
     def validation_step(self, batch, batch_idx):
         """Validation step for domain adaptation.
 
-        Evaluates both task performance on source domain and domain discrimination
-        across both domains.
+        Evaluates both task performance on source domain and target domain (if enabled)
+        and domain discrimination across both domains.
 
         Args:
             batch: Combined batch containing source and target domain data
@@ -345,30 +383,59 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
 
         metrics = {}
 
-        # 1. Task Loss (source only)
+        # 1. Source Domain Task Loss
         if "X" in source_batch and len(source_batch["X"]) > 0:
             source_pred = self(source_batch["X"], source_batch["static"])
             source_loss = self.mse_criterion(
-                source_pred, source_batch["y"].unsqueeze(-1))
+                source_pred, source_batch["y"].unsqueeze(-1)
+            )
+            metrics["val_source_loss"] = source_loss
+            # Keep backward compatibility for monitoring
             metrics["val_loss"] = source_loss
 
-        # 2. Domain Classification (only if both domains present)
+        # 2. Target Domain Task Loss (if enabled)
+        if "X" in target_batch and len(target_batch["X"]) > 0:
+            target_pred = self(target_batch["X"], target_batch["static"])
+            target_loss = self.mse_criterion(
+                target_pred, target_batch["y"].unsqueeze(-1)
+            )
+            metrics["val_target_loss"] = target_loss
+
+            # Update validation loss to include target domain if using target labels
+            if self.config.use_target_labels:
+                metrics["val_loss"] = (metrics["val_source_loss"] + target_loss) / 2
+
+        # 3. Domain Classification (only if both domains present)
         if "X" in source_batch and "X" in target_batch:
             combined_X = torch.cat([source_batch["X"], target_batch["X"]])
             combined_static = torch.cat(
-                [source_batch["static"], target_batch["static"]])
-            true_domains = torch.cat([
-                torch.zeros(len(source_batch["X"])),
-                torch.ones(len(target_batch["X"]))
-            ]).unsqueeze(1).to(self.device)
+                [source_batch["static"], target_batch["static"]]
+            )
+            true_domains = (
+                torch.cat(
+                    [
+                        torch.zeros(len(source_batch["X"])),
+                        torch.ones(len(target_batch["X"])),
+                    ]
+                )
+                .unsqueeze(1)
+                .to(self.device)
+            )
 
             features = self.extract_features(combined_X, combined_static)
             domain_preds = self.domain_discriminator(features)
-            domain_acc = ((domain_preds > 0.5).float()
-                          == true_domains).float().mean()
+            domain_acc = ((domain_preds > 0.5).float() == true_domains).float().mean()
             metrics["val_domain_acc"] = domain_acc
 
-        self.log_dict(metrics, prog_bar=True, batch_size=len(combined_X))
+        # Log all metrics
+        self.log_dict(
+            metrics,
+            prog_bar=True,
+            batch_size=len(combined_X)
+            if "X" in source_batch and "X" in target_batch
+            else 1,
+        )
+
         return metrics.get("val_loss", torch.tensor(0.0))
 
     def test_step(self, batch, batch_idx):
@@ -423,7 +490,7 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
                 optimizer,
                 mode="min",
                 patience=self.config.lr_scheduler_patience,
-                factor=self.config.lr_scheduler_factor
+                factor=self.config.lr_scheduler_factor,
             ),
             "monitor": "val_loss",
         }
@@ -433,20 +500,22 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
             "monitor": "val_loss",
         }
 
-    def visualize_domain_adaptation(self,
-                                    source_dataloader,
-                                    target_dataloader,
-                                    max_samples=500,
-                                    device=None,
-                                    perplexity=30,
-                                    figsize=(6, 6),
-                                    title="Domain Adaptation Visualization"):
+    def visualize_domain_adaptation(
+        self,
+        source_dataloader,
+        target_dataloader,
+        max_samples=500,
+        device=None,
+        perplexity=30,
+        figsize=(6, 6),
+        title="Domain Adaptation Visualization",
+    ):
         """
         Visualize domain adaptation by projecting features to 2D using t-SNE.
 
         Args:
             source_dataloader: DataLoader for source domain data
-            target_dataloader: DataLoader for target domain data  
+            target_dataloader: DataLoader for target domain data
             max_samples: Maximum number of samples to collect from each domain
             device: Device to run the model on (defaults to model's device)
             perplexity: t-SNE perplexity parameter
@@ -504,10 +573,8 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
             target_domains = torch.ones(target_features.size(0))
 
             # Combine features and domain labels
-            all_features = torch.cat(
-                [source_features, target_features], dim=0).numpy()
-            all_domains = torch.cat(
-                [source_domains, target_domains], dim=0).numpy()
+            all_features = torch.cat([source_features, target_features], dim=0).numpy()
+            all_domains = torch.cat([source_domains, target_domains], dim=0).numpy()
 
             # Apply t-SNE for dimensionality reduction
             tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42)
@@ -520,18 +587,24 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
             plt.scatter(
                 features_2d[all_domains == 0, 0],
                 features_2d[all_domains == 0, 1],
-                c='blue', label='Source', alpha=0.7, s=30
+                c="blue",
+                label="Source",
+                alpha=0.7,
+                s=30,
             )
             plt.scatter(
                 features_2d[all_domains == 1, 0],
                 features_2d[all_domains == 1, 1],
-                c='red', label='Target', alpha=0.7, s=30
+                c="red",
+                label="Target",
+                alpha=0.7,
+                s=30,
             )
 
             # Add labels and title
             plt.title(title, fontsize=14)
-            plt.xlabel('t-SNE Component 1', fontsize=12)
-            plt.ylabel('t-SNE Component 2', fontsize=12)
+            plt.xlabel("t-SNE Component 1", fontsize=12)
+            plt.ylabel("t-SNE Component 2", fontsize=12)
             plt.legend(fontsize=12)
 
             # Improve layout
