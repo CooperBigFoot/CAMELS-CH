@@ -39,8 +39,7 @@ class HydroTransformer(BaseEstimator, TransformerMixin):
             ValueError: If input validation fails
         """
         if isinstance(X, pd.DataFrame) and self.columns is not None:
-            missing_cols = [
-                col for col in self.columns if col not in X.columns]
+            missing_cols = [col for col in self.columns if col not in X.columns]
             if missing_cols:
                 raise ValueError(f"Columns not found in data: {missing_cols}")
 
@@ -62,7 +61,9 @@ class HydroTransformer(BaseEstimator, TransformerMixin):
                 return list(range(X.shape[1]))
             return self.columns
 
-    def fit(self, X: Union[pd.DataFrame, np.ndarray], y: Optional[pd.Series] = None) -> "HydroTransformer":
+    def fit(
+        self, X: Union[pd.DataFrame, np.ndarray], y: Optional[pd.Series] = None
+    ) -> "HydroTransformer":
         """Fit transformer to data.
 
         Args:
@@ -82,7 +83,8 @@ class HydroTransformer(BaseEstimator, TransformerMixin):
         else:
             self.n_features_in_ = X.shape[1]
             self.feature_names_in_ = np.array(
-                [f"feature_{i}" for i in range(X.shape[1])])
+                [f"feature_{i}" for i in range(X.shape[1])]
+            )
 
         # Original code
         if isinstance(X, pd.DataFrame):
@@ -94,7 +96,9 @@ class HydroTransformer(BaseEstimator, TransformerMixin):
         self._fitted = True
         return self
 
-    def transform(self, X: Union[pd.DataFrame, np.ndarray]) -> Union[pd.DataFrame, np.ndarray]:
+    def transform(
+        self, X: Union[pd.DataFrame, np.ndarray]
+    ) -> Union[pd.DataFrame, np.ndarray]:
         """Transform data.
 
         Args:
@@ -107,15 +111,16 @@ class HydroTransformer(BaseEstimator, TransformerMixin):
             ValueError: If transformer hasn't been fitted
         """
         if not self._fitted:
-            raise ValueError(
-                "Transformer must be fitted before calling transform")
+            raise ValueError("Transformer must be fitted before calling transform")
 
         self._validate_input(X)
 
         # Default implementation: return data unchanged
         return X
 
-    def inverse_transform(self, X: Union[pd.DataFrame, np.ndarray]) -> Union[pd.DataFrame, np.ndarray]:
+    def inverse_transform(
+        self, X: Union[pd.DataFrame, np.ndarray]
+    ) -> Union[pd.DataFrame, np.ndarray]:
         """Inverse transform data.
 
         Args:
@@ -129,7 +134,8 @@ class HydroTransformer(BaseEstimator, TransformerMixin):
         """
         if not self._fitted:
             raise ValueError(
-                "Transformer must be fitted before calling inverse_transform")
+                "Transformer must be fitted before calling inverse_transform"
+            )
 
         self._validate_input(X)
 
@@ -146,7 +152,6 @@ class HydroTransformer(BaseEstimator, TransformerMixin):
             ValueError: If transformer hasn't been fitted
         """
         if not self._fitted:
-            raise ValueError(
-                "Transformer must be fitted before getting feature names")
+            raise ValueError("Transformer must be fitted before getting feature names")
 
         return self._feature_names

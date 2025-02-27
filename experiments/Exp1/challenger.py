@@ -31,7 +31,7 @@ import multiprocessing
 from experiments.Exp1 import config
 
 if config.ACCELERATOR == "cuda":
-    torch.set_float32_matmul_precision('medium')
+    torch.set_float32_matmul_precision("medium")
 
 
 # ----- CONFIGURE CH DATASET FOR PRETRAINING -----
@@ -53,7 +53,9 @@ ch_caravan.load_stations(ch_basins)
 ts_columns = config.FORCING_FEATURES + [config.TARGET]
 static_columns = config.STATIC_FEATURES
 
-ch_ts_data = ch_caravan.get_time_series()[ts_columns + ["date"] + [config.GROUP_IDENTIFIER]]
+ch_ts_data = ch_caravan.get_time_series()[
+    ts_columns + ["date"] + [config.GROUP_IDENTIFIER]
+]
 ch_static_data = ch_caravan.get_static_attributes()[static_columns]
 
 # ----- CONFIGURE PREPROCESSING -----
@@ -118,7 +120,9 @@ print("STARTING CH PRETRAINING")
 pretrain_trainer.fit(model, ch_data_module)
 
 # Save pretrained model
-pretrain_save_path = Path("experiments/Exp1/saved_models/tsmixer_challenger_pretrained.pt")
+pretrain_save_path = Path(
+    "experiments/Exp1/saved_models/tsmixer_challenger_pretrained.pt"
+)
 pretrain_save_path.parent.mkdir(parents=True, exist_ok=True)
 torch.save(model.state_dict(), pretrain_save_path)
 print("PRETRAINING COMPLETE")
@@ -139,7 +143,9 @@ ca_basins = ca_caravan.get_all_gauge_ids()
 print(f"Loading {len(ca_basins)} CA basins")
 ca_caravan.load_stations(ca_basins)
 
-ca_ts_data = ca_caravan.get_time_series()[ts_columns + ["date"] + [config.GROUP_IDENTIFIER]]
+ca_ts_data = ca_caravan.get_time_series()[
+    ts_columns + ["date"] + [config.GROUP_IDENTIFIER]
+]
 ca_static_data = ca_caravan.get_static_attributes()[static_columns]
 
 # ----- CREATE CA DATA MODULE -----
@@ -205,8 +211,7 @@ raw_results = model.test_results
 # Create evaluator and calculate metrics
 print("Calculating evaluation metrics...")
 evaluator = TSForecastEvaluator(
-    ca_data_module, 
-    horizons=list(range(1, model.config.pred_len + 1))
+    ca_data_module, horizons=list(range(1, model.config.pred_len + 1))
 )
 results_df, overall_metrics, basin_metrics = evaluator.evaluate(raw_results)
 

@@ -3,7 +3,7 @@
 Code adapted from: https://github.com/kratzert/ealstm_regional_modeling/blob/master/papercode/ealstm.py
 
 The EA-LSTM extends the standard LSTM by incorporating static (entity-aware) features
-that modulate the input gate, allowing the model to learn how static attributes 
+that modulate the input gate, allowing the model to learn how static attributes
 influence the importance of dynamic inputs.
 """
 

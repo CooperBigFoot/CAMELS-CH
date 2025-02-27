@@ -15,7 +15,7 @@ class ExperimentConfig:
     MAX_EPOCHS: int = 15
     ACCELERATOR: str = "cuda"
     NUM_RUNS: int = 5
-    MAX_WORKERS: int = 4  
+    MAX_WORKERS: int = 4
 
     # Learning rates with scheduling
     PRETRAIN_LR: float = 1e-3

@@ -38,21 +38,13 @@ FORCING_FEATURES = [
 ]
 
 # Config specific to Central Asia -> these configs result in 44 valid basins
-CA_ATTRIBUTE_DIR = (
-    "/workspace/CARAVANIFY/CA/post_processed/attributes"
-)
-CA_TIMESERIES_DIR = (
-    "/workspace/CARAVANIFY/CA/post_processed/timeseries/csv"
-)
+CA_ATTRIBUTE_DIR = "/workspace/CARAVANIFY/CA/post_processed/attributes"
+CA_TIMESERIES_DIR = "/workspace/CARAVANIFY/CA/post_processed/timeseries/csv"
 CA_GAUGE_ID_PREFIX = "CA"
 
 # Config specific to Switzeerland -> these configs result in 132 valid basins
-CH_ATTRIBUTE_DIR = (
-    "/workspace/CARAVANIFY/CH/post_processed/attributes"
-)
-CH_TIMESERIES_DIR = (
-    "/workspace/CARAVANIFY/CH/post_processed/timeseries/csv"
-)
+CH_ATTRIBUTE_DIR = "/workspace/CARAVANIFY/CH/post_processed/attributes"
+CH_TIMESERIES_DIR = "/workspace/CARAVANIFY/CH/post_processed/timeseries/csv"
 CH_GAUGE_ID_PREFIX = "CH"
 
 # Bundle configs

@@ -132,8 +132,7 @@ class HydroDataModule(pl.LightningDataModule):
 
         for _, transformer in pipeline.steps:
             required_methods = ["fit", "transform", "inverse_transform"]
-            missing = [
-                m for m in required_methods if not hasattr(transformer, m)]
+            missing = [m for m in required_methods if not hasattr(transformer, m)]
             if missing:
                 raise ValueError(
                     f"Transformer {transformer.__class__.__name__} "
@@ -171,8 +170,7 @@ class HydroDataModule(pl.LightningDataModule):
                 )
 
         if self.target not in self.time_series_df.columns:
-            raise ValueError(
-                f"Target {self.target} not found in time series data")
+            raise ValueError(f"Target {self.target} not found in time series data")
 
     def prepare_data(self) -> None:
         """
@@ -232,10 +230,8 @@ class HydroDataModule(pl.LightningDataModule):
                 period["end"] for period in periods.values() if period["end"]
             )
 
-            test_start = valid_end - \
-                pd.Timedelta(days=int(self.test_years * 365.25))
-            val_start = test_start - \
-                pd.Timedelta(days=int(self.val_years * 365.25))
+            test_start = valid_end - pd.Timedelta(days=int(self.test_years * 365.25))
+            val_start = test_start - pd.Timedelta(days=int(self.val_years * 365.25))
 
             basin_data = basin_data.sort_values("date")
             test_mask = basin_data["date"] >= test_start
@@ -264,8 +260,7 @@ class HydroDataModule(pl.LightningDataModule):
         # Process features
         if "features" in self.preprocessing_config and self.features:
             # Remove target from features list if present
-            features_to_process = [
-                f for f in self.features if f != self.target]
+            features_to_process = [f for f in self.features if f != self.target]
 
             config = self.preprocessing_config["features"]
             pipeline = clone(config["pipeline"])
@@ -324,7 +319,6 @@ class HydroDataModule(pl.LightningDataModule):
             and self.processed_static is not None
             and self.static_features
         ):
-
             config = self.preprocessing_config["static_features"]
             pipeline = clone(config["pipeline"])
 
@@ -367,8 +361,7 @@ class HydroDataModule(pl.LightningDataModule):
         for each stage of training.
         """
         if not hasattr(self, "quality_report"):
-            raise RuntimeError(
-                "Quality report not found. Did you run prepare_data()?")
+            raise RuntimeError("Quality report not found. Did you run prepare_data()?")
 
         # Split data
         train_data, val_data, test_data = self._split_data()
@@ -428,8 +421,7 @@ class HydroDataModule(pl.LightningDataModule):
             Array of inverse-transformed predictions
         """
         if "target" not in self.fitted_pipelines:
-            raise ValueError(
-                "Target pipeline not found - did you run prepare_data()?")
+            raise ValueError("Target pipeline not found - did you run prepare_data()?")
 
         # Ensure predictions and basin_ids are numpy arrays
         predictions = np.asarray(predictions)
@@ -448,8 +440,7 @@ class HydroDataModule(pl.LightningDataModule):
                 missing_basins.append(basin)
 
         if missing_basins:
-            raise ValueError(
-                f"No fitted pipeline found for basins: {missing_basins}")
+            raise ValueError(f"No fitted pipeline found for basins: {missing_basins}")
 
         # Use fitted pipeline for inverse transform
         target_pipeline = self.fitted_pipelines["target"]
@@ -549,7 +540,7 @@ class HydroTransferDataModule(pl.LightningDataModule):
         """Create combined loader for either train/val/test"""
         loaders = {
             "source": getattr(self.source_dm, f"{stage}_dataloader")(),
-            "target": getattr(self.target_dm, f"{stage}_dataloader")()
+            "target": getattr(self.target_dm, f"{stage}_dataloader")(),
         }
         return CombinedLoader(loaders, mode=self.mode)
 

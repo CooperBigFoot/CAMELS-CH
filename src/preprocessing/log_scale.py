@@ -27,7 +27,9 @@ class LogTransformer(HydroTransformer):
         self.epsilon = epsilon
         self._fitted_state["offsets"] = {}
 
-    def fit(self, X: Union[pd.DataFrame, np.ndarray], y: Optional[pd.Series] = None) -> "LogTransformer":
+    def fit(
+        self, X: Union[pd.DataFrame, np.ndarray], y: Optional[pd.Series] = None
+    ) -> "LogTransformer":
         """Fit transformer by computing offsets for negative values.
 
         Args:
@@ -57,7 +59,9 @@ class LogTransformer(HydroTransformer):
 
         return self
 
-    def transform(self, X: Union[pd.DataFrame, np.ndarray]) -> Union[pd.DataFrame, np.ndarray]:
+    def transform(
+        self, X: Union[pd.DataFrame, np.ndarray]
+    ) -> Union[pd.DataFrame, np.ndarray]:
         """Apply log1p transformation to data.
 
         Args:
@@ -83,7 +87,9 @@ class LogTransformer(HydroTransformer):
                 X_transformed[:, col] = np.log1p(X[:, col] + offset)
             return X_transformed
 
-    def inverse_transform(self, X: Union[pd.DataFrame, np.ndarray]) -> Union[pd.DataFrame, np.ndarray]:
+    def inverse_transform(
+        self, X: Union[pd.DataFrame, np.ndarray]
+    ) -> Union[pd.DataFrame, np.ndarray]:
         """Apply inverse log1p transformation to data.
 
         Args:

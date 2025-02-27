@@ -112,12 +112,12 @@ class TSForecastEvaluator:
         datamodule,
         fig_size: tuple = (12, 6),
         title: str = None,
-        date_format: str = '%Y-%m-%d',
+        date_format: str = "%Y-%m-%d",
         y_label: str = "Streamflow",
-        color_observed: str = 'blue',
-        color_forecast: str = 'red',
+        color_observed: str = "blue",
+        color_forecast: str = "red",
         alpha_forecast: float = 1.0,
-        line_style_forecast: str = '--',
+        line_style_forecast: str = "--",
         line_width_forecast: float = 2.0,
         debug: bool = False,
     ) -> tuple:
@@ -145,7 +145,8 @@ class TSForecastEvaluator:
         # Validate horizon
         if horizon not in self.horizons:
             raise ValueError(
-                f"Horizon {horizon} not in available horizons: {self.horizons}")
+                f"Horizon {horizon} not in available horizons: {self.horizons}"
+            )
 
         # Extract test results data
         basin_ids = np.array(self.test_results["basin_ids"]).flatten()
@@ -157,7 +158,8 @@ class TSForecastEvaluator:
         if not np.any(mask):
             available_ids = np.unique(basin_ids)
             raise ValueError(
-                f"Group identifier '{group_identifier}' not found in test results. Available IDs: {available_ids}")
+                f"Group identifier '{group_identifier}' not found in test results. Available IDs: {available_ids}"
+            )
 
         if debug:
             print(f"Found {np.sum(mask)} matches for {group_identifier}")
@@ -173,48 +175,49 @@ class TSForecastEvaluator:
 
         if debug:
             print(
-                f"Extracted {len(group_preds)} predictions and {len(group_obs)} observations")
-            print(
-                f"Predictions range: [{np.min(group_preds)}, {np.max(group_preds)}]")
-            print(
-                f"Observations range: [{np.min(group_obs)}, {np.max(group_obs)}]")
+                f"Extracted {len(group_preds)} predictions and {len(group_obs)} observations"
+            )
+            print(f"Predictions range: [{np.min(group_preds)}, {np.max(group_preds)}]")
+            print(f"Observations range: [{np.min(group_obs)}, {np.max(group_obs)}]")
 
         # Apply inverse transformation
         basin_ids_expanded = np.repeat([group_identifier], len(group_preds))
         group_preds = datamodule.inverse_transform_predictions(
-            group_preds, basin_ids_expanded)
+            group_preds, basin_ids_expanded
+        )
         group_obs = datamodule.inverse_transform_predictions(
-            group_obs, basin_ids_expanded)
+            group_obs, basin_ids_expanded
+        )
 
         if debug:
             print(f"After inverse transform:")
-            print(
-                f"Predictions range: [{np.min(group_preds)}, {np.max(group_preds)}]")
-            print(
-                f"Observations range: [{np.min(group_obs)}, {np.max(group_obs)}]")
+            print(f"Predictions range: [{np.min(group_preds)}, {np.max(group_preds)}]")
+            print(f"Observations range: [{np.min(group_obs)}, {np.max(group_obs)}]")
 
         # Get the dataset's sorted dataframe
-        if not hasattr(datamodule, 'test_dataset') or datamodule.test_dataset is None:
+        if not hasattr(datamodule, "test_dataset") or datamodule.test_dataset is None:
             raise ValueError(
-                "Datamodule missing test_dataset. Ensure the datamodule has been properly set up.")
+                "Datamodule missing test_dataset. Ensure the datamodule has been properly set up."
+            )
 
         df_sorted = datamodule.test_dataset.df_sorted
         if df_sorted is None or df_sorted.empty:
             raise ValueError("Dataset's sorted dataframe is empty or missing.")
 
         # Generate dates for the test period
-        basin_data = df_sorted[df_sorted[datamodule.group_identifier]
-                               == group_identifier]
+        basin_data = df_sorted[
+            df_sorted[datamodule.group_identifier] == group_identifier
+        ]
         if basin_data.empty:
-            raise ValueError(
-                f"No data found for {group_identifier} in test dataset")
+            raise ValueError(f"No data found for {group_identifier} in test dataset")
 
         if debug:
             print(
-                f"Found {len(basin_data)} rows for basin {group_identifier} in dataset")
+                f"Found {len(basin_data)} rows for basin {group_identifier} in dataset"
+            )
 
         # Get all dates for this basin and sort them
-        all_dates = basin_data['date'].sort_values().reset_index(drop=True)
+        all_dates = basin_data["date"].sort_values().reset_index(drop=True)
 
         # We need to determine which dates correspond to our test predictions
         # Since the test set is typically at the end, we'll use the last N dates
@@ -228,28 +231,41 @@ class TSForecastEvaluator:
         fig, ax = plt.subplots(figsize=fig_size)
 
         # Plot all observations as a continuous line
-        ax.plot(test_dates, group_obs, color=color_observed,
-                label='Observed', linewidth=2, zorder=10)
+        ax.plot(
+            test_dates,
+            group_obs,
+            color=color_observed,
+            label="Observed",
+            linewidth=2,
+            zorder=10,
+        )
 
         # Plot predictions as a single line
-        ax.plot(test_dates, group_preds, color=color_forecast, alpha=alpha_forecast,
-                label='Forecast', linestyle=line_style_forecast,
-                linewidth=line_width_forecast, zorder=15)
+        ax.plot(
+            test_dates,
+            group_preds,
+            color=color_forecast,
+            alpha=alpha_forecast,
+            label="Forecast",
+            linestyle=line_style_forecast,
+            linewidth=line_width_forecast,
+            zorder=15,
+        )
 
         # Set title and labels
         if title is None:
             title = f"{horizon}-day Forecast for {group_identifier}"
 
         ax.set_title(title, fontsize=14)
-        ax.set_xlabel('', fontsize=12)
+        ax.set_xlabel("", fontsize=12)
         ax.set_ylabel(y_label, fontsize=12)
 
         # Format x-axis
         ax.xaxis.set_major_formatter(mdates.DateFormatter(date_format))
 
         # Add legend with distinctive appearance
-        ax.legend(loc='upper right', frameon=True, framealpha=0.9, fontsize=10)
-        ax.grid(True, linestyle='--', alpha=0.7)
+        ax.legend(loc="upper right", frameon=True, framealpha=0.9, fontsize=10)
+        ax.grid(True, linestyle="--", alpha=0.7)
 
         # Clean up the plot
         sns.despine()

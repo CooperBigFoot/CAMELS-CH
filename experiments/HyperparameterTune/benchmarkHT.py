@@ -49,8 +49,7 @@ class BenchmarkTuner:
         self.ca_ts_data = self.ca_caravan.get_time_series()[
             ts_columns + ["date"] + [self.config.GROUP_IDENTIFIER]
         ]
-        self.ca_static_data = self.ca_caravan.get_static_attributes()[
-            static_columns]
+        self.ca_static_data = self.ca_caravan.get_static_attributes()[static_columns]
 
     def objective(self, trial: optuna.Trial) -> float:
         """Optuna objective function for hyperparameter optimization."""
@@ -58,8 +57,7 @@ class BenchmarkTuner:
         input_length = trial.suggest_int("input_length", 30, 120)
         hidden_size = trial.suggest_int("hidden_size", 32, 128)
         num_layers = trial.suggest_int("num_layers", 2, 10)
-        learning_rate = trial.suggest_float(
-            "learning_rate", 1e-5, 1e-3, log=True)
+        learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-3, log=True)
         dropout = trial.suggest_float("dropout", 0.0, 0.5)
 
         # Create data module with trial hyperparameters
@@ -85,11 +83,9 @@ class BenchmarkTuner:
         # Create TSMixerConfig
         tsmixer_config = TSMixerConfig(
             input_len=input_length,
-            input_size=len(self.config.FORCING_FEATURES) +
-            1,  # Add 1 for target
+            input_size=len(self.config.FORCING_FEATURES) + 1,  # Add 1 for target
             output_len=self.config.OUTPUT_LENGTH,
-            static_size=len(self.config.STATIC_FEATURES) -
-            1,  # Subtract 1 for gauge_id
+            static_size=len(self.config.STATIC_FEATURES) - 1,  # Subtract 1 for gauge_id
             hidden_size=hidden_size,
             num_layers=num_layers,
             dropout=dropout,
@@ -180,10 +176,10 @@ class BenchmarkTuner:
             fig.write_image(str(self.results_dir / "optimization_history.png"))
 
             # Plot parameter importance
-            param_importance = optuna.visualization.plot_param_importances(
-                study)
+            param_importance = optuna.visualization.plot_param_importances(study)
             param_importance.write_image(
-                str(self.results_dir / "param_importances.png"))
+                str(self.results_dir / "param_importances.png")
+            )
 
             # Plot contour plots for top parameters
             contour = optuna.visualization.plot_contour(study)

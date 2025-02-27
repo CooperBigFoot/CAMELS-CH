@@ -44,7 +44,7 @@ def _process_groups_fit(
         # Handle target data if provided
         group_y = None
         if y is not None:
-            group_y = y.loc[group_mask] if hasattr(y, 'loc') else y[group_mask]
+            group_y = y.loc[group_mask] if hasattr(y, "loc") else y[group_mask]
 
         # Clone the pipeline for this group
         group_pipeline = clone(pipeline_template)
@@ -130,7 +130,7 @@ def _process_groups_inverse_transform(
         pipeline = fitted_pipelines[group_id]
 
         # Check if pipeline has inverse_transform method
-        if hasattr(pipeline, 'inverse_transform'):
+        if hasattr(pipeline, "inverse_transform"):
             inverse_data = pipeline.inverse_transform(group_data)
             result["transformed_data"][group_id] = inverse_data
 
@@ -192,12 +192,16 @@ class GroupedTransformer(BaseEstimator, TransformerMixin):
 
         if self.chunk_size:
             # Split based on specified chunk size
-            return [groups[i:i + self.chunk_size] for i in range(0, len(groups), self.chunk_size)]
+            return [
+                groups[i : i + self.chunk_size]
+                for i in range(0, len(groups), self.chunk_size)
+            ]
         else:
             # Split based on number of jobs
-            chunk_size = (len(groups) + n_jobs -
-                          1) // n_jobs  # Ceiling division
-            return [groups[i:i + chunk_size] for i in range(0, len(groups), chunk_size)]
+            chunk_size = (len(groups) + n_jobs - 1) // n_jobs  # Ceiling division
+            return [
+                groups[i : i + chunk_size] for i in range(0, len(groups), chunk_size)
+            ]
 
     def fit(
         self, X: pd.DataFrame, y: Optional[pd.Series] = None
@@ -236,8 +240,7 @@ class GroupedTransformer(BaseEstimator, TransformerMixin):
                 group_data = X.loc[group_mask, self.columns].copy()
                 group_y = None
                 if y is not None:
-                    group_y = y.loc[group_mask] if hasattr(
-                        y, 'loc') else y[group_mask]
+                    group_y = y.loc[group_mask] if hasattr(y, "loc") else y[group_mask]
 
                 # Create a fresh copy of the pipeline for this group
                 group_pipeline = copy.deepcopy(self.pipeline)
@@ -290,15 +293,14 @@ class GroupedTransformer(BaseEstimator, TransformerMixin):
         data_groups = X[self.group_identifier].unique().tolist()
 
         # Filter for groups we have fitted pipelines for
-        groups_to_process = [
-            g for g in data_groups if g in self.fitted_pipelines]
+        groups_to_process = [g for g in data_groups if g in self.fitted_pipelines]
 
         # Warn about groups not seen during fit
-        unseen_groups = [
-            g for g in data_groups if g not in self.fitted_pipelines]
+        unseen_groups = [g for g in data_groups if g not in self.fitted_pipelines]
         if unseen_groups:
             print(
-                f"Warning: Groups {unseen_groups} not seen during fit, passing through unchanged")
+                f"Warning: Groups {unseen_groups} not seen during fit, passing through unchanged"
+            )
 
         # If not using multiprocessing, fall back to original implementation
         if self.n_jobs == 1:
@@ -311,17 +313,14 @@ class GroupedTransformer(BaseEstimator, TransformerMixin):
                 group_data = X.loc[group_mask, self.columns].copy()
 
                 # Transform this group's data
-                transformed_data = self.fitted_pipelines[group].transform(
-                    group_data)
+                transformed_data = self.fitted_pipelines[group].transform(group_data)
 
                 # Handle the case where pipeline returns ndarray instead of DataFrame
                 if isinstance(transformed_data, np.ndarray):
                     for i, col in enumerate(self.columns):
-                        X_transformed.loc[group_mask,
-                                          col] = transformed_data[:, i]
+                        X_transformed.loc[group_mask, col] = transformed_data[:, i]
                 else:
-                    X_transformed.loc[group_mask,
-                                      self.columns] = transformed_data
+                    X_transformed.loc[group_mask, self.columns] = transformed_data
         else:
             # Use multiprocessing
             group_chunks = self._split_groups_into_chunks(groups_to_process)
@@ -343,13 +342,11 @@ class GroupedTransformer(BaseEstimator, TransformerMixin):
                     group_mask = X[self.group_identifier] == group_id
                     # Handle different return types from transformers
                     if isinstance(transformed_data, pd.DataFrame):
-                        X_transformed.loc[group_mask,
-                                          self.columns] = transformed_data
+                        X_transformed.loc[group_mask, self.columns] = transformed_data
                     else:
                         # Assume numpy array
                         for i, col in enumerate(self.columns):
-                            X_transformed.loc[group_mask,
-                                              col] = transformed_data[:, i]
+                            X_transformed.loc[group_mask, col] = transformed_data[:, i]
 
         return X_transformed
 
@@ -376,15 +373,14 @@ class GroupedTransformer(BaseEstimator, TransformerMixin):
         data_groups = X[self.group_identifier].unique().tolist()
 
         # Filter for groups we have fitted pipelines for
-        groups_to_process = [
-            g for g in data_groups if g in self.fitted_pipelines]
+        groups_to_process = [g for g in data_groups if g in self.fitted_pipelines]
 
         # Warn about groups not seen during fit
-        unseen_groups = [
-            g for g in data_groups if g not in self.fitted_pipelines]
+        unseen_groups = [g for g in data_groups if g not in self.fitted_pipelines]
         if unseen_groups:
             print(
-                f"Warning: Groups {unseen_groups} not seen during fit, passing through unchanged")
+                f"Warning: Groups {unseen_groups} not seen during fit, passing through unchanged"
+            )
 
         # If not using multiprocessing, fall back to original implementation
         if self.n_jobs == 1:
@@ -397,14 +393,16 @@ class GroupedTransformer(BaseEstimator, TransformerMixin):
                 group_data = X.loc[group_mask, self.columns].copy()
 
                 # Check if pipeline has inverse_transform method
-                if not hasattr(self.fitted_pipelines[group], 'inverse_transform'):
+                if not hasattr(self.fitted_pipelines[group], "inverse_transform"):
                     print(
-                        f"Warning: Pipeline for group {group} does not support inverse_transform")
+                        f"Warning: Pipeline for group {group} does not support inverse_transform"
+                    )
                     continue
 
                 # Inverse transform this group's data
                 inverse_data = self.fitted_pipelines[group].inverse_transform(
-                    group_data)
+                    group_data
+                )
 
                 # Handle the case where pipeline returns ndarray instead of DataFrame
                 if isinstance(inverse_data, np.ndarray):
@@ -448,8 +446,7 @@ class GroupedTransformer(BaseEstimator, TransformerMixin):
             List of output feature names
         """
         if not self.fitted_pipelines:
-            raise ValueError(
-                "Transformer must be fitted before getting feature names")
+            raise ValueError("Transformer must be fitted before getting feature names")
 
         # Return the input columns as output feature names, assuming the pipeline
         # doesn't change the feature names

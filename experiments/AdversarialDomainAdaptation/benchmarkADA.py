@@ -27,12 +27,13 @@ class BenchmarkRunner:
 
     def setup_directories(self):
         """Create necessary directories for experiment outputs."""
-        self.results_dir = Path(
-            "experiments/AdversarialDomainAdaptation/results")
+        self.results_dir = Path("experiments/AdversarialDomainAdaptation/results")
         self.model_dir = Path(
-            "experiments/AdversarialDomainAdaptation/saved_models/benchmark")
+            "experiments/AdversarialDomainAdaptation/saved_models/benchmark"
+        )
         self.checkpoint_dir = Path(
-            "experiments/AdversarialDomainAdaptation/checkpoints/benchmark")
+            "experiments/AdversarialDomainAdaptation/checkpoints/benchmark"
+        )
 
         for directory in [self.results_dir, self.model_dir, self.checkpoint_dir]:
             directory.mkdir(parents=True, exist_ok=True)
@@ -61,8 +62,7 @@ class BenchmarkRunner:
         self.ca_ts_data = self.ca_caravan.get_time_series()[
             ts_columns + ["date"] + [self.config.GROUP_IDENTIFIER]
         ]
-        self.ca_static_data = self.ca_caravan.get_static_attributes()[
-            static_columns]
+        self.ca_static_data = self.ca_caravan.get_static_attributes()[static_columns]
 
     def run_experiment(self):
         """Run the complete experiment with multiple runs."""
@@ -85,6 +85,7 @@ class BenchmarkRunner:
             except Exception as e:
                 print(f"Error in run {run}: {str(e)}")
                 import traceback
+
                 traceback.print_exc()
                 continue
 
@@ -105,8 +106,7 @@ class BenchmarkRunner:
             batch_size=self.config.BATCH_SIZE,
             input_length=self.config.INPUT_LENGTH,
             output_length=self.config.OUTPUT_LENGTH,
-            num_workers=min(self.config.MAX_WORKERS,
-                            multiprocessing.cpu_count()),
+            num_workers=min(self.config.MAX_WORKERS, multiprocessing.cpu_count()),
             features=self.config.FORCING_FEATURES + [self.config.TARGET],
             static_features=self.config.STATIC_FEATURES,
             target=self.config.TARGET,
@@ -183,8 +183,7 @@ class BenchmarkRunner:
             self.results_dir / f"benchmark_overall_metrics_{run}.csv", index=True
         )
 
-        basin_summary = evaluator.summarize_metrics(
-            basin_metrics, per_basin=True)
+        basin_summary = evaluator.summarize_metrics(basin_metrics, per_basin=True)
         basin_summary.to_csv(
             self.results_dir / f"benchmark_basin_metrics_{run}.csv", index=True
         )
@@ -208,24 +207,25 @@ class BenchmarkRunner:
 
         try:
             # Combine overall metrics across runs
-            overall_metrics_df = pd.concat([
-                pd.DataFrame(run["overall_metrics"]).assign(run=i)
-                for i, run in enumerate(all_results)
-                if run is not None and "overall_metrics" in run
-            ])
+            overall_metrics_df = pd.concat(
+                [
+                    pd.DataFrame(run["overall_metrics"]).assign(run=i)
+                    for i, run in enumerate(all_results)
+                    if run is not None and "overall_metrics" in run
+                ]
+            )
 
             if overall_metrics_df.empty:
                 print("Warning: No valid metrics to aggregate")
                 return
 
             # Calculate and save summary statistics
-            summary_stats = overall_metrics_df.groupby(
-                level=0).agg(['mean', 'std', 'min', 'max'])
-            summary_stats.to_csv(self.results_dir /
-                                 "benchmark_aggregate_metrics.csv")
+            summary_stats = overall_metrics_df.groupby(level=0).agg(
+                ["mean", "std", "min", "max"]
+            )
+            summary_stats.to_csv(self.results_dir / "benchmark_aggregate_metrics.csv")
 
-            print(
-                f"Successfully saved aggregate metrics for {len(all_results)} runs")
+            print(f"Successfully saved aggregate metrics for {len(all_results)} runs")
 
         except Exception as e:
             print(f"Error while saving aggregated results: {str(e)}")

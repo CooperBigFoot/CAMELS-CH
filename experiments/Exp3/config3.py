@@ -4,7 +4,7 @@ BATCH_SIZE = 128
 INPUT_LENGTH = 64
 OUTPUT_LENGTH = 10
 MAX_EPOCHS = 15
-ACCELERATOR = 'cuda'
+ACCELERATOR = "cuda"
 
 # Learning rate configs
 PRETRAIN_LR = 1e-3
@@ -41,12 +41,8 @@ FORCING_FEATURES = [
 ]
 
 # Config specific to Central Asia -> these configs result in 44 valid basins
-CA_ATTRIBUTE_DIR = (
-    "/workspace/CARAVANIFY/CA/post_processed/attributes"
-)
-CA_TIMESERIES_DIR = (
-    "/workspace/CARAVANIFY/CA/post_processed/timeseries/csv"
-)
+CA_ATTRIBUTE_DIR = "/workspace/CARAVANIFY/CA/post_processed/attributes"
+CA_TIMESERIES_DIR = "/workspace/CARAVANIFY/CA/post_processed/timeseries/csv"
 CA_GAUGE_ID_PREFIX = "CA"
 CA_MIN_TRAIN_YEARS = 8
 CA_VAL_YEARS = 2
@@ -54,12 +50,8 @@ CA_TEST_YEARS = 3
 CA_MAX_MISSING_PCT = 10
 
 # Config specific to Switzeerland -> these configs result in 132 valid basins
-CH_ATTRIBUTE_DIR = (
-    "/workspace/CARAVANIFY/CH/post_processed/attributes"
-)
-CH_TIMESERIES_DIR = (
-    "/workspace/CARAVANIFY/CH/post_processed/timeseries/csv"
-)
+CH_ATTRIBUTE_DIR = "/workspace/CARAVANIFY/CH/post_processed/attributes"
+CH_TIMESERIES_DIR = "/workspace/CARAVANIFY/CH/post_processed/timeseries/csv"
 CH_GAUGE_ID_PREFIX = "CH"
 CH_MIN_TRAIN_YEARS = 20
 CH_VAL_YEARS = 10

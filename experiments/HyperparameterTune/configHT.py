@@ -12,7 +12,7 @@ class ExperimentConfig:
     BATCH_SIZE: int = 1024
     INPUT_LENGTH: int = 100
     OUTPUT_LENGTH: int = 10
-    MAX_EPOCHS: int = 50  
+    MAX_EPOCHS: int = 50
     ACCELERATOR: str = "cuda"
     NUM_RUNS: int = 5
     MAX_WORKERS: int = 4
@@ -20,7 +20,7 @@ class ExperimentConfig:
     # Learning rates with scheduling
     PRETRAIN_LR: float = 1e-3
     FINETUNE_LR: float = 1e-4
-    LR_SCHEDULER_PATIENCE: int = 5  
+    LR_SCHEDULER_PATIENCE: int = 5
     LR_SCHEDULER_FACTOR: float = 0.5
 
     # TSMixer specific configuration

@@ -81,6 +81,7 @@ class BenchmarkRunner:
             except Exception as e:
                 print(f"Error in run {run}: {str(e)}")
                 import traceback
+
                 traceback.print_exc()
                 continue
 
@@ -207,22 +208,26 @@ class BenchmarkRunner:
 
         try:
             # Combine overall metrics across runs
-            overall_metrics_df = pd.concat([
-                pd.DataFrame(run["overall_metrics"]).assign(run=i)
-                for i, run in enumerate(all_results)
-                if run is not None and "overall_metrics" in run
-            ])
+            overall_metrics_df = pd.concat(
+                [
+                    pd.DataFrame(run["overall_metrics"]).assign(run=i)
+                    for i, run in enumerate(all_results)
+                    if run is not None and "overall_metrics" in run
+                ]
+            )
 
             if overall_metrics_df.empty:
                 print("Warning: No valid metrics to aggregate")
                 return
 
             # Calculate and save summary statistics
-            summary_stats = overall_metrics_df.groupby(level=0).agg(['mean', 'std', 'min', 'max'])
+            summary_stats = overall_metrics_df.groupby(level=0).agg(
+                ["mean", "std", "min", "max"]
+            )
             summary_stats.to_csv(self.results_dir / "benchmark_aggregate_metrics.csv")
-            
+
             print(f"Successfully saved aggregate metrics for {len(all_results)} runs")
-            
+
         except Exception as e:
             print(f"Error while saving aggregated results: {str(e)}")
 

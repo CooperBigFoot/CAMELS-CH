@@ -55,8 +55,7 @@ class HydroDataset(Dataset):
             self.static_features = []
 
         # Sort time series data for consistency
-        self._df_sorted = time_series_df.sort_values(
-            [self.group_identifier, "date"])
+        self._df_sorted = time_series_df.sort_values([self.group_identifier, "date"])
 
         # Handle static features
         if static_df is not None and self.static_features:
@@ -88,12 +87,8 @@ class HydroDataset(Dataset):
 
         for gauge_id, group in self._df_sorted.groupby(self.group_identifier):
             # Convert features and target to tensors
-            feat_tensor = torch.tensor(
-                group[self.features].to_numpy(dtype=np.float32)
-            )
-            targ_tensor = torch.tensor(
-                group[self.target].to_numpy(dtype=np.float32)
-            )
+            feat_tensor = torch.tensor(group[self.features].to_numpy(dtype=np.float32))
+            targ_tensor = torch.tensor(group[self.target].to_numpy(dtype=np.float32))
 
             self.features_data[gauge_id] = feat_tensor
             self.target_data[gauge_id] = targ_tensor
@@ -121,9 +116,9 @@ class HydroDataset(Dataset):
 
             # Find valid sequences
             for start in range(n_steps - self.total_length + 1):
-                feat_window = feat_tensor[start: start + self.input_length]
+                feat_window = feat_tensor[start : start + self.input_length]
                 targ_window = targ_tensor[
-                    start + self.input_length: start + self.total_length
+                    start + self.input_length : start + self.total_length
                 ]
 
                 # Only include sequences without NaN values
@@ -163,19 +158,17 @@ class HydroDataset(Dataset):
         end_idx = start_idx + self.total_length
 
         # Extract sequence data
-        X = self.features_data[gauge_id][start_idx: start_idx +
-                                         self.input_length]
-        y = self.target_data[gauge_id][start_idx + self.input_length: end_idx]
+        X = self.features_data[gauge_id][start_idx : start_idx + self.input_length]
+        y = self.target_data[gauge_id][start_idx + self.input_length : end_idx]
 
         # Retrieve the original DataFrame indices for this sequence
         # (You can later use these indices to fetch the dates from the original df.)
-        slice_idx = self.index_data[gauge_id][start_idx: end_idx].tolist()
+        slice_idx = self.index_data[gauge_id][start_idx:end_idx].tolist()
 
         # Get static features or zeros if none available
         static = (
             self.static_dict.get(
-                gauge_id, torch.zeros(
-                    len(self.static_features), dtype=torch.float32)
+                gauge_id, torch.zeros(len(self.static_features), dtype=torch.float32)
             )
             if self.static_dict
             else torch.zeros(0, dtype=torch.float32)

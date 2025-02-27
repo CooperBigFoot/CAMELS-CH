@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 import gc
+
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 
@@ -30,11 +31,14 @@ class DomainAdaptationRunner:
     def setup_directories(self):
         """Create necessary directories for experiment outputs."""
         self.results_dir = Path(
-            f"experiments/AdversarialDomainAdaptation/results/{self.config.EXPERIMENT_NAME}")
+            f"experiments/AdversarialDomainAdaptation/results/{self.config.EXPERIMENT_NAME}"
+        )
         self.model_dir = Path(
-            f"experiments/AdversarialDomainAdaptation/saved_models/{self.config.EXPERIMENT_NAME}")
+            f"experiments/AdversarialDomainAdaptation/saved_models/{self.config.EXPERIMENT_NAME}"
+        )
         self.checkpoint_dir = Path(
-            f"experiments/AdversarialDomainAdaptation/checkpoints/{self.config.EXPERIMENT_NAME}")
+            f"experiments/AdversarialDomainAdaptation/checkpoints/{self.config.EXPERIMENT_NAME}"
+        )
 
         for directory in [self.results_dir, self.model_dir, self.checkpoint_dir]:
             directory.mkdir(parents=True, exist_ok=True)
@@ -82,14 +86,12 @@ class DomainAdaptationRunner:
         self.ch_ts_data = self.ch_caravan.get_time_series()[
             ts_columns + ["date"] + [self.config.GROUP_IDENTIFIER]
         ]
-        self.ch_static_data = self.ch_caravan.get_static_attributes()[
-            static_columns]
+        self.ch_static_data = self.ch_caravan.get_static_attributes()[static_columns]
 
         self.ca_ts_data = self.ca_caravan.get_time_series()[
             ts_columns + ["date"] + [self.config.GROUP_IDENTIFIER]
         ]
-        self.ca_static_data = self.ca_caravan.get_static_attributes()[
-            static_columns]
+        self.ca_static_data = self.ca_caravan.get_static_attributes()[static_columns]
 
     def run_experiment(self):
         """Run the complete experiment with multiple runs."""
@@ -112,6 +114,7 @@ class DomainAdaptationRunner:
             except Exception as e:
                 print(f"Error in run {run}: {str(e)}")
                 import traceback
+
                 traceback.print_exc()
                 continue
 
@@ -129,7 +132,7 @@ class DomainAdaptationRunner:
             self.ch_static_data,
             preprocessing_configs,
             is_source=True,
-            domain_id=0  # Source domain = 0
+            domain_id=0,  # Source domain = 0
         )
 
         ca_data_module = self.create_data_module(
@@ -137,7 +140,7 @@ class DomainAdaptationRunner:
             self.ca_static_data,
             preprocessing_configs,
             is_source=False,
-            domain_id=1  # Target domain = 1
+            domain_id=1,  # Target domain = 1
         )
 
         # Create transfer data module for domain adaptation
@@ -154,17 +157,24 @@ class DomainAdaptationRunner:
         # Phase 2: Domain adaptation with adversarial training
         print("\n=== PHASE 2: DOMAIN ADAPTATION ===")
         adapted_model = self.run_domain_adaptation(
-            pretrain_model, transfer_data_module, run)
+            pretrain_model, transfer_data_module, run
+        )
 
         # Phase 3: Fine-tune on target data with frozen backbone
         print("\n=== PHASE 3: FINE-TUNING ON TARGET DATA ===")
-        fine_tuned_model = self.run_fine_tuning(
-            adapted_model, ca_data_module, run)
+        fine_tuned_model = self.run_fine_tuning(adapted_model, ca_data_module, run)
 
         # Evaluate final model
         return self.evaluate_model(fine_tuned_model, ca_data_module, run)
 
-    def create_data_module(self, ts_data, static_data, preprocessing_configs, is_source: bool, domain_id=None):
+    def create_data_module(
+        self,
+        ts_data,
+        static_data,
+        preprocessing_configs,
+        is_source: bool,
+        domain_id=None,
+    ):
         """Create a data module with appropriate configuration."""
         # Get the appropriate domain config
         domain_config = self.config.CH_CONFIG if is_source else self.config.CA_CONFIG
@@ -177,8 +187,7 @@ class DomainAdaptationRunner:
             batch_size=self.config.BATCH_SIZE,
             input_length=self.config.INPUT_LENGTH,
             output_length=self.config.OUTPUT_LENGTH,
-            num_workers=min(self.config.MAX_WORKERS,
-                            multiprocessing.cpu_count()),
+            num_workers=min(self.config.MAX_WORKERS, multiprocessing.cpu_count()),
             features=self.config.FORCING_FEATURES + [self.config.TARGET],
             static_features=self.config.STATIC_FEATURES,
             target=self.config.TARGET,
@@ -186,7 +195,7 @@ class DomainAdaptationRunner:
             val_years=domain_config["VAL_YEARS"],
             test_years=domain_config["TEST_YEARS"],
             max_missing_pct=domain_config["MAX_MISSING_PCT"],
-            domain_id=domain_id  # Add domain identifier
+            domain_id=domain_id,  # Add domain identifier
         )
 
         # Explicitly prepare and set up the data module
@@ -216,8 +225,7 @@ class DomainAdaptationRunner:
         print("CONFIGURING MODEL FOR DOMAIN ADAPTATION")
 
         # Create domain adaptation model using the config
-        model = LitTSMixerDomainAdaptation(
-            self.config.get_domain_adaptation_config())
+        model = LitTSMixerDomainAdaptation(self.config.get_domain_adaptation_config())
 
         # Load pretrained weights
         model.load_from_pretrained(pretrain_model.state_dict())
@@ -241,20 +249,21 @@ class DomainAdaptationRunner:
         # Extract TSMixer weights from the domain-adapted model
         adapted_tsmixer_state_dict = {}
         for key, value in adapted_model.state_dict().items():
-            if key.startswith('model.'):
-                new_key = key.replace('model.', '')
+            if key.startswith("model."):
+                new_key = key.replace("model.", "")
                 adapted_tsmixer_state_dict[new_key] = value
 
         # Transfer weights to the fine-tuning model
         missing_keys, unexpected_keys = fine_tune_model.model.load_state_dict(
-            adapted_tsmixer_state_dict, strict=False)
+            adapted_tsmixer_state_dict, strict=False
+        )
 
         if missing_keys:
-            print(
-                f"Warning: Missing keys when transferring weights: {missing_keys}")
+            print(f"Warning: Missing keys when transferring weights: {missing_keys}")
         if unexpected_keys:
             print(
-                f"Warning: Unexpected keys when transferring weights: {unexpected_keys}")
+                f"Warning: Unexpected keys when transferring weights: {unexpected_keys}"
+            )
 
         print("Transferred weights from domain-adapted model to fine-tuning model")
 
@@ -312,18 +321,23 @@ class DomainAdaptationRunner:
 
         # Save results
         results_df.to_csv(
-            self.results_dir / f"da_challenger_{self.config.EXPERIMENT_NAME}_detailed_results_{run}.csv", index=True
+            self.results_dir
+            / f"da_challenger_{self.config.EXPERIMENT_NAME}_detailed_results_{run}.csv",
+            index=True,
         )
 
         overall_summary = evaluator.summarize_metrics(overall_metrics)
         overall_summary.to_csv(
-            self.results_dir / f"da_challenger_{self.config.EXPERIMENT_NAME}_overall_metrics_{run}.csv", index=True
+            self.results_dir
+            / f"da_challenger_{self.config.EXPERIMENT_NAME}_overall_metrics_{run}.csv",
+            index=True,
         )
 
-        basin_summary = evaluator.summarize_metrics(
-            basin_metrics, per_basin=True)
+        basin_summary = evaluator.summarize_metrics(basin_metrics, per_basin=True)
         basin_summary.to_csv(
-            self.results_dir / f"da_challenger_{self.config.EXPERIMENT_NAME}_basin_metrics_{run}.csv", index=True
+            self.results_dir
+            / f"da_challenger_{self.config.EXPERIMENT_NAME}_basin_metrics_{run}.csv",
+            index=True,
         )
 
         return {
@@ -345,24 +359,27 @@ class DomainAdaptationRunner:
 
         try:
             # Combine overall metrics across runs
-            overall_metrics_df = pd.concat([
-                pd.DataFrame(run["overall_metrics"]).assign(run=i)
-                for i, run in enumerate(all_results)
-                if run is not None and "overall_metrics" in run
-            ])
+            overall_metrics_df = pd.concat(
+                [
+                    pd.DataFrame(run["overall_metrics"]).assign(run=i)
+                    for i, run in enumerate(all_results)
+                    if run is not None and "overall_metrics" in run
+                ]
+            )
 
             if overall_metrics_df.empty:
                 print("Warning: No valid metrics to aggregate")
                 return
 
             # Calculate and save summary statistics
-            summary_stats = overall_metrics_df.groupby(
-                level=0).agg(['mean', 'std', 'min', 'max'])
-            summary_stats.to_csv(self.results_dir /
-                                 "da_challenger_test_aggregate_metrics.csv")
+            summary_stats = overall_metrics_df.groupby(level=0).agg(
+                ["mean", "std", "min", "max"]
+            )
+            summary_stats.to_csv(
+                self.results_dir / "da_challenger_test_aggregate_metrics.csv"
+            )
 
-            print(
-                f"Successfully saved aggregate metrics for {len(all_results)} runs")
+            print(f"Successfully saved aggregate metrics for {len(all_results)} runs")
 
         except Exception as e:
             print(f"Error while saving aggregated results: {str(e)}")

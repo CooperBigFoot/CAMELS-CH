@@ -5,7 +5,6 @@ https://arxiv.org/abs/2303.06053
 TSMixer Model Implementation. The architecture is based on Figure 6 from the paper:
 """
 
-
 from typing import Dict, Optional, Tuple, Any, Union, List
 import numpy as np
 from torch.optim import Adam
@@ -112,7 +111,9 @@ class TimeMixingBlock(nn.Module):
 class ResBlock(nn.Module):
     """Residual block combining temporal and feature mixing."""
 
-    def __init__(self, input_dim: int, hidden_size: int, dropout: float, input_len: int):
+    def __init__(
+        self, input_dim: int, hidden_size: int, dropout: float, input_len: int
+    ):
         super().__init__()
 
         # Temporal mixing: mixing along the time dimension
@@ -134,7 +135,13 @@ class ResBlock(nn.Module):
 class ConditionalFeatureMixing(nn.Module):
     """Applies conditional feature mixing using static features to modulate dynamic features."""
 
-    def __init__(self, input_size: int, static_size: int, static_embedding_size: int, hidden_size: int):
+    def __init__(
+        self,
+        input_size: int,
+        static_size: int,
+        static_embedding_size: int,
+        hidden_size: int,
+    ):
         super().__init__()
 
         # Projections for static features
@@ -147,7 +154,7 @@ class ConditionalFeatureMixing(nn.Module):
         self.feature_mixing = nn.Sequential(
             nn.Linear(input_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, input_size)
+            nn.Linear(hidden_size, input_size),
         )
 
         self.norm = nn.LayerNorm(input_size)
@@ -157,8 +164,7 @@ class ConditionalFeatureMixing(nn.Module):
         static_emb = self.static_proj(static)
 
         # Expand static features across time dimension
-        static_expanded = static_emb.unsqueeze(
-            1).expand(-1, x_dynamic.size(1), -1)
+        static_expanded = static_emb.unsqueeze(1).expand(-1, x_dynamic.size(1), -1)
 
         # Create modulation gate
         gate = torch.sigmoid(self.gate_proj(static_expanded))
@@ -184,20 +190,25 @@ class TSMixerBackbone(nn.Module):
             input_size=config.input_size,
             static_size=config.static_size,
             static_embedding_size=config.static_embedding_size,
-            hidden_size=config.hidden_size
+            hidden_size=config.hidden_size,
         )
 
         # Main mixing layers
-        self.layers = nn.ModuleList([
-            ResBlock(
-                input_dim=config.input_size,
-                hidden_size=config.hidden_size,
-                dropout=config.dropout,
-                input_len=config.input_len,
-            ) for _ in range(config.num_layers)
-        ])
+        self.layers = nn.ModuleList(
+            [
+                ResBlock(
+                    input_dim=config.input_size,
+                    hidden_size=config.hidden_size,
+                    dropout=config.dropout,
+                    input_len=config.input_len,
+                )
+                for _ in range(config.num_layers)
+            ]
+        )
 
-    def forward(self, x: torch.Tensor, static: torch.Tensor, zero_static: bool = False) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, static: torch.Tensor, zero_static: bool = False
+    ) -> torch.Tensor:
         """
         Forward pass with conditional feature mixing.
 
@@ -220,7 +231,9 @@ class TSMixerBackbone(nn.Module):
 class TSMixerHead(nn.Module):
     """Prediction head for TSMixer."""
 
-    def __init__(self, input_dim: int, input_len: int, hidden_size: int, output_len: int):
+    def __init__(
+        self, input_dim: int, input_len: int, hidden_size: int, output_len: int
+    ):
         super().__init__()
 
         self.projection = nn.Sequential(
@@ -247,7 +260,7 @@ class TSMixer(nn.Module):
             input_dim=config.input_size,
             input_len=config.input_len,
             hidden_size=config.hidden_size,
-            output_len=config.output_len
+            output_len=config.output_len,
         )
         self.config = config
 
@@ -309,7 +322,9 @@ class LitTSMixer(pl.LightningModule):
     def forward(self, x: torch.Tensor, static: torch.Tensor) -> torch.Tensor:
         return self.model(x, static)
 
-    def training_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor:
+    def training_step(
+        self, batch: Dict[str, torch.Tensor], batch_idx: int
+    ) -> torch.Tensor:
         x, y = batch["X"], batch["y"].unsqueeze(-1)
         static = batch["static"]
         y_hat = self(x, static)
@@ -322,7 +337,9 @@ class LitTSMixer(pl.LightningModule):
 
         return loss
 
-    def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
+    def validation_step(
+        self, batch: Dict[str, torch.Tensor], batch_idx: int
+    ) -> Dict[str, torch.Tensor]:
         x, y = batch["X"], batch["y"].unsqueeze(-1)
         static = batch["static"]
         y_hat = self(x, static)
@@ -333,13 +350,11 @@ class LitTSMixer(pl.LightningModule):
         self.log("val_loss", loss, batch_size=x.size(0))
         self.log("val_mse", loss, batch_size=x.size(0))
 
-        return {
-            "val_loss": loss,
-            "preds": y_hat,
-            "targets": y
-        }
+        return {"val_loss": loss, "preds": y_hat, "targets": y}
 
-    def test_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
+    def test_step(
+        self, batch: Dict[str, torch.Tensor], batch_idx: int
+    ) -> Dict[str, torch.Tensor]:
         x, y = batch["X"], batch["y"].unsqueeze(-1)
         static = batch["static"]
         y_hat = self(x, static)
@@ -379,7 +394,7 @@ class LitTSMixer(pl.LightningModule):
                 optimizer,
                 mode="min",
                 patience=self.config.lr_scheduler_patience,
-                factor=self.config.lr_scheduler_factor
+                factor=self.config.lr_scheduler_factor,
             ),
             "monitor": "val_loss",
         }

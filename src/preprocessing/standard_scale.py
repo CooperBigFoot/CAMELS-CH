@@ -22,8 +22,7 @@ class StandardScaleTransformer(HydroTransformer):
                 self._fitted_state["mean"][col] = X[col].mean()
                 self._fitted_state["std"][col] = X[col].std()
             else:
-                col_idx = col if isinstance(
-                    col, int) else list(X.columns).index(col)
+                col_idx = col if isinstance(col, int) else list(X.columns).index(col)
                 self._fitted_state["mean"][col] = np.mean(X[:, col_idx])
                 self._fitted_state["std"][col] = np.std(X[:, col_idx])
 
@@ -48,8 +47,7 @@ class StandardScaleTransformer(HydroTransformer):
         else:
             X_transformed = X.copy()
             for col in feature_cols:
-                col_idx = col if isinstance(
-                    col, int) else list(X.columns).index(col)
+                col_idx = col if isinstance(col, int) else list(X.columns).index(col)
                 mean = self._fitted_state["mean"].get(col, 0)
                 std = self._fitted_state["std"].get(col, 1)
                 X_transformed[:, col_idx] = (X[:, col_idx] - mean) / std
@@ -70,8 +68,7 @@ class StandardScaleTransformer(HydroTransformer):
         else:
             X_inverse = X.copy()
             for col in feature_cols:
-                col_idx = col if isinstance(
-                    col, int) else list(X.columns).index(col)
+                col_idx = col if isinstance(col, int) else list(X.columns).index(col)
                 mean = self._fitted_state["mean"].get(col, 0)
                 std = self._fitted_state["std"].get(col, 1)
                 X_inverse[:, col_idx] = X[:, col_idx] * std + mean

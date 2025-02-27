@@ -29,15 +29,24 @@ class ChallengerRunner:
     def setup_directories(self):
         """Create necessary directories for experiment outputs."""
         self.results_dir = Path(
-            f"experiments/ADA_direct/results/{self.config.EXPERIMENT_NAME}")
+            f"experiments/ADA_direct/results/{self.config.EXPERIMENT_NAME}"
+        )
         self.model_dir = Path(
-            f"experiments/ADA_direct/saved_models/{self.config.EXPERIMENT_NAME}")
+            f"experiments/ADA_direct/saved_models/{self.config.EXPERIMENT_NAME}"
+        )
         self.checkpoint_dir = Path(
-            f"experiments/ADA_direct/checkpoints/{self.config.EXPERIMENT_NAME}")
+            f"experiments/ADA_direct/checkpoints/{self.config.EXPERIMENT_NAME}"
+        )
         self.viz_dir = Path(
-            f"experiments/ADA_direct/visualizations/{self.config.EXPERIMENT_NAME}")
+            f"experiments/ADA_direct/visualizations/{self.config.EXPERIMENT_NAME}"
+        )
 
-        for directory in [self.results_dir, self.model_dir, self.checkpoint_dir, self.viz_dir]:
+        for directory in [
+            self.results_dir,
+            self.model_dir,
+            self.checkpoint_dir,
+            self.viz_dir,
+        ]:
             directory.mkdir(parents=True, exist_ok=True)
 
     def load_data(self):
@@ -81,14 +90,12 @@ class ChallengerRunner:
         self.ch_ts_data = self.ch_caravan.get_time_series()[
             ts_columns + ["date"] + [self.config.GROUP_IDENTIFIER]
         ]
-        self.ch_static_data = self.ch_caravan.get_static_attributes()[
-            static_columns]
+        self.ch_static_data = self.ch_caravan.get_static_attributes()[static_columns]
 
         self.ca_ts_data = self.ca_caravan.get_time_series()[
             ts_columns + ["date"] + [self.config.GROUP_IDENTIFIER]
         ]
-        self.ca_static_data = self.ca_caravan.get_static_attributes()[
-            static_columns]
+        self.ca_static_data = self.ca_caravan.get_static_attributes()[static_columns]
 
     def run_experiment(self):
         """Run the complete experiment with multiple runs."""
@@ -111,6 +118,7 @@ class ChallengerRunner:
             except Exception as e:
                 print(f"Error in run {run}: {str(e)}")
                 import traceback
+
                 traceback.print_exc()
                 continue
 
@@ -128,7 +136,7 @@ class ChallengerRunner:
             self.ch_static_data,
             preprocessing_configs,
             is_source=True,
-            domain_id=0  # Source domain = 0
+            domain_id=0,  # Source domain = 0
         )
 
         ca_data_module = self.create_data_module(
@@ -136,7 +144,7 @@ class ChallengerRunner:
             self.ca_static_data,
             preprocessing_configs,
             is_source=False,
-            domain_id=1  # Target domain = 1
+            domain_id=1,  # Target domain = 1
         )
 
         # Create transfer data module for domain adaptation
@@ -149,16 +157,23 @@ class ChallengerRunner:
         # Train with domain adaptation
         print("\n=== DIRECT DOMAIN ADAPTATION TRAINING ===")
         model = self.train_domain_adaptation_model(transfer_data_module, run)
-        
+
         # Evaluate on target domain
         results = self.evaluate_model(model, ca_data_module, run)
-        
+
         # Visualize domain adaptation
         self.visualize_domain_adaptation(model, ch_data_module, ca_data_module, run)
-        
+
         return results
 
-    def create_data_module(self, ts_data, static_data, preprocessing_configs, is_source: bool, domain_id=None):
+    def create_data_module(
+        self,
+        ts_data,
+        static_data,
+        preprocessing_configs,
+        is_source: bool,
+        domain_id=None,
+    ):
         """Create a data module with appropriate configuration."""
         # Get the appropriate domain config
         domain_config = self.config.CH_CONFIG if is_source else self.config.CA_CONFIG
@@ -171,8 +186,7 @@ class ChallengerRunner:
             batch_size=self.config.BATCH_SIZE,
             input_length=self.config.INPUT_LENGTH,
             output_length=self.config.OUTPUT_LENGTH,
-            num_workers=min(self.config.MAX_WORKERS,
-                            multiprocessing.cpu_count()),
+            num_workers=min(self.config.MAX_WORKERS, multiprocessing.cpu_count()),
             features=self.config.FORCING_FEATURES + [self.config.TARGET],
             static_features=self.config.STATIC_FEATURES,
             target=self.config.TARGET,
@@ -180,7 +194,7 @@ class ChallengerRunner:
             val_years=domain_config["VAL_YEARS"],
             test_years=domain_config["TEST_YEARS"],
             max_missing_pct=domain_config["MAX_MISSING_PCT"],
-            domain_id="source" if is_source else "target"  # Add domain identifier
+            domain_id="source" if is_source else "target",  # Add domain identifier
         )
 
         # Explicitly prepare and set up the data module
@@ -194,8 +208,7 @@ class ChallengerRunner:
         print("CONFIGURING MODEL FOR DOMAIN ADAPTATION")
 
         # Create domain adaptation model using the config
-        model = LitTSMixerDomainAdaptation(
-            self.config.get_domain_adaptation_config())
+        model = LitTSMixerDomainAdaptation(self.config.get_domain_adaptation_config())
 
         # Train with domain adaptation
         trainer = self.create_trainer("domain_adapt", run)
@@ -256,8 +269,7 @@ class ChallengerRunner:
             self.results_dir / f"challenger_overall_metrics_{run}.csv", index=True
         )
 
-        basin_summary = evaluator.summarize_metrics(
-            basin_metrics, per_basin=True)
+        basin_summary = evaluator.summarize_metrics(basin_metrics, per_basin=True)
         basin_summary.to_csv(
             self.results_dir / f"challenger_basin_metrics_{run}.csv", index=True
         )
@@ -267,33 +279,33 @@ class ChallengerRunner:
             "basin_metrics": basin_metrics,
             "results_df": results_df,
         }
-        
+
     def visualize_domain_adaptation(self, model, source_dm, target_dm, run):
         """Create and save visualizations of domain adaptation."""
         print("CREATING DOMAIN ADAPTATION VISUALIZATION")
-        
+
         # Create dataloaders for visualization
         source_dl = source_dm.train_dataloader()
         target_dl = target_dm.train_dataloader()
-        
+
         # Generate visualization
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = model.to(device)
-        
+
         fig = model.visualize_domain_adaptation(
-            source_dl, 
+            source_dl,
             target_dl,
             max_samples=self.config.VIZ_MAX_SAMPLES,
             device=device,
             perplexity=self.config.VIZ_PERPLEXITY,
             figsize=(10, 8),
-            title=f"Challenger Domain Adaptation (Run {run})"
+            title=f"Challenger Domain Adaptation (Run {run})",
         )
-        
+
         # Save the figure
         if fig:
             save_path = self.viz_dir / f"challenger_domain_adaptation_run{run}.png"
-            fig.savefig(save_path, dpi=300, bbox_inches='tight')
+            fig.savefig(save_path, dpi=300, bbox_inches="tight")
             plt.close(fig)
             print(f"Saved domain adaptation visualization to {save_path}")
 
@@ -310,24 +322,25 @@ class ChallengerRunner:
 
         try:
             # Combine overall metrics across runs
-            overall_metrics_df = pd.concat([
-                pd.DataFrame(run["overall_metrics"]).assign(run=i)
-                for i, run in enumerate(all_results)
-                if run is not None and "overall_metrics" in run
-            ])
+            overall_metrics_df = pd.concat(
+                [
+                    pd.DataFrame(run["overall_metrics"]).assign(run=i)
+                    for i, run in enumerate(all_results)
+                    if run is not None and "overall_metrics" in run
+                ]
+            )
 
             if overall_metrics_df.empty:
                 print("Warning: No valid metrics to aggregate")
                 return
 
             # Calculate and save summary statistics
-            summary_stats = overall_metrics_df.groupby(
-                level=0).agg(['mean', 'std', 'min', 'max'])
-            summary_stats.to_csv(self.results_dir /
-                                 f"challenger_aggregate_metrics.csv")
+            summary_stats = overall_metrics_df.groupby(level=0).agg(
+                ["mean", "std", "min", "max"]
+            )
+            summary_stats.to_csv(self.results_dir / f"challenger_aggregate_metrics.csv")
 
-            print(
-                f"Successfully saved aggregate metrics for {len(all_results)} runs")
+            print(f"Successfully saved aggregate metrics for {len(all_results)} runs")
 
         except Exception as e:
             print(f"Error while saving aggregated results: {str(e)}")

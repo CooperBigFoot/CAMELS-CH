@@ -51,8 +51,8 @@ class ExperimentConfig:
 
     # Visualization configs
     VIZ_MAX_SAMPLES: int = 500  # Maximum samples per domain for visualization
-    VIZ_PERPLEXITY: int = 30    # t-SNE perplexity parameter
-    VIZ_DPI: int = 300          # DPI for saving visualizations
+    VIZ_PERPLEXITY: int = 30  # t-SNE perplexity parameter
+    VIZ_DPI: int = 300  # DPI for saving visualizations
 
     def __post_init__(self):
         # Set dependent configurations

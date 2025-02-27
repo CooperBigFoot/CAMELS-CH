@@ -56,7 +56,6 @@ class CamelsCH:
         self.static = {attr_type: pd.DataFrame() for attr_type in StaticAttributeType}
 
     def load_stations(self, gauge_ids: List[str]) -> None:
-
         for gauge_id in gauge_ids:
             self._check_gauge_id(gauge_id)
 
@@ -96,7 +95,6 @@ class CamelsCH:
 
         for attr_type, enabled in attr_map.items():
             if enabled:
-
                 print(f"Loading {attr_type.value} attributes")
 
                 self._load_attribute(attr_type, gauge_ids)

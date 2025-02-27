@@ -1,27 +1,26 @@
 import cdsapi
 
-def main():  
+
+def main():
     client = cdsapi.Client()
-    
-    dataset = 'reanalysis-era5-pressure-levels'
+
+    dataset = "reanalysis-era5-pressure-levels"
     request = {
-        'product_type': ['reanalysis'],
-        'variable': ['geopotential'],
-        'year': ['2024'],
-        'month': ['03'],
-        'day': ['01'],
-        'time': ['13:00'],
-        'pressure_level': ['1000'],
-        'data_format': 'grib',
+        "product_type": ["reanalysis"],
+        "variable": ["geopotential"],
+        "year": ["2024"],
+        "month": ["03"],
+        "day": ["01"],
+        "time": ["13:00"],
+        "pressure_level": ["1000"],
+        "data_format": "grib",
     }
-    target = 'download.grib'
+    target = "download.grib"
 
     client.retrieve(dataset, request, target)
 
-    print('Downloaded file: {}'.format(target))
-    
+    print("Downloaded file: {}".format(target))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
-    
-

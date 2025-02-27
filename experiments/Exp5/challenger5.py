@@ -83,7 +83,6 @@ class ExperimentRunner:
         ]
         self.ca_static_data = self.ca_caravan.get_static_attributes()[static_columns]
 
-
     def run_experiment(self):
         """Run the complete experiment with multiple runs."""
         all_results = []
@@ -105,6 +104,7 @@ class ExperimentRunner:
             except Exception as e:
                 print(f"Error in run {run}: {str(e)}")
                 import traceback
+
                 traceback.print_exc()
                 continue
 
@@ -134,11 +134,13 @@ class ExperimentRunner:
         # Evaluate
         return self.evaluate_model(finetune_model, ca_data_module, run)
 
-    def create_data_module(self, ts_data, static_data, preprocessing_configs, is_source: bool):
+    def create_data_module(
+        self, ts_data, static_data, preprocessing_configs, is_source: bool
+    ):
         """Create a data module with appropriate configuration."""
         # Get the appropriate domain config using dot notation
         domain_config = self.config.CH_CONFIG if is_source else self.config.CA_CONFIG
-        
+
         return HydroDataModule(
             time_series_df=ts_data,
             static_df=static_data,
@@ -275,22 +277,26 @@ class ExperimentRunner:
 
         try:
             # Combine overall metrics across runs
-            overall_metrics_df = pd.concat([
-                pd.DataFrame(run["overall_metrics"]).assign(run=i)
-                for i, run in enumerate(all_results)
-                if run is not None and "overall_metrics" in run
-            ])
+            overall_metrics_df = pd.concat(
+                [
+                    pd.DataFrame(run["overall_metrics"]).assign(run=i)
+                    for i, run in enumerate(all_results)
+                    if run is not None and "overall_metrics" in run
+                ]
+            )
 
             if overall_metrics_df.empty:
                 print("Warning: No valid metrics to aggregate")
                 return
 
             # Calculate and save summary statistics
-            summary_stats = overall_metrics_df.groupby(level=0).agg(['mean', 'std', 'min', 'max'])
+            summary_stats = overall_metrics_df.groupby(level=0).agg(
+                ["mean", "std", "min", "max"]
+            )
             summary_stats.to_csv(self.results_dir / "challenger_aggregate_metrics.csv")
-            
+
             print(f"Successfully saved aggregate metrics for {len(all_results)} runs")
-            
+
         except Exception as e:
             print(f"Error while saving aggregated results: {str(e)}")
 

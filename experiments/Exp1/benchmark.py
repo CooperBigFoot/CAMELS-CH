@@ -148,8 +148,7 @@ raw_results = model.test_results
 # Create evaluator and calculate metrics
 print("Calculating evaluation metrics...")
 evaluator = TSForecastEvaluator(
-    data_module, 
-    horizons=list(range(1, model.config.pred_len + 1))
+    data_module, horizons=list(range(1, model.config.pred_len + 1))
 )
 results_df, overall_metrics, basin_metrics = evaluator.evaluate(raw_results)
 
