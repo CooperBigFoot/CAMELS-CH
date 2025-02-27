@@ -3,8 +3,7 @@ import torch.nn as nn
 from torch.optim import Adam
 import pytorch_lightning as pl
 from torch.nn import MSELoss
-import math
-from typing import Dict, Any, Union, List, Optional, Tuple
+from typing import Dict, Any, Union
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
