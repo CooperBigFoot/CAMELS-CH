@@ -16,7 +16,7 @@ class ExperimentConfig:
     # Base configuration
     GROUP_IDENTIFIER: str = "gauge_id"
     BATCH_SIZE: int = 1024
-    INPUT_LENGTH: int = 40
+    INPUT_LENGTH: int = 80
     OUTPUT_LENGTH: int = 10
     MAX_EPOCHS: int = 30
     ACCELERATOR: str = "cuda" if torch.cuda.is_available() else "cpu"
@@ -24,16 +24,16 @@ class ExperimentConfig:
     MAX_WORKERS: int = os.cpu_count()
 
     # Learning rates with scheduling
-    FINETUNE_LR: float = 5e-5
-    PRETRAIN_LR: float = 7e-4
+    FINETUNE_LR: float = 1e-5
+    PRETRAIN_LR: float = 1e-4
     LR_SCHEDULER_PATIENCE: int = 5
     LR_SCHEDULER_FACTOR: float = 0.5
 
     # Model configuration
-    HIDDEN_SIZE: int = 80
-    DROPOUT: float = 0.12
-    NUM_LAYERS: int = 2
-    STATIC_EMBEDDING_SIZE: int = 10
+    HIDDEN_SIZE: int = 64
+    DROPOUT: float = 0.4
+    NUM_LAYERS: int = 6
+    STATIC_EMBEDDING_SIZE: int = 5
 
     # Dataset configuration
     TARGET: str = "streamflow"
@@ -45,11 +45,11 @@ class ExperimentConfig:
     CH_CONFIG: Dict[str, Any] = None
 
     # Adversarial configs
-    LAMBDA_ADV: float = 2.0
+    LAMBDA_ADV: float = 1.0
     DOMAIN_LOSS_WEIGHT: float = 0.5
-    DISCRIMINATOR_HIDDEN_DIM: int = None  # Will be set in __post_init__
+    DISCRIMINATOR_HIDDEN_DIM: int = 32
     USE_TARGET_LABELS: bool = True
-    USE_ZERO_STATICS: bool = False
+    USE_ZERO_STATIC: bool = True
 
     # Visualization configs
     VIZ_MAX_SAMPLES: int = 500  # Maximum samples per domain for visualization
@@ -58,7 +58,7 @@ class ExperimentConfig:
 
     def __post_init__(self):
         # Set dependent configurations
-        self.DISCRIMINATOR_HIDDEN_DIM = int(self.HIDDEN_SIZE / 2)
+        # self.DISCRIMINATOR_HIDDEN_DIM = int(self.HIDDEN_SIZE / 2)
 
         # Initialize feature lists
         self.STATIC_FEATURES = [
@@ -176,7 +176,7 @@ class ExperimentConfig:
             domain_loss_weight=self.DOMAIN_LOSS_WEIGHT,
             discriminator_hidden_dim=self.DISCRIMINATOR_HIDDEN_DIM,
             use_target_labels=self.USE_TARGET_LABELS,
-            use_zero_statics=self.USE_ZERO_STATICS,
+            use_zero_static=self.USE_ZERO_STATIC,
         )
 
     def get_finetune_config(self) -> TSMixerConfig:
