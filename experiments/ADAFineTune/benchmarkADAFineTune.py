@@ -13,7 +13,7 @@ from pytorch_lightning.callbacks import (
 )
 import pandas as pd
 import matplotlib.pyplot as plt
-from experiments.adversarial_finetune.configAdversarialFinetune import ExperimentConfig
+from experiments.ADAFineTune.configADAFineTune import ExperimentConfig
 from src.data_models.caravanify import Caravanify, CaravanifyConfig
 from src.data_models.datamodule import HydroDataModule
 from src.models.TSMixer import LitTSMixer
@@ -29,16 +29,16 @@ class BenchmarkRunner:
     def setup_directories(self):
         """Create necessary directories for experiment outputs."""
         self.results_dir = Path(
-            f"experiments/adversarial_finetune/results/{self.config.EXPERIMENT_NAME}_benchmark"
+            f"experiments/ADAFineTune/results/{self.config.EXPERIMENT_NAME}_benchmark"
         )
         self.model_dir = Path(
-            f"experiments/adversarial_finetune/saved_models/{self.config.EXPERIMENT_NAME}_benchmark"
+            f"experiments/ADAFineTune/saved_models/{self.config.EXPERIMENT_NAME}_benchmark"
         )
         self.checkpoint_dir = Path(
-            f"experiments/adversarial_finetune/checkpoints/{self.config.EXPERIMENT_NAME}_benchmark"
+            f"experiments/ADAFineTune/checkpoints/{self.config.EXPERIMENT_NAME}_benchmark"
         )
         self.viz_dir = Path(
-            f"experiments/adversarial_finetune/visualizations/{self.config.EXPERIMENT_NAME}_benchmark"
+            f"experiments/ADAFineTune/visualizations/{self.config.EXPERIMENT_NAME}_benchmark"
         )
 
         for directory in [
