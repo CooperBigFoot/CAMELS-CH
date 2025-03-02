@@ -48,6 +48,8 @@ class ExperimentConfig:
     LAMBDA_ADV: float = 2.0
     DOMAIN_LOSS_WEIGHT: float = 0.5
     DISCRIMINATOR_HIDDEN_DIM: int = None  # Will be set in __post_init__
+    USE_TARGET_LABELS: bool = True
+    USE_ZERO_STATICS: bool = False
 
     # Visualization configs
     VIZ_MAX_SAMPLES: int = 500  # Maximum samples per domain for visualization
@@ -173,6 +175,8 @@ class ExperimentConfig:
             lambda_adv=self.LAMBDA_ADV,
             domain_loss_weight=self.DOMAIN_LOSS_WEIGHT,
             discriminator_hidden_dim=self.DISCRIMINATOR_HIDDEN_DIM,
+            use_target_labels=self.USE_TARGET_LABELS,
+            use_zero_statics=self.USE_ZERO_STATICS,
         )
 
     def get_finetune_config(self) -> TSMixerConfig:
