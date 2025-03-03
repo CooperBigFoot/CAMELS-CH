@@ -1,10 +1,9 @@
-import math
 from typing import Optional, Dict, Union, List
 from lightning.pytorch.utilities.combined_loader import CombinedLoader
 import pandas as pd
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, IterableDataset
+from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from sklearn.base import clone
 from sklearn.pipeline import Pipeline
@@ -552,3 +551,78 @@ class HydroTransferDataModule(pl.LightningDataModule):
 
     def test_dataloader(self) -> CombinedLoader:
         return self._create_combined_loader("test")
+
+
+class MergedHydroDataModule(pl.LightningDataModule):
+    """A data module that simply concatenates datasets from multiple domains."""
+
+    def __init__(
+        self,
+        source_datamodules: List[HydroDataModule],
+        batch_size: int = 256,
+        num_workers: int = 4,
+        shuffle: bool = True,
+    ):
+        super().__init__()
+        self.source_dms = source_datamodules
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.shuffle = shuffle
+
+        # Copy properties from the first datamodule for compatibility
+        ref_dm = source_datamodules[0]
+        self.features = ref_dm.features
+        self.static_features = ref_dm.static_features
+        self.target = ref_dm.target
+        self.group_identifier = ref_dm.group_identifier
+
+    def prepare_data(self):
+        for dm in self.source_dms:
+            dm.prepare_data()
+
+    def setup(self, stage=None):
+        # Ensure all datamodules are set up
+        for dm in self.source_dms:
+            dm.setup(stage)
+
+        # For each stage, create a concatenated dataset
+        from torch.utils.data import ConcatDataset
+
+        if stage == "fit" or stage is None:
+            train_datasets = [dm.train_dataset for dm in self.source_dms]
+            val_datasets = [dm.val_dataset for dm in self.source_dms]
+            self.train_dataset = ConcatDataset(train_datasets)
+            self.val_dataset = ConcatDataset(val_datasets)
+
+        if stage == "test" or stage is None:
+            test_datasets = [dm.test_dataset for dm in self.source_dms]
+            self.test_dataset = ConcatDataset(test_datasets)
+
+    def train_dataloader(self):
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            shuffle=self.shuffle,
+            num_workers=self.num_workers,
+        )
+
+    def val_dataloader(self):
+        return DataLoader(
+            self.val_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self.num_workers,
+        )
+
+    def test_dataloader(self):
+        return DataLoader(
+            self.test_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self.num_workers,
+        )
+
+    def inverse_transform_predictions(self, predictions, basin_ids):
+        """Pass-through to the first datamodule's inverse transform."""
+        # For simplicity, using the first datamodule for inverse transforms
+        return self.source_dms[0].inverse_transform_predictions(predictions, basin_ids)

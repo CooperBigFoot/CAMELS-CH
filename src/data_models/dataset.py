@@ -2,15 +2,14 @@ from torch.utils.data import Dataset
 import torch
 import numpy as np
 import pandas as pd
-from typing import List, Dict, Optional, Union
+from typing import List, Dict, Optional
 
 
 class HydroDataset(Dataset):
-    """Dataset class for hydrological data with optional domain support.
+    """Dataset class for hydrological data with enhanced domain support.
 
     Handles time series and static features while providing domain identification
-    capabilities for transfer learning scenarios. When domain_id is not specified,
-    defaults to a standard training configuration.
+    capabilities for transfer learning scenarios with multiple domains.
     """
 
     def __init__(
@@ -24,8 +23,9 @@ class HydroDataset(Dataset):
         static_features: Optional[List[str]] = None,
         group_identifier: str = "gauge_id",
         domain_id: str = "source",
+        domain_type: str = "source",  # Either 'source' or 'target'
     ) -> None:
-        """Initialize the dataset with optional domain awareness.
+        """Initialize the dataset with domain awareness.
 
         Args:
             time_series_df: DataFrame containing time series data
@@ -36,7 +36,8 @@ class HydroDataset(Dataset):
             static_df: Optional DataFrame containing static catchment attributes
             static_features: Optional list of static feature names to use
             group_identifier: Column name identifying the grouping variable
-            domain_id: Identifier for the domain (default is "source")
+            domain_id: Specific identifier for the domain (e.g., "CH", "US")
+            domain_type: General type of domain - "source" or "target"
         """
         self.input_length = input_length
         self.output_length = output_length
@@ -45,6 +46,7 @@ class HydroDataset(Dataset):
         self.target = target
         self.group_identifier = group_identifier
         self.domain_id = domain_id
+        self.domain_type = domain_type
 
         # Process static features
         if static_features:
@@ -78,11 +80,10 @@ class HydroDataset(Dataset):
         else:
             self.static_dict = {}
 
-        # Convert time series to tensors and save original indices for each group.
+        # Convert time series to tensors and save original indices for each group
         self.gauge_ids = []
         self.features_data: Dict[str, torch.Tensor] = {}
         self.target_data: Dict[str, torch.Tensor] = {}
-        # NEW: to store original indices
         self.index_data: Dict[str, np.ndarray] = {}
 
         for gauge_id, group in self._df_sorted.groupby(self.group_identifier):
@@ -101,7 +102,7 @@ class HydroDataset(Dataset):
         self._build_sequence_index()
 
         print(
-            f"Domain {domain_id}: Created {len(self.index)} valid sequences "
+            f"Domain {domain_id} ({domain_type}): Created {len(self.index)} valid sequences "
             f"from {len(self.gauge_ids)} catchments"
         )
 
@@ -147,7 +148,8 @@ class HydroDataset(Dataset):
                 - X: Input features tensor
                 - y: Target tensor
                 - static: Static features tensor
-                - domain_id: Domain identifier (if not "training")
+                - domain_id: Domain identifier (source=0, target=1)
+                - domain_name: String identifier for specific domain
                 - group_identifier: Basin/gauge identifier
                 - slice_idx: Original indices corresponding to the full sequence slice
         """
@@ -162,7 +164,6 @@ class HydroDataset(Dataset):
         y = self.target_data[gauge_id][start_idx + self.input_length : end_idx]
 
         # Retrieve the original DataFrame indices for this sequence
-        # (You can later use these indices to fetch the dates from the original df.)
         slice_idx = self.index_data[gauge_id][start_idx:end_idx].tolist()
 
         # Get static features or zeros if none available
@@ -174,9 +175,9 @@ class HydroDataset(Dataset):
             else torch.zeros(0, dtype=torch.float32)
         )
 
-        # Build return dictionary
+        # Build return dictionary - use domain_type for binary domain encoding
         domain_tensor = torch.tensor(
-            [1.0 if self.domain_id == "target" else 0.0], dtype=torch.float32
+            [1.0 if self.domain_type == "target" else 0.0], dtype=torch.float32
         )
 
         return_dict = {
@@ -184,6 +185,7 @@ class HydroDataset(Dataset):
             "y": y,
             "static": static,
             "domain_id": domain_tensor,
+            "domain_name": self.domain_id,  # Added specific domain identifier
             self.group_identifier: gauge_id,
             "slice_idx": slice_idx,
         }
