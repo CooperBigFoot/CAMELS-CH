@@ -401,14 +401,23 @@ class AdversarialFinetuneRunner:
         # Delete explicit references to large objects
         if hasattr(self, "adapted_model"):
             del self.adapted_model
+            
         if hasattr(self, "fine_tuned_model"):
             del self.fine_tuned_model
 
-        # Only clear CUDA cache if needed (check GPU memory usage first)
-        if (
-            torch.cuda.is_available() and torch.cuda.memory_allocated() > 1e9
-        ):  # Only if >1GB used
+        # Force Python garbage collection
+        import gc
+
+        gc.collect()
+
+        # Only clear CUDA cache if needed
+        if torch.cuda.is_available():
             torch.cuda.empty_cache()
+
+        # Wait a moment for resources to be released
+        import time
+
+        time.sleep(1)
 
     def save_aggregated_results(self, all_results):
         """Save aggregated results across all runs."""

@@ -16,3 +16,7 @@ data
 notebooks/checkpoints
 notebooks/lightning_logs
 images
+.ruff_cache
+checkpoints
+clustering
+lightning_logs
