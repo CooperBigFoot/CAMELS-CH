@@ -20,7 +20,7 @@ class ExperimentConfig:
     MAX_EPOCHS: int = 30
     ACCELERATOR: str = "cuda" if torch.cuda.is_available() else "cpu"
     NUM_RUNS: int = 1
-    MAX_WORKERS: int = min(4, os.cpu_count())
+    MAX_WORKERS: int = min(6, os.cpu_count())
 
     # Learning rates with scheduling
     LEARNING_RATE: float = 1e-4
