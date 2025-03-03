@@ -303,7 +303,7 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
             Combined loss value
         """
         # Unpack the tuple from CombinedLoader
-        data_dict, _, _ = batch  # (data_dict, 0, 0)
+        data_dict, _, _ = batch  # (data, idx, iterable_idx)
         source_batch = data_dict["source"]
         target_batch = data_dict["target"]
 
@@ -382,7 +382,7 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
             Dictionary with validation metrics
         """
         # Handle both CombinedLoader tuple and standard DataLoader dict formats
-        data_dict, _, _ = batch  # CombinedLoader format
+        data_dict, _, _ = batch  # (data, idx, iterable_idx)
         source_batch = data_dict.get("source", {})
         target_batch = data_dict.get("target", {})
 
