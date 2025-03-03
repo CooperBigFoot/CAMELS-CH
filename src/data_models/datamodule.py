@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Union, List
+from typing import Optional, Dict, Union, List, Tuple
 from lightning.pytorch.utilities.combined_loader import CombinedLoader
 import pandas as pd
 import numpy as np
@@ -23,10 +23,12 @@ class HydroDataModule(pl.LightningDataModule):
 
     def __init__(
         self,
-        time_series_df: pd.DataFrame,
-        static_df: pd.DataFrame,
-        group_identifier: str,
-        preprocessing_config: Dict[str, Dict[str, Union[Pipeline, GroupedTransformer]]],
+        time_series_df: Union[pd.DataFrame, List[pd.DataFrame]],
+        static_df: Optional[Union[pd.DataFrame, List[pd.DataFrame]]] = None,
+        group_identifier: str = "gauge_id",
+        preprocessing_config: Dict[
+            str, Dict[str, Union[Pipeline, GroupedTransformer]]
+        ] = None,
         batch_size: int = 32,
         input_length: int = 365,
         output_length: int = 1,
@@ -44,13 +46,9 @@ class HydroDataModule(pl.LightningDataModule):
         """Initialize the HydroDataModule with data and configuration parameters."""
         super().__init__()
 
-        # Store input data
-        self.time_series_df = time_series_df
-        self.static_df = static_df
-        self.group_identifier = group_identifier
-        self.preprocessing_config = preprocessing_config
-
         # Store configuration parameters
+        self.group_identifier = group_identifier
+        self.preprocessing_config = preprocessing_config or {}
         self.batch_size = batch_size
         self.input_length = input_length
         self.output_length = output_length
@@ -59,13 +57,16 @@ class HydroDataModule(pl.LightningDataModule):
         self.static_features = static_features if static_features else []
         self.target = target
         self.domain_id = domain_id
-
-        # Store quality check parameters
         self.min_train_years = min_train_years
         self.val_years = val_years
         self.test_years = test_years
         self.max_missing_pct = max_missing_pct
         self.max_gap_length = max_gap_length
+
+        # Process and validate input data
+        self.time_series_df, self.static_df = self._process_input_data(
+            time_series_df, static_df
+        )
 
         # Initialize storage attributes
         self._train_dataset = None
@@ -170,6 +171,200 @@ class HydroDataModule(pl.LightningDataModule):
 
         if self.target not in self.time_series_df.columns:
             raise ValueError(f"Target {self.target} not found in time series data")
+
+    def _process_input_data(
+        self,
+        time_series_df: Union[pd.DataFrame, List[pd.DataFrame]],
+        static_df: Optional[Union[pd.DataFrame, List[pd.DataFrame]]],
+    ) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
+        """
+        Process and validate input data formats.
+
+        Args:
+            time_series_df: Time series DataFrame or list of DataFrames
+            static_df: Static attributes DataFrame or list of DataFrames
+
+        Returns:
+            Tuple of (processed_time_series_df, processed_static_df)
+
+        Raises:
+            ValueError: If input formats are inconsistent
+            TypeError: If input types are invalid
+        """
+        # Check for mismatched input types
+        is_time_series_list = isinstance(time_series_df, list)
+        is_static_list = isinstance(static_df, list) if static_df is not None else False
+
+        if is_time_series_list != is_static_list and static_df is not None:
+            raise ValueError(
+                "Input type mismatch: If time_series_df is a list, static_df must also be a list (or None), and vice versa."
+            )
+
+        # Process time series DataFrames
+        processed_time_series = self._process_dataframe_input(
+            time_series_df, "time_series", is_time_series_list
+        )
+
+        # Process static DataFrames
+        if static_df is not None:
+            # Additional check for list length match
+            if (
+                is_time_series_list
+                and is_static_list
+                and len(time_series_df) != len(static_df)
+            ):
+                raise ValueError(
+                    f"Length mismatch: static_df list has {len(static_df)} items, "
+                    f"but time_series_df list has {len(time_series_df)} items"
+                )
+
+            processed_static = self._process_dataframe_input(
+                static_df, "static", is_static_list
+            )
+        else:
+            processed_static = None
+
+        return processed_time_series, processed_static
+
+    def _process_dataframe_input(
+        self,
+        df_input: Union[pd.DataFrame, List[pd.DataFrame]],
+        df_type: str,
+        is_list: bool,
+    ) -> pd.DataFrame:
+        """
+        Process a DataFrame input which may be a single DataFrame or a list.
+
+        Args:
+            df_input: DataFrame or list of DataFrames
+            df_type: Type of data ('time_series' or 'static')
+            is_list: Whether the input is expected to be a list
+
+        Returns:
+            Processed DataFrame
+        """
+        if is_list:
+            # Validate all items are DataFrames
+            if not all(isinstance(df, pd.DataFrame) for df in df_input):
+                raise TypeError(
+                    f"All elements in {df_type} list must be pandas DataFrames"
+                )
+
+            # Set attribute for tracking data origin
+            for i, df in enumerate(df_input):
+                if not hasattr(df, "attrs"):
+                    df.attrs = {}
+                df.attrs["df_type"] = df_type
+                df.attrs["domain_id"] = f"domain_{i}"
+
+            return self._merge_dfs(df_input)
+        else:
+            if not isinstance(df_input, pd.DataFrame):
+                raise TypeError(
+                    f"{df_type} must be a pandas DataFrame or a list of DataFrames"
+                )
+            return df_input
+
+    def _merge_dfs(self, dfs_list: List[pd.DataFrame]) -> pd.DataFrame:
+        """
+        Merge multiple DataFrames into a single DataFrame.
+
+        Args:
+            dfs_list: List of DataFrames to merge
+
+        Returns:
+            Merged DataFrame
+        """
+        # Validate input
+        if not dfs_list:
+            raise ValueError("Empty list of DataFrames provided")
+
+        # Check if all DataFrames have the necessary columns
+        required_cols = [self.group_identifier]
+        if "time_series" in dfs_list[0].attrs.get("df_type", ""):
+            required_cols.append("date")
+
+        for i, df in enumerate(dfs_list):
+            missing_cols = [col for col in required_cols if col not in df.columns]
+            if missing_cols:
+                raise ValueError(
+                    f"DataFrame at index {i} missing required columns: {missing_cols}"
+                )
+
+        # Merge all DataFrames
+        merged_df = pd.concat(dfs_list, ignore_index=True)
+
+        # Handle potential duplicate gauge_ids by adding prefix if needed
+        if "time_series" in dfs_list[0].attrs.get("df_type", ""):
+            # For time series data, duplicates are fine as long as (gauge_id, date) is unique
+            if merged_df.duplicated(subset=[self.group_identifier, "date"]).any():
+                # Add domain identifier to gauge_id if provided in DataFrame attributes
+                start_idx = 0
+                for i, df in enumerate(dfs_list):
+                    domain_id = df.attrs.get("domain_id", f"domain_{i}")
+                    prefix = f"{domain_id}_"
+
+                    # Only modify gauge_ids in the merged DataFrame that came from this source
+                    df_size = len(df)
+                    end_idx = start_idx + df_size
+
+                    # Check if these gauge_ids need prefixing (have duplicates)
+                    gauge_ids = merged_df.iloc[start_idx:end_idx][
+                        self.group_identifier
+                    ].unique()
+
+                    # Check for duplicates with other datasets
+                    has_duplicates = False
+                    for gid in gauge_ids:
+                        count = merged_df[
+                            merged_df[self.group_identifier] == gid
+                        ].shape[0]
+                        if count > df[df[self.group_identifier] == gid].shape[0]:
+                            has_duplicates = True
+                            break
+
+                    if has_duplicates:
+                        # Add prefix to these gauge_ids
+                        merged_df.iloc[
+                            start_idx:end_idx,
+                            merged_df.columns.get_loc(self.group_identifier),
+                        ] = (
+                            prefix
+                            + merged_df.iloc[start_idx:end_idx][self.group_identifier]
+                        )
+
+                    start_idx = end_idx
+        else:
+            # For static data, gauge_id should be unique
+            if merged_df.duplicated(subset=[self.group_identifier]).any():
+                # Add domain identifier to gauge_id if provided in DataFrame attributes
+                start_idx = 0
+                for i, df in enumerate(dfs_list):
+                    domain_id = df.attrs.get("domain_id", f"domain_{i}")
+                    prefix = f"{domain_id}_"
+
+                    # Only modify gauge_ids in the merged DataFrame that came from this source
+                    df_size = len(df)
+                    end_idx = start_idx + df_size
+
+                    # Add prefix to these gauge_ids
+                    merged_df.iloc[
+                        start_idx:end_idx,
+                        merged_df.columns.get_loc(self.group_identifier),
+                    ] = (
+                        prefix
+                        + merged_df.iloc[start_idx:end_idx][self.group_identifier]
+                    )
+
+                    start_idx = end_idx
+
+                # Check if there are still duplicates after prefixing
+                if merged_df.duplicated(subset=[self.group_identifier]).any():
+                    raise ValueError(
+                        f"Duplicate {self.group_identifier} found in static DataFrames even after adding prefixes"
+                    )
+
+        return merged_df
 
     def prepare_data(self) -> None:
         """
@@ -551,5 +746,3 @@ class HydroTransferDataModule(pl.LightningDataModule):
 
     def test_dataloader(self) -> CombinedLoader:
         return self._create_combined_loader("test")
-
-
