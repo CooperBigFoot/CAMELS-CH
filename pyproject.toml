@@ -30,4 +30,7 @@ dependencies = [
   "ipykernel>=6.29.5",
   "geopy>=2.4.1",
   "geodatasets>=2024.8.0",
+  "sktime>=0.36.0",
+  "numba>=0.61.0",
+  "pyarrow>=19.0.1",
 ]
