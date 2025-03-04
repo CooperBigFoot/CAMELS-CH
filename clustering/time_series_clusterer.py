@@ -1,10 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import silhouette_score
-from sktime.clustering.k_means import TimeSeriesKMeans
+from sklearn.cluster import KMeans
 import seaborn as sns
 from scipy.stats import zscore
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Optional
+from joblib import Parallel, delayed
+from dtaidistance import dtw
 
 
 RANDOM_SEED = 42
@@ -18,6 +20,10 @@ class TimeSeriesClusterer:
         warping_window: float = 0.2,  # 20% warping window as mentioned in paper
         n_init: int = 5,
         max_iter: int = 75,
+        tol: float = 1e-4,
+        averaging_method: str = "dba",
+        n_jobs: int = -1,
+        random_state: int = RANDOM_SEED,
     ):
         """
         Initialize the Time Series Clusterer with enhanced parameters.
@@ -28,38 +34,95 @@ class TimeSeriesClusterer:
             warping_window (float): Size of warping window for DTW (proportion of series length)
             n_init (int): Number of times the algorithm runs with different centroid seeds
             max_iter (int): Maximum number of iterations for clustering
+            tol (float): Tolerance to declare convergence
+            averaging_method (str): Method for averaging time series
+            n_jobs (int): Number of parallel jobs to run (-1 for all cores)
+            random_state (int): Random state for reproducibility
         """
         self.n_clusters = n_clusters
+        self.metric = metric
         self.warping_window = warping_window
+        self.n_init = n_init
+        self.max_iter = max_iter
+        self.tol = tol
+        self.averaging_method = averaging_method
+        self.n_jobs = n_jobs
+        self.random_state = random_state
 
-        # Create distance parameters for DTW with LB_Keogh
-        distance_params = {
-            "window": warping_window,  # Set the warping window constraint
-            "use_lb": True,  # Enable LB_Keogh lower bounding
-            "lb_method": "keogh",  # Specify LB_Keogh as the lower bounding method
-        }
-
-        self.clusterer = TimeSeriesKMeans(
-            n_clusters=n_clusters,
-            metric=metric,
-            n_init=n_init,
-            max_iter=max_iter,
-            random_state=RANDOM_SEED,
-            distance_params=distance_params,
-            averaging_method="dba",  # Use Dynamic Time Warping Barycenter Averaging
-        )
-
-        self.id_to_index = {}
+        # Results storage
         self.labels_ = None
+        self.cluster_centers_ = None
+        self.inertia_ = None
         self.X = None
         self.series_ids = None
-        self.cluster_centers_ = None
+        self.id_to_index = {}
 
+        # For optimization
         self.optimization_results: Dict[str, List[Union[int, float]]] = {
             "n_clusters": [],
             "inertia": [],
             "silhouette_scores": [],
         }
+
+        # Try importing tslearn for DBA if needed
+        try:
+            import tslearn.barycenters
+
+            self._has_tslearn = True
+        except ImportError:
+            self._has_tslearn = False
+            if averaging_method == "dba":
+                print("Warning: tslearn not found. Using mean for averaging instead.")
+                self.averaging_method = "mean"
+
+    def _compute_dtw_distance(self, x: np.ndarray, y: np.ndarray) -> float:
+        """
+        Compute DTW distance between two time series.
+
+        Args:
+            x (np.ndarray): First time series
+            y (np.ndarray): Second time series
+
+        Returns:
+            float: DTW distance between x and y
+        """
+        # Convert warping_window from percentage to actual window size
+        window = int(self.warping_window * len(x))
+
+        # Use dtaidistance for faster computation
+        return dtw.distance(x, y, window=window, use_pruning=True)
+
+    def _compute_dba_center(self, series_cluster):
+        """
+        Compute DBA (DTW Barycenter Averaging) for a cluster.
+
+        Args:
+            series_cluster (np.ndarray): Time series in a cluster
+
+        Returns:
+            np.ndarray: Centroid series
+        """
+        if self._has_tslearn and self.averaging_method == "dba":
+            from tslearn.barycenters import dtw_barycenter_averaging
+
+            # Create metric_params dictionary with the constraint
+            metric_params = {
+                "sakoe_chiba_radius": int(self.warping_window * series_cluster.shape[1])
+            }
+
+            # Get the DBA center
+            center = dtw_barycenter_averaging(
+                series_cluster,
+                max_iter=10,
+                barycenter_size=series_cluster.shape[1],
+                metric_params=metric_params,
+            )
+
+            # Ensure the center has the right shape by squeezing out any extra dimensions
+            return center.squeeze()
+        else:
+            # Fallback to mean if tslearn is not available
+            return np.mean(series_cluster, axis=0)
 
     def preprocess_data(self, X: np.ndarray) -> np.ndarray:
         """
@@ -73,33 +136,144 @@ class TimeSeriesClusterer:
         """
         return zscore(X, axis=1)
 
-    def fit(self, X: np.ndarray, series_ids: List[str]) -> "TimeSeriesClusterer":
+    def fit(
+        self, X: np.ndarray, series_ids: Optional[List[str]] = None
+    ) -> "TimeSeriesClusterer":
         """
         Fit the clusterer to the data
 
         Args:
             X (np.ndarray): Input time series data
-            series_ids (List[str]): Unique identifiers for each time series
+            series_ids (List[str], optional): Unique identifiers for each time series
 
         Returns:
             TimeSeriesClusterer: Fitted clusterer
         """
         # Preprocess data
-        processed_X = self.preprocess_data(X)
-
-        # Store the input data
-        self.X = processed_X
-        self.series_ids = series_ids
+        self.X = self.preprocess_data(X)
+        self.series_ids = (
+            series_ids
+            if series_ids is not None
+            else [f"series_{i}" for i in range(X.shape[0])]
+        )
 
         # Map IDs to indices
-        self.id_to_index = {id_: idx for idx, id_ in enumerate(series_ids)}
+        self.id_to_index = {id_: idx for idx, id_ in enumerate(self.series_ids)}
 
-        # Fit the clusterer
-        self.clusterer.fit(processed_X)
-        self.labels_ = self.clusterer.labels_
-        self.cluster_centers_ = self.clusterer.cluster_centers_
+        np.random.seed(self.random_state)
+
+        # Step 1: Initialize cluster centers using K-means++ on flattened data
+        kmeans = KMeans(
+            n_clusters=self.n_clusters,
+            n_init=self.n_init,
+            max_iter=1,  # Only for initialization
+            random_state=self.random_state,
+            init="k-means++",
+        )
+        flattened_X = self.X.reshape(self.X.shape[0], -1)
+        initial_labels = kmeans.fit_predict(flattened_X)
+
+        # Initialize cluster centers using DBA
+        centers = np.zeros((self.n_clusters, self.X.shape[1]))
+        for k in range(self.n_clusters):
+            mask = initial_labels == k
+            if mask.sum() > 0:
+                centers[k] = self._compute_dba_center(self.X[mask])
+            else:
+                # Handle empty cluster
+                centers[k] = self.X[np.random.choice(self.X.shape[0])]
+
+        # Step 2: Iterative optimization
+        labels = initial_labels
+        old_inertia = float("inf")
+
+        for iteration in range(self.max_iter):
+            # Assign points to nearest center using DTW
+            distances = np.zeros((self.X.shape[0], self.n_clusters))
+
+            # Compute distances in parallel
+            def compute_distances_to_centers(i):
+                series_distances = np.zeros(self.n_clusters)
+                for k in range(self.n_clusters):
+                    series_distances[k] = self._compute_dtw_distance(
+                        self.X[i], centers[k]
+                    )
+                return series_distances
+
+            all_distances = Parallel(n_jobs=self.n_jobs)(
+                delayed(compute_distances_to_centers)(i) for i in range(self.X.shape[0])
+            )
+            distances = np.array(all_distances)
+
+            # Assign to nearest center
+            new_labels = np.argmin(distances, axis=1)
+
+            # Update centers using DBA
+            new_centers = np.zeros_like(centers)
+            for k in range(self.n_clusters):
+                mask = new_labels == k
+                if mask.sum() > 0:
+                    new_centers[k] = self._compute_dba_center(self.X[mask])
+                else:
+                    # Handle empty cluster
+                    new_centers[k] = centers[k]
+
+            # Calculate inertia (sum of squared DTW distances to closest center)
+            inertia = 0
+            for i, label in enumerate(new_labels):
+                inertia += distances[i, label] ** 2
+
+            # Check convergence
+            if (
+                np.array_equal(labels, new_labels)
+                or abs(old_inertia - inertia) < self.tol
+            ):
+                break
+
+            labels = new_labels
+            centers = new_centers
+            old_inertia = inertia
+
+            if iteration % 10 == 0:
+                print(f"Iteration {iteration}, inertia: {inertia:.4f}")
+
+        # Store results
+        self.labels_ = labels
+        self.cluster_centers_ = centers
+        self.inertia_ = inertia
 
         return self
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """
+        Predict cluster membership for new data.
+
+        Args:
+            X (np.ndarray): Input time series data
+
+        Returns:
+            np.ndarray: Cluster labels
+        """
+        if self.cluster_centers_ is None:
+            raise ValueError("Model not fitted yet. Call fit() before predict().")
+
+        X_processed = self.preprocess_data(X)
+
+        def assign_to_cluster(series):
+            distances = np.array(
+                [
+                    self._compute_dtw_distance(series, center)
+                    for center in self.cluster_centers_
+                ]
+            )
+            return np.argmin(distances)
+
+        labels = Parallel(n_jobs=self.n_jobs)(
+            delayed(assign_to_cluster)(X_processed[i])
+            for i in range(X_processed.shape[0])
+        )
+
+        return np.array(labels)
 
     def get_label_from_id(self, series_id: str) -> int:
         """
@@ -123,6 +297,9 @@ class TimeSeriesClusterer:
         Args:
             max_series_per_cluster (int): Maximum number of series to plot per cluster
         """
+        if self.labels_ is None or self.cluster_centers_ is None:
+            raise ValueError("Model not fitted yet. Call fit() before plot_clusters().")
+
         # Define distinct colors for centroids
         centroid_colors = sns.color_palette("husl", self.n_clusters)
 
@@ -154,7 +331,7 @@ class TimeSeriesClusterer:
 
             # Plot centroid in color
             ax.plot(
-                self.cluster_centers_[i, 0],
+                self.cluster_centers_[i],
                 color=centroid_colors[i % len(centroid_colors)],
                 linewidth=3,
                 label="Cluster Centroid",
@@ -181,6 +358,11 @@ class TimeSeriesClusterer:
         Returns:
             List[dict]: Descriptive statistics for each cluster
         """
+        if self.labels_ is None:
+            raise ValueError(
+                "Model not fitted yet. Call fit() before describe_clusters()."
+            )
+
         cluster_descriptions = []
         for i in range(self.n_clusters):
             cluster_data = self.X[self.labels_ == i]
@@ -208,6 +390,8 @@ class TimeSeriesClusterer:
         Returns:
             Dict with optimization results
         """
+        X_processed = self.preprocess_data(X)
+
         # Reset optimization results
         self.optimization_results = {
             "n_clusters": list(range(min_clusters, max_clusters + 1)),
@@ -215,40 +399,33 @@ class TimeSeriesClusterer:
             "silhouette_scores": [],
         }
 
-        # Preprocess data if not already done
-        if X.ndim == 2:
-            X = self.preprocess_data(X)
-
-        # Try different numbers of clusters
         for n_clusters in self.optimization_results["n_clusters"]:
-            # Create distance parameters for DTW with LB_Keogh
-            distance_params = {
-                "window": self.warping_window,
-                "use_lb": True,
-                "lb_method": "keogh",
-            }
+            print(f"Testing {n_clusters} clusters...")
 
             # Create and fit clusterer
-            clusterer = TimeSeriesKMeans(
+            temp_clusterer = TimeSeriesClusterer(
                 n_clusters=n_clusters,
-                metric=self.clusterer.metric,
-                n_init=self.clusterer.n_init,
-                max_iter=self.clusterer.max_iter,
-                random_state=RANDOM_SEED,
-                distance_params=distance_params,
-                averaging_method="dba",
+                metric=self.metric,
+                warping_window=self.warping_window,
+                n_init=self.n_init,
+                max_iter=self.max_iter,
+                tol=self.tol,
+                averaging_method=self.averaging_method,
+                n_jobs=self.n_jobs,
+                random_state=self.random_state,
             )
 
             # Fit and get labels
-            labels = clusterer.fit_predict(X)
+            temp_clusterer.fit(X_processed)
+            labels = temp_clusterer.labels_
 
             # Store inertia
-            self.optimization_results["inertia"].append(clusterer.inertia_)
+            self.optimization_results["inertia"].append(temp_clusterer.inertia_)
 
             # Calculate silhouette score (only if more than one cluster)
             if n_clusters > 1:
                 # Flatten the time series for silhouette score calculation
-                X_flat = X.reshape(X.shape[0], -1)
+                X_flat = X_processed.reshape(X_processed.shape[0], -1)
                 sil_score = silhouette_score(X_flat, labels)
                 self.optimization_results["silhouette_scores"].append(sil_score)
             else:

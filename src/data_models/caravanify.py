@@ -2,7 +2,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Union, List, Dict
 import pandas as pd
+from concurrent.futures import ThreadPoolExecutor
 
+# TODO: Improve docstrings and type hints
 
 @dataclass
 class CaravanifyConfig:
@@ -27,16 +29,7 @@ class Caravanify:
         self.static_attributes = pd.DataFrame()  # Combined static attributes
 
     def get_all_gauge_ids(self) -> List[str]:
-        """Get all gauge IDs from the timeseries directory.
-
-        Returns:
-            List[str]: List of all gauge IDs found in the timeseries directory.
-            Each ID will start with the configured gauge_id_prefix.
-
-        Raises:
-            FileNotFoundError: If the timeseries directory for the prefix doesn't exist.
-        """
-        # Construct path to prefix-specific directory
+        """Get all gauge IDs from the timeseries directory."""
         ts_dir = self.config.timeseries_dir / self.config.gauge_id_prefix
 
         if not ts_dir.exists():
@@ -44,10 +37,7 @@ class Caravanify:
                 f"Timeseries directory not found for prefix {self.config.gauge_id_prefix}: {ts_dir}"
             )
 
-        # Get all CSV files and extract gauge IDs from filenames
         gauge_ids = [f.stem for f in ts_dir.glob("*.csv")]
-
-        # Validate that all gauge IDs start with the correct prefix
         prefix = f"{self.config.gauge_id_prefix}_"
         invalid_ids = [gid for gid in gauge_ids if not gid.startswith(prefix)]
         if invalid_ids:
@@ -64,60 +54,69 @@ class Caravanify:
         self._load_static_attributes(gauge_ids)
 
     def _load_timeseries(self, gauge_ids: List[str]) -> None:
-        """Load timeseries CSVs from timeseries_dir/gauge_id_prefix/"""
+        """Load timeseries CSVs in parallel using multithreading."""
         ts_dir = self.config.timeseries_dir / self.config.gauge_id_prefix
-
+        file_paths = []
         for gauge_id in gauge_ids:
-            file_path = ts_dir / f"{gauge_id}.csv"
-            if not file_path.exists():
-                raise FileNotFoundError(f"Timeseries file {file_path} not found")
+            fp = ts_dir / f"{gauge_id}.csv"
+            if not fp.exists():
+                raise FileNotFoundError(f"Timeseries file {fp} not found")
+            file_paths.append(fp)
 
-            # Read the CSV file but don't set date as index
-            df = pd.read_csv(file_path, parse_dates=["date"])
+        def read_single(fp: Path) -> pd.DataFrame:
+            # Consider adding engine='pyarrow' if installed for faster parsing
+            df = pd.read_csv(fp, parse_dates=["date"])  # , engine='pyarrow')
+            df["gauge_id"] = fp.stem
+            return df
 
-            # Add gauge_id column
-            df["gauge_id"] = gauge_id
+        with ThreadPoolExecutor() as executor:
+            dfs = list(executor.map(read_single, file_paths))
 
-            # Store DataFrame in dictionary
-            self.time_series[gauge_id] = df
+        for df in dfs:
+            self.time_series[df["gauge_id"].iloc[0]] = df
 
     def _load_static_attributes(self, gauge_ids: List[str]) -> None:
-        """Load and merge enabled attribute files."""
+        """Load and merge static attributes using efficient concatenation."""
         attr_dir = self.config.attributes_dir / self.config.gauge_id_prefix
+        gauge_ids_set = set(gauge_ids)
         dfs = []
 
-        # Load metadata (lat/lon/area/etc.)
+        # Helper function to load and process attributes
+        def load_attributes(file_name: str) -> Union[pd.DataFrame, None]:
+            file_path = attr_dir / file_name
+            if not file_path.exists():
+                return None
+
+            df = pd.read_csv(file_path, dtype={"gauge_id": str}, engine="pyarrow")
+            df = df[df["gauge_id"].isin(gauge_ids_set)]
+            df.set_index("gauge_id", inplace=True)
+            return df
+
+        # Load enabled attribute types
         if self.config.use_other_attributes:
-            other_path = (
-                attr_dir / f"attributes_other_{self.config.gauge_id_prefix}.csv"
+            other_df = load_attributes(
+                f"attributes_other_{self.config.gauge_id_prefix}.csv"
             )
-            other_df = pd.read_csv(other_path, dtype={"gauge_id": str})
-            dfs.append(other_df[other_df["gauge_id"].isin(gauge_ids)])
+            if other_df is not None:
+                dfs.append(other_df)
 
-        # Load HydroATLAS attributes
         if self.config.use_hydroatlas_attributes:
-            hydroatlas_path = (
-                attr_dir / f"attributes_hydroatlas_{self.config.gauge_id_prefix}.csv"
+            hydro_df = load_attributes(
+                f"attributes_hydroatlas_{self.config.gauge_id_prefix}.csv"
             )
-            hydro_df = pd.read_csv(hydroatlas_path, dtype={"gauge_id": str})
-            dfs.append(hydro_df[hydro_df["gauge_id"].isin(gauge_ids)])
+            if hydro_df is not None:
+                dfs.append(hydro_df)
 
-        # Load Caravan climate indices
         if self.config.use_caravan_attributes:
-            caravan_path = (
-                attr_dir / f"attributes_caravan_{self.config.gauge_id_prefix}.csv"
+            caravan_df = load_attributes(
+                f"attributes_caravan_{self.config.gauge_id_prefix}.csv"
             )
-            caravan_df = pd.read_csv(caravan_path, dtype={"gauge_id": str})
-            dfs.append(caravan_df[caravan_df["gauge_id"].isin(gauge_ids)])
+            if caravan_df is not None:
+                dfs.append(caravan_df)
 
-        # Merge all DataFrames
+        # Concatenate all DataFrames horizontally
         if dfs:
-            # Merge on gauge_id
-            self.static_attributes = dfs[0]
-            for df in dfs[1:]:
-                self.static_attributes = pd.merge(
-                    self.static_attributes, df, on="gauge_id", how="outer"
-                )
+            self.static_attributes = pd.concat(dfs, axis=1, join="outer").reset_index()
 
     def _validate_gauge_ids(self, gauge_ids: List[str]) -> None:
         """Ensure all gauge IDs start with the configured prefix."""
@@ -127,20 +126,14 @@ class Caravanify:
                 raise ValueError(f"Gauge ID {gid} must start with '{prefix}'")
 
     def get_time_series(self) -> pd.DataFrame:
-        """Return all loaded timeseries as a concatenated DataFrame with gauge_id and date as columns."""
+        """Return concatenated time series data."""
         if not self.time_series:
             return pd.DataFrame()
-
-        # Concatenate all DataFrames
         df = pd.concat(self.time_series.values(), ignore_index=True)
-
-        # Ensure gauge_id and date are the first columns
-        cols = df.columns.tolist()
-        cols.remove("gauge_id")
-        cols.remove("date")
-        df = df[["gauge_id", "date"] + cols]
-
-        return df
+        return df[
+            ["gauge_id", "date"]
+            + [c for c in df.columns if c not in ("gauge_id", "date")]
+        ]
 
     def get_static_attributes(self) -> pd.DataFrame:
         """Return merged static attributes."""
