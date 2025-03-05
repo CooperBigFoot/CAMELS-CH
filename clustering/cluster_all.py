@@ -70,8 +70,6 @@ def load_country_data(country: str, config: ClusteringConfig) -> pd.DataFrame:
     ts_colunms = ["streamflow", "date", "gauge_id"]
     ts_data = ts_data[ts_colunms]
 
-    print(ts_data.head())
-
     # Configure HydroDataModule for preprocessing
     data_module = HydroDataModule(
         time_series_df=ts_data,
@@ -84,8 +82,6 @@ def load_country_data(country: str, config: ClusteringConfig) -> pd.DataFrame:
         target="streamflow",
         domain_id=country,
     )
-
-    print(f"  Preprocessing data for {country}...")
 
     # Process data
     data_module.prepare_data()
@@ -144,28 +140,28 @@ def main(config: ClusteringConfig):
         warping_window=config.warping_window,
     )
 
-    # Optimize clusters
-    print(
-        f"Optimizing number of clusters from {config.min_clusters} to {config.max_clusters}..."
-    )
-    clusterer.optimize_clusters(
-        ts_data_standardized, config.min_clusters, config.max_clusters
-    )
+    # # Optimize clusters
+    # print(
+    #     f"Optimizing number of clusters from {config.min_clusters} to {config.max_clusters}..."
+    # )
+    # clusterer.optimize_clusters(
+    #     ts_data_standardized, config.min_clusters, config.max_clusters
+    # )
 
-    # Plot and save optimization results
-    plt.figure(figsize=(15, 7))
-    clusterer.plot_cluster_optimization(save_path=elbow_plot_path)
-    plt.close()
-    print(f"Saved optimization plot to {elbow_plot_path}")
+    # # Plot and save optimization results
+    # plt.figure(figsize=(15, 7))
+    # clusterer.plot_cluster_optimization(save_path=elbow_plot_path)
+    # plt.close()
+    # print(f"Saved optimization plot to {elbow_plot_path}")
 
     # Get recommended number of clusters
-    optimal_clusters = clusterer.recommend_clusters(method=config.optimization_method)
-    print(f"Recommended number of clusters: {optimal_clusters}")
+    # optimal_clusters = clusterer.recommend_clusters(method=config.optimization_method)
+    # print(f"Recommended number of clusters: {optimal_clusters}")
 
     # Fit with recommended clusters
-    print(f"Fitting clusterer with {optimal_clusters} clusters...")
+    print(f"Fitting clusterer with {13} clusters...")
     clusterer = TimeSeriesClusterer(
-        n_clusters=optimal_clusters,
+        n_clusters=13,
         max_iter=config.max_iter,
         n_jobs=config.n_jobs,
         warping_window=config.warping_window,
@@ -196,8 +192,8 @@ if __name__ == "__main__":
     # Define configuration
     config = ClusteringConfig(
         countries=["CH", "CL", "USA"],
-        attributes_base_dir="/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY",
-        timeseries_base_dir="/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY",
+        attributes_base_dir="/workspace/CARAVANIFY",
+        timeseries_base_dir="/workspace/CARAVANIFY",
         output_dir="./clustering_results",
         min_clusters=4,
         max_clusters=20,
