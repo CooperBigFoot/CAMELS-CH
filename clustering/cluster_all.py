@@ -170,7 +170,7 @@ def main(config: ClusteringConfig):
 
     # Plot and save clusters
     plt.figure(figsize=(20, 15))
-    clusterer.plot_clusters(max_series_per_cluster=10, save_path=cluster_plot_path)
+    clusterer.plot_clusters(max_series_per_cluster=200, save_path=cluster_plot_path)
     plt.close()
     print(f"Saved cluster plot to {cluster_plot_path}")
 
