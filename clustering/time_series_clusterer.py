@@ -290,12 +290,17 @@ class TimeSeriesClusterer:
         idx = self.id_to_index[series_id]
         return self.labels_[idx]
 
-    def plot_clusters(self, max_series_per_cluster: int = 10, save_path: str = None):
+    def plot_clusters(
+        self, max_series_per_cluster: int = 10, save_path: Optional[str] = None
+    ):
         """
         Plot clusters with centroids and sample series from each cluster in a grid layout.
+        Only bottom-most plots in each column have x-axis labels, and only leftmost plots
+        in each row have y-axis labels.
 
         Args:
             max_series_per_cluster (int): Maximum number of series to plot per cluster
+            save_path (str, optional): Path to save the plot
         """
         if self.labels_ is None or self.cluster_centers_ is None:
             raise ValueError("Model not fitted yet. Call fit() before plot_clusters().")
@@ -313,11 +318,13 @@ class TimeSeriesClusterer:
         )
 
         # Flatten the axes array for easier indexing
-        axes = axes.flatten()
+        axes_flat = axes.flatten()
 
         # Loop through each cluster
         for i in range(self.n_clusters):
-            ax = axes[i]
+            # Calculate grid position (row, col) from flattened index
+            row, col = i // cols, i % cols
+            ax = axes[row, col]
 
             # Plot series in this cluster
             cluster_series = self.X[self.labels_ == i]
@@ -337,19 +344,38 @@ class TimeSeriesClusterer:
                 label="Cluster Centroid",
             )
 
+            # Set title for all plots
             ax.set_title(f"Cluster {i}")
-            ax.set_xlabel("Week")
-            ax.set_ylabel("Standardized Flow")
+
+            # Only show x-labels for bottom-most plots in each column or for the last plot
+            is_bottom_plot = row == rows - 1 or (
+                col == i % cols and (i + cols) >= self.n_clusters
+            )
+            if is_bottom_plot:
+                ax.set_xlabel("Week")
+            else:
+                ax.set_xlabel("")
+
+            # Only show y-labels for leftmost plots in each row
+            if col == 0:
+                ax.set_ylabel("Standardized Flow")
+            else:
+                ax.set_ylabel("")
+
+            # Add horizontal dashed line at y=0
+            ax.axhline(0, color="black", linestyle="--", linewidth=0.5)
+
             ax.legend()
             ax.grid(True, alpha=0.3)
             sns.despine(ax=ax)
 
         # Hide unused subplots
-        for j in range(self.n_clusters, len(axes)):
-            fig.delaxes(axes[j])
+        for j in range(self.n_clusters, len(axes_flat)):
+            fig.delaxes(axes_flat[j])
 
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches="tight")
+
         plt.tight_layout()
         plt.show()
 
