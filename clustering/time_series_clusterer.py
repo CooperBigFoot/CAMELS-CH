@@ -290,7 +290,7 @@ class TimeSeriesClusterer:
         idx = self.id_to_index[series_id]
         return self.labels_[idx]
 
-    def plot_clusters(self, max_series_per_cluster: int = 10):
+    def plot_clusters(self, max_series_per_cluster: int = 10, save_path: str = None):
         """
         Plot clusters with centroids and sample series from each cluster in a grid layout.
 
@@ -348,6 +348,8 @@ class TimeSeriesClusterer:
         for j in range(self.n_clusters, len(axes)):
             fig.delaxes(axes[j])
 
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches="tight")
         plt.tight_layout()
         plt.show()
 
@@ -433,7 +435,7 @@ class TimeSeriesClusterer:
 
         return self.optimization_results
 
-    def plot_cluster_optimization(self):
+    def plot_cluster_optimization(self, save_path: str = None):
         """
         Plot elbow curve and silhouette scores for cluster optimization.
         """
@@ -464,6 +466,11 @@ class TimeSeriesClusterer:
         ax2.set_ylabel("Silhouette Score")
         ax2.set_title("Silhouette Analysis")
 
+        sns.despine(ax=ax1)
+        sns.despine(ax=ax2)
+
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches="tight")
         plt.tight_layout()
         plt.show()
 
