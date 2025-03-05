@@ -105,7 +105,6 @@ def main(config: ClusteringConfig):
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Create full paths for output files
-    elbow_plot_path = output_dir / config.elbow_plot_filename
     cluster_plot_path = output_dir / config.cluster_plot_filename
     results_csv_path = output_dir / config.results_csv_filename
 
