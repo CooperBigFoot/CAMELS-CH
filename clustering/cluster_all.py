@@ -15,6 +15,8 @@ from clustering.preprocess_time_series import prepare_timeseries_data
 from clustering.time_series_clusterer import TimeSeriesClusterer
 from src.data_models.caravanify import Caravanify, CaravanifyConfig
 
+from src.data_models.datamodule import HydroDataModule
+
 
 @dataclass
 class ClusteringConfig:
@@ -42,19 +44,14 @@ class ClusteringConfig:
     optimization_method: str = "elbow"  # 'elbow' or 'silhouette'
 
 
-def load_country_data(country: str, config: ClusteringConfig) -> tuple:
+def load_country_data(country: str, config: ClusteringConfig) -> pd.DataFrame:
     """
-    Load time series and static data for a specific country.
-
-    Args:
-        country: Country code (e.g., 'CH', 'CL', 'USA')
-        config: Clustering configuration
-
-    Returns:
-        Tuple of (time_series_df, static_attributes_df)
+    Load and preprocess data for a country using HydroDataModule.
+    Returns cleaned daily time series DataFrame.
     """
     print(f"Loading data for {country}...")
 
+    # Configure Caravanify
     caravan_config = CaravanifyConfig(
         attributes_dir=f"{config.attributes_base_dir}/{country}/post_processed/attributes",
         timeseries_dir=f"{config.timeseries_base_dir}/{country}/post_processed/timeseries/csv",
@@ -69,7 +66,35 @@ def load_country_data(country: str, config: ClusteringConfig) -> tuple:
     print(f"  Found {len(ids)} stations for {country}")
 
     caravan.load_stations(ids)
-    return caravan.get_time_series(), caravan.get_static_attributes()
+    ts_data = caravan.get_time_series()
+    ts_colunms = ["streamflow", "date", "gauge_id"]
+    ts_data = ts_data[ts_colunms]
+
+    print(ts_data.head())
+
+    # Configure HydroDataModule for preprocessing
+    data_module = HydroDataModule(
+        time_series_df=ts_data,
+        group_identifier="gauge_id",
+        min_train_years=5,
+        val_years=0,
+        test_years=0,
+        max_missing_pct=10,
+        features=["streamflow"],
+        target="streamflow",
+        domain_id=country,
+    )
+
+    print(f"  Preprocessing data for {country}...")
+
+    # Process data
+    data_module.prepare_data()
+    data_module.setup("fit")
+
+    print(f"  Cleaned data for {country}")
+
+    # Return cleaned daily data
+    return data_module.train_dataset.df_sorted
 
 
 def main(config: ClusteringConfig):
@@ -89,35 +114,27 @@ def main(config: ClusteringConfig):
     results_csv_path = output_dir / config.results_csv_filename
 
     # Load data from all countries
-    all_ts_data = []
-    all_static_data = []
-
+    all_cleaned_daily = []
     for country in config.countries:
         try:
-            ts_data, static_data = load_country_data(country, config)
-            all_ts_data.append(ts_data)
-            all_static_data.append(static_data)
+            cleaned_daily = load_country_data(country, config)
+            all_cleaned_daily.append(cleaned_daily)
         except Exception as e:
-            print(f"Error loading data for {country}: {e}")
+            print(f"Error processing {country}: {e}")
 
-    # Combine all data
-    if not all_ts_data:
-        print("No data loaded. Exiting.")
-        return
+    # Combine cleaned daily data
+    combined_daily = pd.concat(all_cleaned_daily, ignore_index=True)
 
-    combined_ts_data = pd.concat(all_ts_data, ignore_index=True)
-    print(
-        f"Combined time series data: {len(combined_ts_data)} records from {len(set(combined_ts_data['gauge_id']))} stations"
-    )
-
-    # Prepare data for clustering
+    # Generate weekly mean annual cycles for clustering
     ts_data_standardized, basin_ids = prepare_timeseries_data(
-        df=combined_ts_data,
+        df=combined_daily,
         basin_id_col="gauge_id",
         date_col="date",
         flow_col="streamflow",
+        standardize=True,
     )
 
+    # Proceed with clustering
     print(f"Prepared standardized data with shape: {ts_data_standardized.shape}")
 
     # Initialize clusterer

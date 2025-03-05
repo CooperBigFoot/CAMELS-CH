@@ -2,7 +2,6 @@ from typing import Optional, Dict, Union, List, Tuple
 from lightning.pytorch.utilities.combined_loader import CombinedLoader
 import pandas as pd
 import numpy as np
-import torch
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from sklearn.base import clone
@@ -78,7 +77,7 @@ class HydroDataModule(pl.LightningDataModule):
         self.fitted_pipelines = {}
 
         # Validate configuration
-        self._validate_preprocessing_config(preprocessing_config)
+        self._validate_preprocessing_config(self.preprocessing_config)
         self._validate_features()
 
     def _validate_preprocessing_config(self, config: Dict) -> None:
