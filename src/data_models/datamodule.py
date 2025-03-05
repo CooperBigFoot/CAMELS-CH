@@ -22,7 +22,7 @@ class HydroDataModule(pl.LightningDataModule):
 
     def __init__(
         self,
-        time_series_df: Union[pd.DataFrame, List[pd.DataFrame]],
+        time_series_df: Union[pd.DataFrame, List[pd.DataFrame]] = None,
         static_df: Optional[Union[pd.DataFrame, List[pd.DataFrame]]] = None,
         group_identifier: str = "gauge_id",
         preprocessing_config: Dict[
@@ -242,6 +242,10 @@ class HydroDataModule(pl.LightningDataModule):
         Returns:
             Processed DataFrame
         """
+        if df_input is None:
+            # Warning for None input, but return empty DataFrame
+            print(f"Warning: {df_type} DataFrame is None, returning empty DataFrame")
+            return pd.DataFrame()
         if is_list:
             # Validate all items are DataFrames
             if not all(isinstance(df, pd.DataFrame) for df in df_input):
