@@ -200,7 +200,7 @@ class GroupBasedRunner:
 
         if best_checkpoint:
             # Load best model for both saving and returning
-            best_model = LitTSMixer.load_from_checkpoint(best_checkpoint)
+            best_model = LitTSMixer.load_from_checkpoint(best_checkpoint, config=self.config.get_tsmixer_config())
 
             # Save full model (architecture + weights)
             from datetime import datetime
@@ -310,10 +310,14 @@ class GroupBasedRunner:
         print(f"EVALUATING MODEL FOR GROUP {group_key}")
         trainer = self.create_trainer(f"evaluate_{group_key}", run)
         trainer.test(model, data_module)
+        raw_results = model.test_results
+
 
         evaluator = TSForecastEvaluator(
             data_module, horizons=list(range(1, self.config.OUTPUT_LENGTH + 1))
         )
+        evaluator.test_results = raw_results
+
 
         results_df, overall_metrics, basin_metrics = evaluator.evaluate(
             model.test_results

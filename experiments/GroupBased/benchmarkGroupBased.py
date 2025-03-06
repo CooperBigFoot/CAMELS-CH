@@ -29,19 +29,19 @@ class BenchmarkRunner:
     def setup_directories(self):
         """Create necessary directories for experiment outputs."""
         self.results_dir = Path(
-            f"experiments/Merged/results/{self.config.EXPERIMENT_NAME}_benchmark"
+            f"experiments/GroupBased/results/{self.config.EXPERIMENT_NAME}_benchmark"
         )
         self.model_dir = Path(
-            f"experiments/Merged/saved_models/{self.config.EXPERIMENT_NAME}_benchmark"
+            f"experiments/GroupBased/saved_models/{self.config.EXPERIMENT_NAME}_benchmark"
         )
         self.checkpoint_dir = Path(
-            f"experiments/Merged/checkpoints/{self.config.EXPERIMENT_NAME}_benchmark"
+            f"experiments/GroupBased/checkpoints/{self.config.EXPERIMENT_NAME}_benchmark"
         )
         self.viz_dir = Path(
-            f"experiments/Merged/visualizations/{self.config.EXPERIMENT_NAME}_benchmark"
+            f"experiments/GroupBased/visualizations/{self.config.EXPERIMENT_NAME}_benchmark"
         )
         self.logs_dir = Path(
-            f"experiments/Merged/logs/{self.config.EXPERIMENT_NAME}_benchmark"
+            f"experiments/GroupBased/logs/{self.config.EXPERIMENT_NAME}_benchmark"
         )
 
         for directory in [
@@ -180,7 +180,7 @@ class BenchmarkRunner:
 
         if best_checkpoint:
             # Load best model for saving
-            best_model = LitTSMixer.load_from_checkpoint(best_checkpoint)
+            best_model = LitTSMixer.load_from_checkpoint(best_checkpoint, config=self.config.get_tsmixer_config())
 
             # Save with validation loss and timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -233,7 +233,7 @@ class BenchmarkRunner:
 
             # Define logs directory for CSVLogger
             logs_path = Path(
-                f"experiments/GroupBased/logs/{self.config.EXPERIMENT_NAME}/{group_key}"
+                f"experiments/GroupBased/logs/{self.config.EXPERIMENT_NAME}_benchmark/{group_key}"
             )
             logs_path.mkdir(parents=True, exist_ok=True)
         else:
@@ -242,7 +242,7 @@ class BenchmarkRunner:
 
             # Define logs directory for CSVLogger
             logs_path = Path(
-                f"experiments/GroupBased/logs/{self.config.EXPERIMENT_NAME}"
+                f"experiments/GroupBased/logs/{self.config.EXPERIMENT_NAME}_benchmark"
             )
             logs_path.mkdir(parents=True, exist_ok=True)
 
@@ -286,10 +286,13 @@ class BenchmarkRunner:
         print("STARTING MODEL EVALUATION")
         trainer = self.create_trainer("evaluate", run)
         trainer.test(model, data_module)
+        raw_results = model.test_results
+
 
         evaluator = TSForecastEvaluator(
             data_module, horizons=list(range(1, self.config.OUTPUT_LENGTH + 1))
         )
+        evaluator.test_results = raw_results
 
         results_df, overall_metrics, basin_metrics = evaluator.evaluate(
             model.test_results

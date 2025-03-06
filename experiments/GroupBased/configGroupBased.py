@@ -18,15 +18,15 @@ class ExperimentConfig:
     BATCH_SIZE: int = 1024
     INPUT_LENGTH: int = 40
     OUTPUT_LENGTH: int = 10
-    MAX_EPOCHS: int = 30
+    MAX_EPOCHS: int = 1
     ACCELERATOR: str = "cuda" if torch.cuda.is_available() else "cpu"
     NUM_RUNS: int = 1
     MAX_WORKERS: int = min(6, os.cpu_count())
 
     # Group-based training configuration
     GROUP_TRAINING_ENABLED: bool = True
-    CA_GROUPS_PATH: str = "/Users/cooper/Desktop/CAMELS-CH/classification_results/final_basin_assignments_for_12_clusters.csv"
-    SOURCE_CLUSTERS_PATH: str = "/Users/cooper/Desktop/CAMELS-CH/clustering_results/cluster_assignments12.csv"
+    CA_GROUPS_PATH: str = "/workspace/CAMELS-CH/classification_results/final_basin_assignments_for_12_clusters.csv"
+    SOURCE_CLUSTERS_PATH: str = "/workspace/CAMELS-CH/clustering_results/cluster_assignments12.csv"
     GROUP_MAPPINGS: Dict[str, Dict] = None  # Will be initialized in __post_init__
 
     # Learning rates with scheduling
@@ -87,8 +87,8 @@ class ExperimentConfig:
 
         # Central Asia configuration
         self.CA_CONFIG = {
-            "ATTRIBUTE_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CA/post_processed/attributes",
-            "TIMESERIES_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CA/post_processed/timeseries/csv",
+            "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/CA/post_processed/attributes",
+            "TIMESERIES_DIR": "/workspace/CARAVANIFY/CA/post_processed/timeseries/csv",
             "GAUGE_ID_PREFIX": "CA",
             "MIN_TRAIN_YEARS": 8,
             "VAL_YEARS": 2,
@@ -98,8 +98,8 @@ class ExperimentConfig:
 
         # Switzerland configuration
         self.CH_CONFIG = {
-            "ATTRIBUTE_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CH/post_processed/attributes",
-            "TIMESERIES_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CH/post_processed/timeseries/csv",
+            "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/CH/post_processed/attributes",
+            "TIMESERIES_DIR": "/workspace/CARAVANIFY/CH/post_processed/timeseries/csv",
             "GAUGE_ID_PREFIX": "CH",
             "MIN_TRAIN_YEARS": 8,
             "VAL_YEARS": 2,
@@ -109,8 +109,8 @@ class ExperimentConfig:
 
         # USA configuration
         self.USA_CONFIG = {
-            "ATTRIBUTE_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/USA/post_processed/attributes",
-            "TIMESERIES_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/USA/post_processed/timeseries/csv",
+            "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/USA/post_processed/attributes",
+            "TIMESERIES_DIR": "/workspace/CARAVANIFY/USA/post_processed/timeseries/csv",
             "GAUGE_ID_PREFIX": "USA",
             "MIN_TRAIN_YEARS": 8,
             "VAL_YEARS": 2,
@@ -120,8 +120,8 @@ class ExperimentConfig:
 
         # Chile configuration
         self.CL_CONFIG = {
-            "ATTRIBUTE_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CL/post_processed/attributes",
-            "TIMESERIES_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CL/post_processed/timeseries/csv",
+            "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/CL/post_processed/attributes",
+            "TIMESERIES_DIR": "/workspace/CARAVANIFY/CL/post_processed/timeseries/csv",
             "GAUGE_ID_PREFIX": "CL",
             "MIN_TRAIN_YEARS": 8,
             "VAL_YEARS": 2,
@@ -356,7 +356,7 @@ class ExperimentConfig:
             )
 
             source_caravan = Caravanify(source_config)
-            source_caravan.load_stations(basins[:10])  # Limit to 10 basins for testing
+            source_caravan.load_stations(basins) 
 
             data["source_ts_data"].append(source_caravan.get_time_series())
             data["source_static_data"].append(source_caravan.get_static_attributes())
