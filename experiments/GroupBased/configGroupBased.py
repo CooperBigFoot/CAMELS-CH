@@ -18,7 +18,7 @@ class ExperimentConfig:
     BATCH_SIZE: int = 1024
     INPUT_LENGTH: int = 40
     OUTPUT_LENGTH: int = 10
-    MAX_EPOCHS: int = 1
+    MAX_EPOCHS: int = 30
     ACCELERATOR: str = "cuda" if torch.cuda.is_available() else "cpu"
     NUM_RUNS: int = 1
     MAX_WORKERS: int = min(6, os.cpu_count())
