@@ -163,25 +163,28 @@ def evaluate_seasonal(model, data_module, output_dir):
             data_module.test_dataset.df_sorted[data_module.group_identifier] == basin_id
         ]
         if not basin_data.empty:
-            # Sort dates and get the test period dates
+            # Get all input window end dates (sorted)
             dates = basin_data["date"].sort_values().values
-            # Ensure we only take the dates we need based on number of predictions
-            basin_count = (results_df["basin_id"] == basin_id).sum() // len(horizons)
-            if basin_count > 0:
-                test_dates = dates[-basin_count:]
-                # Repeat each date for each horizon
-                repeated_dates = np.repeat(test_dates, len(horizons))
-                date_map[basin_id] = repeated_dates
+            input_length = data_module.input_length
+            output_length = data_module.output_length
 
-    # Add dates to results DataFrame
+            # Calculate target dates for each horizon
+            target_dates = []
+            for i in range(len(dates) - input_length + 1):
+                end_date = dates[i + input_length - 1]
+                for h in range(1, output_length + 1):
+                    target_date = end_date + pd.Timedelta(days=h)
+                    target_dates.append(target_date)
+
+            date_map[basin_id] = target_dates
+
+    # Assign target dates to results_df
     results_df["date"] = pd.NaT
     for basin_id, dates in date_map.items():
         mask = results_df["basin_id"] == basin_id
-        # Make sure we don't go out of bounds
-        if len(dates) <= mask.sum():
-            results_df.loc[mask, "date"] = dates
+        results_df.loc[mask, "date"] = dates
 
-    # Filter for growing season
+    # Filter for growing season (April-October)
     seasonal_results = filter_growing_season(results_df)
 
     # Get basin_id and horizon pairs from filtered results
