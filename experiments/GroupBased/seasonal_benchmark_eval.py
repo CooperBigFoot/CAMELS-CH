@@ -5,6 +5,7 @@ import argparse
 import os
 import numpy as np
 import pandas as pd
+from typing import Optional, Dict, List
 
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
@@ -134,13 +135,13 @@ def filter_growing_season(results_df):
     return seasonal_df
 
 
-def evaluate_seasonal(model, data_module, output_dir):
+def evaluate_seasonal(model, data_module, output_dir, group_key=None):
     """Evaluate model and save seasonal basin metrics."""
     # Create test trainer
     trainer = pl.Trainer(accelerator="cpu", devices=1)
 
     # Run test
-    print("Running test for benchmark model...")
+    print("Running test for model...")
     trainer.test(model, data_module)
 
     # Get results
@@ -153,36 +154,64 @@ def evaluate_seasonal(model, data_module, output_dir):
     # Calculate metrics
     results_df, overall_metrics, basin_metrics = evaluator.evaluate(test_results)
 
-    # Add date information to results DataFrame
-    basin_ids = results_df["basin_id"].unique()
-    date_map = {}
-
-    # Extract dates for each basin from the test dataset
-    for basin_id in basin_ids:
-        basin_data = data_module.test_dataset.df_sorted[
-            data_module.test_dataset.df_sorted[data_module.group_identifier] == basin_id
-        ]
-        if not basin_data.empty:
-            # Get all input window end dates (sorted)
-            dates = basin_data["date"].sort_values().values
-            input_length = data_module.input_length
-            output_length = data_module.output_length
-
-            # Calculate target dates for each horizon
-            target_dates = []
-            for i in range(len(dates) - input_length + 1):
-                end_date = dates[i + input_length - 1]
-                for h in range(1, output_length + 1):
-                    target_date = end_date + pd.Timedelta(days=h)
-                    target_dates.append(target_date)
-
-            date_map[basin_id] = target_dates
-
-    # Assign target dates to results_df
-    results_df["date"] = pd.NaT
-    for basin_id, dates in date_map.items():
-        mask = results_df["basin_id"] == basin_id
-        results_df.loc[mask, "date"] = dates
+    # Add date information to results DataFrame using our enhanced dataset
+    # First, check if input_end_date is available in test results
+    if "slice_idx" in test_results and "input_end_date" not in results_df.columns:
+        # We need to extract input end dates from our enhanced dataset
+        basin_ids = results_df["basin_id"].unique()
+        
+        # If dataset has input_end_date in its index, we can use it directly
+        if "input_end_date" in data_module.test_dataset.index.columns:
+            # Create a map from sequence index to input_end_date
+            index_to_date = dict(zip(
+                data_module.test_dataset.index["slice_idx"].to_list(),
+                data_module.test_dataset.index["input_end_date"].to_list()
+            ))
+            
+            # Add input_end_date column to results
+            results_df["input_end_date"] = [
+                index_to_date.get(idx) for idx in test_results["slice_idx"]
+            ]
+            
+            # Calculate forecast dates for each horizon
+            results_df["date"] = pd.NaT
+            for i, row in results_df.iterrows():
+                if pd.notna(row["input_end_date"]):
+                    horizon = row["horizon"]
+                    results_df.at[i, "date"] = row["input_end_date"] + pd.Timedelta(days=horizon)
+        else:
+            # Fallback to current method if enhanced dataset not available
+            date_map = {}
+            
+            # Extract dates for each basin from the test dataset
+            for basin_id in basin_ids:
+                basin_data = data_module.test_dataset.df_sorted[
+                    data_module.test_dataset.df_sorted[data_module.group_identifier] == basin_id
+                ]
+                if not basin_data.empty:
+                    # Get all input window end dates (sorted)
+                    dates = basin_data["date"].sort_values().values
+                    input_length = data_module.input_length
+                    output_length = data_module.output_length
+                    
+                    # Calculate target dates for each horizon
+                    target_dates = []
+                    for i in range(len(dates) - input_length - output_length + 1):
+                        end_date = dates[i + input_length - 1]
+                        for h in range(1, output_length + 1):
+                            target_date = end_date + pd.Timedelta(days=h)
+                            target_dates.append(target_date)
+                    
+                    date_map[basin_id] = target_dates
+            
+            # Assign target dates to results_df
+            results_df["date"] = pd.NaT
+            for basin_id, dates in date_map.items():
+                mask = results_df["basin_id"] == basin_id
+                if sum(mask) <= len(dates):  # Ensure we have enough dates
+                    results_df.loc[mask, "date"] = dates[:sum(mask)]
+                else:
+                    print(f"Warning: Not enough dates for basin {basin_id}")
 
     # Filter for growing season (April-October)
     seasonal_results = filter_growing_season(results_df)
@@ -215,12 +244,15 @@ def evaluate_seasonal(model, data_module, output_dir):
     # Create DataFrame with seasonal metrics
     seasonal_metrics_df = pd.DataFrame(seasonal_basin_metrics)
 
-    # Save results - use same format as regular basin_metrics files
-    seasonal_metrics_df.to_csv(
-        f"{output_dir}/seasonal_basin_metrics_benchmark.csv", index=False
-    )
+    # Save results - determine filename based on input
+    filename = "seasonal_basin_metrics_benchmark.csv"
+    if group_key:
+        filename = f"seasonal_basin_metrics_{group_key}.csv"
 
-    print(f"Saved seasonal benchmark basin metrics to {output_dir}")
+    # Save to CSV
+    seasonal_metrics_df.to_csv(f"{output_dir}/{filename}", index=False)
+
+    print(f"Saved seasonal metrics to {output_dir}/{filename}")
 
     return seasonal_metrics_df
 

@@ -153,6 +153,17 @@ class TSForecastEvaluator:
         preds = self.test_results["predictions"].cpu().numpy()
         obs = self.test_results["observations"].cpu().numpy()
 
+        # Access the forecast dates for the specific horizon (if available)
+        forecast_dates = None
+        slice_indices = None
+        if "slice_idx" in self.test_results:
+            slice_indices = self.test_results["slice_idx"]
+
+        if "forecast_dates" in self.test_results:
+            all_forecast_dates = self.test_results["forecast_dates"]
+            horizon_idx = self.horizons.index(horizon)
+            forecast_dates = [dates[horizon_idx] for dates in all_forecast_dates]
+
         # Find all indices for the requested group_identifier
         mask = np.array([bid == group_identifier for bid in basin_ids])
         if not np.any(mask):
@@ -172,6 +183,12 @@ class TSForecastEvaluator:
         # Extract predictions and observations for this group and horizon
         group_preds = preds[mask, horizon_idx]
         group_obs = obs[mask, horizon_idx]
+
+        # Extract corresponding forecast dates for this group if available
+        if forecast_dates is not None:
+            group_forecast_dates = [forecast_dates[i] for i in group_indices]
+        else:
+            group_forecast_dates = None
 
         if debug:
             print(
@@ -204,67 +221,46 @@ class TSForecastEvaluator:
         if df_sorted is None or df_sorted.empty:
             raise ValueError("Dataset's sorted dataframe is empty or missing.")
 
-        # Generate correct dates for the specified horizon
-        basin_data = df_sorted[
-            df_sorted[datamodule.group_identifier] == group_identifier
-        ]
-        if basin_data.empty:
-            raise ValueError(f"No data found for {group_identifier} in test dataset")
+        # If we don't have forecast dates from the test results, derive them from the test dataset
+        if group_forecast_dates is None:
+            if debug:
+                print(
+                    "Forecast dates not available in test results, deriving from dataset"
+                )
 
-        if debug:
-            print(
-                f"Found {len(basin_data)} rows for basin {group_identifier} in dataset"
-            )
-
-        # Get all dates for this basin and sort them
-        all_dates = basin_data["date"].sort_values().values
-        input_length = datamodule.input_length
-
-        # We need to calculate the target date for each prediction
-        # The target date is input_end_date + horizon days
-
-        # First, find valid input window end indices
-        # (skip the first input_length-1 dates which can't be end of an input window)
-        output_length = datamodule.output_length
-        window_end_indices = range(input_length - 1, len(all_dates) - output_length)
-
-        # Get the end dates for each input window
-        window_end_dates = all_dates[window_end_indices]
-
-        # Calculate target dates for the specific horizon
-        # (horizon is 1-indexed, so we need horizon-1 for 0-indexed array)
-        target_dates = [date + pd.Timedelta(days=horizon) for date in window_end_dates]
-
-        # Use these dates for plotting
-        # Ensure we have the right number of dates to match our predictions
-        if len(target_dates) > len(group_preds):
-            # Use only the dates that match our test period
-            test_dates = target_dates[-len(group_preds) :]
-        elif len(target_dates) < len(group_preds):
-            # This shouldn't happen normally, but let's handle it
-            print(
-                f"Warning: Not enough dates ({len(target_dates)}) for predictions ({len(group_preds)})"
-            )
-            # Extend dates by adding days to the last date
-            last_date = target_dates[-1]
-            additional_dates = [
-                last_date + pd.Timedelta(days=i + 1)
-                for i in range(len(group_preds) - len(target_dates))
+            # Get the forecast dates from the test dataset's index
+            test_index = datamodule.test_dataset.index
+            basin_rows = test_index[
+                test_index[datamodule.group_identifier] == group_identifier
             ]
-            test_dates = target_dates + additional_dates
-        else:
-            test_dates = target_dates
 
-        if debug:
-            print(f"Extracted {len(test_dates)} test dates")
-            print(f"First date: {test_dates[0]}, Last date: {test_dates[-1]}")
+            # Generate target dates for the specific horizon
+            input_end_dates = basin_rows["input_end_date"].values
+            group_forecast_dates = [
+                date + pd.Timedelta(days=horizon) for date in input_end_dates
+            ]
+
+            # Ensure we have the right number of dates
+            if len(group_forecast_dates) > len(group_preds):
+                group_forecast_dates = group_forecast_dates[-len(group_preds) :]
+            elif len(group_forecast_dates) < len(group_preds):
+                print(
+                    f"Warning: Not enough dates ({len(group_forecast_dates)}) for predictions ({len(group_preds)})"
+                )
+                # Extend dates by adding days to the last date
+                last_date = group_forecast_dates[-1]
+                additional_dates = [
+                    last_date + pd.Timedelta(days=i + 1)
+                    for i in range(len(group_preds) - len(group_forecast_dates))
+                ]
+                group_forecast_dates = group_forecast_dates + additional_dates
 
         # Create plot with Seaborn style
         fig, ax = plt.subplots(figsize=fig_size)
 
         # Plot observations as a continuous line
         ax.plot(
-            test_dates,
+            group_forecast_dates,
             group_obs,
             color=color_observed,
             label="Observed",
@@ -274,7 +270,7 @@ class TSForecastEvaluator:
 
         # Plot predictions as a single line
         ax.plot(
-            test_dates,
+            group_forecast_dates,
             group_preds,
             color=color_forecast,
             alpha=alpha_forecast,

@@ -85,6 +85,7 @@ class HydroDataset(Dataset):
         self.features_data: Dict[str, torch.Tensor] = {}
         self.target_data: Dict[str, torch.Tensor] = {}
         self.index_data: Dict[str, np.ndarray] = {}
+        self.dates_data: Dict[str, np.ndarray] = {}  # New: Store dates for each group
 
         for gauge_id, group in self._df_sorted.groupby(self.group_identifier):
             # Convert features and target to tensors
@@ -95,6 +96,8 @@ class HydroDataset(Dataset):
             self.target_data[gauge_id] = targ_tensor
             # Save the original DataFrame indices (which correspond to the sorted order)
             self.index_data[gauge_id] = group.index.to_numpy()
+            # Save the dates for this group
+            self.dates_data[gauge_id] = group["date"].to_numpy()
 
             self.gauge_ids.append(gauge_id)
 
@@ -107,13 +110,17 @@ class HydroDataset(Dataset):
         )
 
     def _build_sequence_index(self) -> None:
-        """Build index of valid sequences, excluding those with NaN values."""
+        """Build index of valid sequences, excluding those with NaN values.
+
+        Also stores date information for each valid sequence to enable proper time alignment.
+        """
         index_list = []
 
         for gauge_id in self.gauge_ids:
             feat_tensor = self.features_data[gauge_id]
             targ_tensor = self.target_data[gauge_id]
             n_steps = feat_tensor.shape[0]
+            dates = self.dates_data[gauge_id]  # Get dates for this gauge
 
             # Find valid sequences
             for start in range(n_steps - self.total_length + 1):
@@ -127,10 +134,15 @@ class HydroDataset(Dataset):
                     not torch.isnan(feat_window).any()
                     and not torch.isnan(targ_window).any()
                 ):
-                    index_list.append((gauge_id, start))
+                    # Calculate input end date (start + input_length - 1)
+                    input_end_idx = start + self.input_length - 1
+                    input_end_date = dates[input_end_idx]
+
+                    # Store gauge_id, start_idx, and input_end_date
+                    index_list.append((gauge_id, start, input_end_date))
 
         self.index = pd.DataFrame(
-            index_list, columns=[self.group_identifier, "start_idx"]
+            index_list, columns=[self.group_identifier, "start_idx", "input_end_date"]
         )
 
     def __len__(self) -> int:
@@ -138,25 +150,11 @@ class HydroDataset(Dataset):
         return len(self.index)
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
-        """Get a single sequence with domain information.
-
-        Args:
-            idx: Index of the sequence to retrieve
-
-        Returns:
-            Dictionary containing:
-                - X: Input features tensor
-                - y: Target tensor
-                - static: Static features tensor
-                - domain_id: Domain identifier (source=0, target=1)
-                - domain_name: String identifier for specific domain
-                - group_identifier: Basin/gauge identifier
-                - slice_idx: Original indices corresponding to the full sequence slice
-        """
         # Get sequence information
         row = self.index.iloc[idx]
         gauge_id = row[self.group_identifier]
         start_idx = int(row["start_idx"])
+        input_end_date = row["input_end_date"]
         end_idx = start_idx + self.total_length
 
         # Extract sequence data
@@ -165,6 +163,15 @@ class HydroDataset(Dataset):
 
         # Retrieve the original DataFrame indices for this sequence
         slice_idx = self.index_data[gauge_id][start_idx:end_idx].tolist()
+
+        # Convert dates to strings for collation
+        input_end_date_str = pd.to_datetime(input_end_date).strftime("%Y-%m-%d")
+
+        # Calculate forecast dates for each horizon step and convert to strings
+        forecast_dates = [
+            (pd.to_datetime(input_end_date) + pd.Timedelta(days=h)).strftime("%Y-%m-%d")
+            for h in range(1, self.output_length + 1)
+        ]
 
         # Get static features or zeros if none available
         static = (
@@ -180,17 +187,17 @@ class HydroDataset(Dataset):
             [1.0 if self.domain_type == "target" else 0.0], dtype=torch.float32
         )
 
-        return_dict = {
+        return {
             "X": X,
             "y": y,
             "static": static,
             "domain_id": domain_tensor,
-            "domain_name": self.domain_id,  # Added specific domain identifier
+            "domain_name": self.domain_id,
             self.group_identifier: gauge_id,
             "slice_idx": slice_idx,
+            "input_end_date": input_end_date_str,  # now a string
+            "forecast_dates": forecast_dates,  # list of strings
         }
-
-        return return_dict
 
     @property
     def df_sorted(self) -> pd.DataFrame:
