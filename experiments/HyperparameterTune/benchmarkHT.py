@@ -54,10 +54,10 @@ class BenchmarkTuner:
     def objective(self, trial: optuna.Trial) -> float:
         """Optuna objective function for hyperparameter optimization."""
         # Suggest hyperparameters
-        input_length = trial.suggest_int("input_length", 30, 120)
+        input_length = trial.suggest_int("input_length", 30, 365)
         hidden_size = trial.suggest_int("hidden_size", 32, 128)
-        num_layers = trial.suggest_int("num_layers", 2, 10)
-        learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-3, log=True)
+        num_layers = trial.suggest_int("num_layers", 2, 15)
+        learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-3, log=True)
         dropout = trial.suggest_float("dropout", 0.0, 0.5)
 
         # Create data module with trial hyperparameters
