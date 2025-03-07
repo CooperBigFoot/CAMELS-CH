@@ -192,8 +192,8 @@ def evaluate_seasonal(model, data_module, output_dir, group_key=None):
 
     for horizon in [1, 5, 10]:
         fig, ax = evaluator.plot_rolling_forecast(
-            results_df,
-            horizon=10,
+            seasonal_results,
+            horizon=horizon,
             group_identifier="CA_15020",
             datamodule=data_module,
             y_label="Streamflow (m³/s)",
