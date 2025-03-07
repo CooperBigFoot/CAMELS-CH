@@ -129,7 +129,9 @@ def filter_growing_season(results_df):
 def evaluate_seasonal(model, data_module, output_dir, group_key=None):
     """Evaluate model and save seasonal basin metrics."""
     # Create test trainer
-    trainer = pl.Trainer(accelerator="cpu", devices=1)
+    accelerator = "cuda" if torch.cuda.is_available() else "cpu"
+
+    trainer = pl.Trainer(accelerator=accelerator, devices=1)
 
     # Run test
     print("Running test for model...")
@@ -149,7 +151,7 @@ def evaluate_seasonal(model, data_module, output_dir, group_key=None):
     if "date" not in results_df.columns:
         # Extract basin IDs and their dates from the dataset
         basin_ids = np.array(test_results["basin_ids"]).flatten()
-        
+
         # Creating a more robust approach to get dates
         # First try to use the dataset.index which contains input_end_date
         try:
@@ -158,35 +160,40 @@ def evaluate_seasonal(model, data_module, output_dir, group_key=None):
             for basin_id in np.unique(basin_ids):
                 # Get dataset index entries for this basin
                 basin_rows = data_module.test_dataset.index[
-                    data_module.test_dataset.index[data_module.group_identifier] == basin_id
+                    data_module.test_dataset.index[data_module.group_identifier]
+                    == basin_id
                 ]
-                
+
                 if not basin_rows.empty:
                     # Get input_end_dates for this basin
-                    input_end_dates = pd.to_datetime(basin_rows["input_end_date"].values)
+                    input_end_dates = pd.to_datetime(
+                        basin_rows["input_end_date"].values
+                    )
                     basin_dates[basin_id] = []
-                    
+
                     # For each input_end_date, calculate dates for all horizons
                     for end_date in input_end_dates:
                         for h in horizons:
                             forecast_date = end_date + pd.Timedelta(days=h)
                             basin_dates[basin_id].append((h, forecast_date))
-            
+
             # Assign dates to results_df
             results_df["date"] = pd.NaT
-            
+
             # Counter to track position in the basin's date list
             basin_counters = {basin_id: 0 for basin_id in basin_dates.keys()}
-            
+
             for i, row in results_df.iterrows():
                 basin_id = row["basin_id"]
                 horizon = row["horizon"]
-                
-                if basin_id in basin_dates and basin_counters[basin_id] < len(basin_dates[basin_id]):
+
+                if basin_id in basin_dates and basin_counters[basin_id] < len(
+                    basin_dates[basin_id]
+                ):
                     # Find the next matching horizon
                     dates_for_basin = basin_dates[basin_id]
                     date_index = basin_counters[basin_id]
-                    
+
                     # Iterate until we find a matching horizon or run out of dates
                     while date_index < len(dates_for_basin):
                         if dates_for_basin[date_index][0] == horizon:
@@ -194,42 +201,43 @@ def evaluate_seasonal(model, data_module, output_dir, group_key=None):
                             basin_counters[basin_id] = date_index + 1
                             break
                         date_index += 1
-                
+
         except Exception as e:
             # If that doesn't work, try an alternative approach
             print(f"Warning: Error using dataset index for dates: {e}")
             print("Falling back to alternative date assignment method")
-            
+
             # Fallback approach: use the dataset's df_sorted to reconstruct dates
             results_df["date"] = pd.NaT
-            
+
             # Extract dates for each basin from the test dataset
             for basin_id in np.unique(basin_ids):
                 basin_data = data_module.test_dataset.df_sorted[
-                    data_module.test_dataset.df_sorted[data_module.group_identifier] == basin_id
+                    data_module.test_dataset.df_sorted[data_module.group_identifier]
+                    == basin_id
                 ]
                 if not basin_data.empty:
                     # Get all dates for this basin (sorted)
                     dates = pd.to_datetime(basin_data["date"].sort_values().values)
-                    
+
                     # Get basin indices in the results
                     basin_indices = np.where(basin_ids == basin_id)[0]
-                    
+
                     # For each horizon, assign dates
                     for h in horizons:
                         horizon_mask = results_df["horizon"] == h
                         basin_horizon_indices = results_df.index[
                             horizon_mask & (results_df["basin_id"] == basin_id)
                         ]
-                        
+
                         if len(basin_horizon_indices) > 0:
                             # Calculate the input length end dates
                             input_length = data_module.input_length
-                            valid_dates = dates[input_length-1:]
-                            
+                            valid_dates = dates[input_length - 1 :]
+
                             # Create forecast dates by adding horizon days
                             forecast_dates = valid_dates + pd.Timedelta(days=h)
-                            
+
                             # Assign forecast dates to this basin/horizon combination
                             for i, idx in enumerate(basin_horizon_indices):
                                 if i < len(forecast_dates):
@@ -281,6 +289,7 @@ def evaluate_seasonal(model, data_module, output_dir, group_key=None):
     print(f"Saved seasonal metrics to {output_dir}/{filename}")
 
     return seasonal_metrics_df
+
 
 def main():
     args = parse_arguments()
