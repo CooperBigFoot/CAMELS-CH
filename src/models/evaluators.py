@@ -204,7 +204,7 @@ class TSForecastEvaluator:
         if df_sorted is None or df_sorted.empty:
             raise ValueError("Dataset's sorted dataframe is empty or missing.")
 
-        # Generate dates for the test period
+        # Generate correct dates for the specified horizon
         basin_data = df_sorted[
             df_sorted[datamodule.group_identifier] == group_identifier
         ]
@@ -217,11 +217,43 @@ class TSForecastEvaluator:
             )
 
         # Get all dates for this basin and sort them
-        all_dates = basin_data["date"].sort_values().reset_index(drop=True)
+        all_dates = basin_data["date"].sort_values().values
+        input_length = datamodule.input_length
 
-        # We need to determine which dates correspond to our test predictions
-        # Since the test set is typically at the end, we'll use the last N dates
-        test_dates = all_dates.tail(len(group_preds)).values
+        # We need to calculate the target date for each prediction
+        # The target date is input_end_date + horizon days
+
+        # First, find valid input window end indices
+        # (skip the first input_length-1 dates which can't be end of an input window)
+        output_length = datamodule.output_length
+        window_end_indices = range(input_length - 1, len(all_dates) - output_length)
+
+        # Get the end dates for each input window
+        window_end_dates = all_dates[window_end_indices]
+
+        # Calculate target dates for the specific horizon
+        # (horizon is 1-indexed, so we need horizon-1 for 0-indexed array)
+        target_dates = [date + pd.Timedelta(days=horizon) for date in window_end_dates]
+
+        # Use these dates for plotting
+        # Ensure we have the right number of dates to match our predictions
+        if len(target_dates) > len(group_preds):
+            # Use only the dates that match our test period
+            test_dates = target_dates[-len(group_preds) :]
+        elif len(target_dates) < len(group_preds):
+            # This shouldn't happen normally, but let's handle it
+            print(
+                f"Warning: Not enough dates ({len(target_dates)}) for predictions ({len(group_preds)})"
+            )
+            # Extend dates by adding days to the last date
+            last_date = target_dates[-1]
+            additional_dates = [
+                last_date + pd.Timedelta(days=i + 1)
+                for i in range(len(group_preds) - len(target_dates))
+            ]
+            test_dates = target_dates + additional_dates
+        else:
+            test_dates = target_dates
 
         if debug:
             print(f"Extracted {len(test_dates)} test dates")
@@ -230,7 +262,7 @@ class TSForecastEvaluator:
         # Create plot with Seaborn style
         fig, ax = plt.subplots(figsize=fig_size)
 
-        # Plot all observations as a continuous line
+        # Plot observations as a continuous line
         ax.plot(
             test_dates,
             group_obs,
@@ -246,7 +278,7 @@ class TSForecastEvaluator:
             group_preds,
             color=color_forecast,
             alpha=alpha_forecast,
-            label="Forecast",
+            label=f"{horizon}-Day Forecast",
             linestyle=line_style_forecast,
             linewidth=line_width_forecast,
             zorder=15,
