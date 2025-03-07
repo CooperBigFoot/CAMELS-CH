@@ -138,7 +138,7 @@ def filter_growing_season(results_df):
 def evaluate_seasonal(model, data_module, output_dir, group_key=None):
     """Evaluate model and save seasonal basin metrics."""
     # Create test trainer
-    trainer = pl.Trainer(accelerator="cpu", devices=1)
+    trainer = pl.Trainer(accelerator="cuda", devices=1)
 
     # Run test
     print("Running test for model...")
