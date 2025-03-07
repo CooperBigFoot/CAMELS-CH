@@ -84,6 +84,7 @@ class TSForecastEvaluator:
 
         pred = data["prediction"].values
         obs = data["observed"].values
+
         return {
             "MSE": self.calculate_mse(pred, obs),
             "MAE": self.calculate_mae(pred, obs),
@@ -118,6 +119,7 @@ class TSForecastEvaluator:
 
     def plot_rolling_forecast(
         self,
+        df: pd.DataFrame,
         horizon: int,
         group_identifier: str,
         datamodule,
@@ -138,9 +140,6 @@ class TSForecastEvaluator:
             raise ValueError(
                 f"Horizon {horizon} not in available horizons: {self.horizons}"
             )
-
-        # Use the evaluation dataframe that now has dates
-        df, _, _ = self.evaluate(self.test_results)
 
         # Filter for the specific basin and horizon
         basin_df = df[(df["basin_id"] == group_identifier) & (df["horizon"] == horizon)]

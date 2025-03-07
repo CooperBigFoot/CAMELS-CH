@@ -190,6 +190,28 @@ def evaluate_seasonal(model, data_module, output_dir, group_key=None):
 
     print(f"Saved seasonal metrics to {output_dir}/{filename}")
 
+    for horizon in [1, 5, 10]:
+        fig, ax = evaluator.plot_rolling_forecast(
+            results_df,
+            horizon=10,
+            group_identifier="CA_15020",
+            datamodule=data_module,
+            y_label="Streamflow (m³/s)",
+            debug=True,
+            line_style_forecast="-",
+        )
+
+        fig.savefig(
+            os.path.join(
+                output_dir, f"rolling_forecast_horizon_{horizon}_{group_key}.png"
+            ),
+            bbox_inches="tight",
+        )
+
+        print(
+            f"Saved rolling forecast plot for horizon {horizon} to {output_dir}/rolling_forecast_horizon_{horizon}_{group_key}.png"
+        )
+
     return seasonal_metrics_df
 
 
