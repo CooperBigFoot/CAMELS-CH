@@ -22,11 +22,21 @@ class TSForecastEvaluator:
         basin_ids = np.array(test_results["basin_ids"]).flatten()
         preds = test_results["predictions"].cpu().numpy()
         obs = test_results["observations"].cpu().numpy()
+        input_end_dates = test_results["input_end_date"]
 
-        # Expand basin IDs for each horizon
+        # Expand basin IDs and calculate dates for each horizon
         basin_ids_expanded = np.repeat(basin_ids, preds.shape[1])
         preds_flat = preds.flatten()
         obs_flat = obs.flatten()
+
+        # Create expanded dates for each horizon
+        dates_expanded = []
+        for i, input_date in enumerate(input_end_dates):
+            input_date_dt = pd.to_datetime(input_date)
+            for horizon in self.horizons:
+                # Calculate forecast date by adding horizon days to input end date
+                forecast_date = input_date_dt + pd.Timedelta(days=horizon)
+                dates_expanded.append(forecast_date)
 
         # Inverse transformations
         if hasattr(self.datamodule, "inverse_transform_predictions"):
@@ -45,6 +55,7 @@ class TSForecastEvaluator:
                 "prediction": preds_flat,
                 "observed": obs_flat,
                 "basin_id": basin_ids_expanded,
+                "date": dates_expanded,
             }
         )
 
@@ -121,157 +132,50 @@ class TSForecastEvaluator:
         line_width_forecast: float = 2.0,
         debug: bool = False,
     ) -> tuple:
-        """Create a rolling forecast plot for a specific basin and horizon.
-
-        Args:
-            horizon: Forecast horizon in days
-            group_identifier: Identifier for the group (e.g., basin ID)
-            datamodule: Data module containing the dataset and inverse transformation methods
-            fig_size: Size of the figure
-            title: Title of the plot
-            date_format: Date format for x-axis
-            y_label: Y-axis label
-            color_observed: Color for observed data
-            color_forecast: Color for forecast data
-            alpha_forecast: Alpha transparency for forecast line
-            line_style_forecast: Line style for forecast line
-            line_width_forecast: Line width for forecast line
-            debug: If True, print debug information
-
-        Returns:
-            Tuple of figure and axis objects
-        """
-
+        """Create a rolling forecast plot for a specific basin and horizon."""
         # Validate horizon
         if horizon not in self.horizons:
             raise ValueError(
                 f"Horizon {horizon} not in available horizons: {self.horizons}"
             )
 
-        # Extract test results data
-        basin_ids = np.array(self.test_results["basin_ids"]).flatten()
-        preds = self.test_results["predictions"].cpu().numpy()
-        obs = self.test_results["observations"].cpu().numpy()
+        # Use the evaluation dataframe that now has dates
+        df, _, _ = self.evaluate(self.test_results)
 
-        # Access the forecast dates for the specific horizon (if available)
-        forecast_dates = None
-        slice_indices = None
-        if "slice_idx" in self.test_results:
-            slice_indices = self.test_results["slice_idx"]
+        # Filter for the specific basin and horizon
+        basin_df = df[(df["basin_id"] == group_identifier) & (df["horizon"] == horizon)]
 
-        if "forecast_dates" in self.test_results:
-            all_forecast_dates = self.test_results["forecast_dates"]
-            horizon_idx = self.horizons.index(horizon)
-            forecast_dates = [dates[horizon_idx] for dates in all_forecast_dates]
-
-        # Find all indices for the requested group_identifier
-        mask = np.array([bid == group_identifier for bid in basin_ids])
-        if not np.any(mask):
-            available_ids = np.unique(basin_ids)
+        if basin_df.empty:
+            available_ids = df["basin_id"].unique()
             raise ValueError(
                 f"Group identifier '{group_identifier}' not found in test results. Available IDs: {available_ids}"
             )
 
         if debug:
-            print(f"Found {np.sum(mask)} matches for {group_identifier}")
-
-        group_indices = np.where(mask)[0]
-
-        # Get horizon-specific data
-        horizon_idx = self.horizons.index(horizon)
-
-        # Extract predictions and observations for this group and horizon
-        group_preds = preds[mask, horizon_idx]
-        group_obs = obs[mask, horizon_idx]
-
-        # Extract corresponding forecast dates for this group if available
-        if forecast_dates is not None:
-            group_forecast_dates = [forecast_dates[i] for i in group_indices]
-        else:
-            group_forecast_dates = None
-
-        if debug:
+            print(f"Found {len(basin_df)} data points for {group_identifier}")
             print(
-                f"Extracted {len(group_preds)} predictions and {len(group_obs)} observations"
+                f"Predictions range: [{basin_df['prediction'].min()}, {basin_df['prediction'].max()}]"
             )
-            print(f"Predictions range: [{np.min(group_preds)}, {np.max(group_preds)}]")
-            print(f"Observations range: [{np.min(group_obs)}, {np.max(group_obs)}]")
-
-        # Apply inverse transformation
-        basin_ids_expanded = np.repeat([group_identifier], len(group_preds))
-        group_preds = datamodule.inverse_transform_predictions(
-            group_preds, basin_ids_expanded
-        )
-        group_obs = datamodule.inverse_transform_predictions(
-            group_obs, basin_ids_expanded
-        )
-
-        if debug:
-            print(f"After inverse transform:")
-            print(f"Predictions range: [{np.min(group_preds)}, {np.max(group_preds)}]")
-            print(f"Observations range: [{np.min(group_obs)}, {np.max(group_obs)}]")
-
-        # Get the dataset's sorted dataframe
-        if not hasattr(datamodule, "test_dataset") or datamodule.test_dataset is None:
-            raise ValueError(
-                "Datamodule missing test_dataset. Ensure the datamodule has been properly set up."
+            print(
+                f"Observations range: [{basin_df['observed'].min()}, {basin_df['observed'].max()}]"
             )
-
-        df_sorted = datamodule.test_dataset.df_sorted
-        if df_sorted is None or df_sorted.empty:
-            raise ValueError("Dataset's sorted dataframe is empty or missing.")
-
-        # If we don't have forecast dates from the test results, derive them from the test dataset
-        if group_forecast_dates is None:
-            if debug:
-                print(
-                    "Forecast dates not available in test results, deriving from dataset"
-                )
-
-            # Get the forecast dates from the test dataset's index
-            test_index = datamodule.test_dataset.index
-            basin_rows = test_index[
-                test_index[datamodule.group_identifier] == group_identifier
-            ]
-
-            # Generate target dates for the specific horizon
-            input_end_dates = basin_rows["input_end_date"].values
-            group_forecast_dates = [
-                date + pd.Timedelta(days=horizon) for date in input_end_dates
-            ]
-
-            # Ensure we have the right number of dates
-            if len(group_forecast_dates) > len(group_preds):
-                group_forecast_dates = group_forecast_dates[-len(group_preds) :]
-            elif len(group_forecast_dates) < len(group_preds):
-                print(
-                    f"Warning: Not enough dates ({len(group_forecast_dates)}) for predictions ({len(group_preds)})"
-                )
-                # Extend dates by adding days to the last date
-                last_date = group_forecast_dates[-1]
-                additional_dates = [
-                    last_date + pd.Timedelta(days=i + 1)
-                    for i in range(len(group_preds) - len(group_forecast_dates))
-                ]
-                group_forecast_dates = group_forecast_dates + additional_dates
 
         # Create plot with Seaborn style
         fig, ax = plt.subplots(figsize=fig_size)
 
-        # Plot observations as a continuous line
+        # Plot observations and predictions
         ax.plot(
-            group_forecast_dates,
-            group_obs,
+            basin_df["date"],
+            basin_df["observed"],
             color=color_observed,
             label="Observed",
             linewidth=2,
             zorder=10,
         )
 
-        # Plot predictions as a single line
         ax.plot(
-            group_forecast_dates,
-            group_preds,
+            basin_df["date"],
+            basin_df["prediction"],
             color=color_forecast,
             alpha=alpha_forecast,
             label=f"{horizon}-Day Forecast",
@@ -291,17 +195,11 @@ class TSForecastEvaluator:
         # Format x-axis
         ax.xaxis.set_major_formatter(mdates.DateFormatter(date_format))
 
-        # Add legend with distinctive appearance
+        # Add legend and formatting
         ax.legend(loc="upper right", frameon=True, framealpha=0.9, fontsize=10)
         ax.grid(True, linestyle="--", alpha=0.7)
-
-        # Clean up the plot
         sns.despine()
-
-        # Format y-axis to avoid scientific notation
         ax.yaxis.set_major_locator(MaxNLocator(nbins=6, integer=False))
-
-        # Tight layout for better appearance
         fig.tight_layout()
 
         return fig, ax

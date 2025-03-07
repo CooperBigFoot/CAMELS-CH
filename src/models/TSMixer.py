@@ -364,7 +364,6 @@ class LitTSMixer(pl.LightningModule):
             "observations": y.squeeze(-1),
             "basin_ids": batch[self.config.group_identifier],
             "input_end_date": batch["input_end_date"],
-            "forecast_dates": batch["forecast_dates"],
             "slice_idx": batch["slice_idx"],
         }
 
@@ -386,9 +385,6 @@ class LitTSMixer(pl.LightningModule):
             "basin_ids": [bid for x in self.test_outputs for bid in x["basin_ids"]],
             "input_end_date": [
                 date for x in self.test_outputs for date in x["input_end_date"]
-            ],
-            "forecast_dates": [
-                date for x in self.test_outputs for date in x["forecast_dates"]
             ],
             "slice_idx": [idx for x in self.test_outputs for idx in x["slice_idx"]],
         }

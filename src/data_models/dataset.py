@@ -164,15 +164,6 @@ class HydroDataset(Dataset):
         # Retrieve the original DataFrame indices for this sequence
         slice_idx = self.index_data[gauge_id][start_idx:end_idx].tolist()
 
-        # Convert dates to strings for collation
-        input_end_date_str = pd.to_datetime(input_end_date).strftime("%Y-%m-%d")
-
-        # Calculate forecast dates for each horizon step and convert to strings
-        forecast_dates = [
-            (pd.to_datetime(input_end_date) + pd.Timedelta(days=h)).strftime("%Y-%m-%d")
-            for h in range(1, self.output_length + 1)
-        ]
-
         # Get static features or zeros if none available
         static = (
             self.static_dict.get(
@@ -182,7 +173,7 @@ class HydroDataset(Dataset):
             else torch.zeros(0, dtype=torch.float32)
         )
 
-        # Build return dictionary - use domain_type for binary domain encoding
+        # Build return dictionary with no forecast_dates
         domain_tensor = torch.tensor(
             [1.0 if self.domain_type == "target" else 0.0], dtype=torch.float32
         )
@@ -195,8 +186,7 @@ class HydroDataset(Dataset):
             "domain_name": self.domain_id,
             self.group_identifier: gauge_id,
             "slice_idx": slice_idx,
-            "input_end_date": input_end_date_str,  # now a string
-            "forecast_dates": forecast_dates,  # list of strings
+            "input_end_date": str(input_end_date),
         }
 
     @property
