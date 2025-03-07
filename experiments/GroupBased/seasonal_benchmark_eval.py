@@ -154,67 +154,102 @@ def evaluate_seasonal(model, data_module, output_dir, group_key=None):
     # Calculate metrics
     results_df, overall_metrics, basin_metrics = evaluator.evaluate(test_results)
 
-    # Add date information to results DataFrame using our enhanced dataset
-    # First, check if input_end_date is available in test results
-    if "slice_idx" in test_results and "input_end_date" not in results_df.columns:
-        # We need to extract input end dates from our enhanced dataset
-        basin_ids = results_df["basin_id"].unique()
+    # Add date information to results DataFrame using dataset information
+    if "date" not in results_df.columns:
+        # Extract basin IDs and their dates from the dataset
+        basin_ids = np.array(test_results["basin_ids"]).flatten()
         
-        # If dataset has input_end_date in its index, we can use it directly
-        if "input_end_date" in data_module.test_dataset.index.columns:
-            # Create a map from sequence index to input_end_date
-            index_to_date = dict(zip(
-                data_module.test_dataset.index["slice_idx"].to_list(),
-                data_module.test_dataset.index["input_end_date"].to_list()
-            ))
+        # Creating a more robust approach to get dates
+        # First try to use the dataset.index which contains input_end_date
+        try:
+            # Get all basin dates from the dataset
+            basin_dates = {}
+            for basin_id in np.unique(basin_ids):
+                # Get dataset index entries for this basin
+                basin_rows = data_module.test_dataset.index[
+                    data_module.test_dataset.index[data_module.group_identifier] == basin_id
+                ]
+                
+                if not basin_rows.empty:
+                    # Get input_end_dates for this basin
+                    input_end_dates = pd.to_datetime(basin_rows["input_end_date"].values)
+                    basin_dates[basin_id] = []
+                    
+                    # For each input_end_date, calculate dates for all horizons
+                    for end_date in input_end_dates:
+                        for h in horizons:
+                            forecast_date = end_date + pd.Timedelta(days=h)
+                            basin_dates[basin_id].append((h, forecast_date))
             
-            # Add input_end_date column to results
-            results_df["input_end_date"] = [
-                index_to_date.get(idx) for idx in test_results["slice_idx"]
-            ]
-            
-            # Calculate forecast dates for each horizon
+            # Assign dates to results_df
             results_df["date"] = pd.NaT
+            
+            # Counter to track position in the basin's date list
+            basin_counters = {basin_id: 0 for basin_id in basin_dates.keys()}
+            
             for i, row in results_df.iterrows():
-                if pd.notna(row["input_end_date"]):
-                    horizon = row["horizon"]
-                    results_df.at[i, "date"] = row["input_end_date"] + pd.Timedelta(days=horizon)
-        else:
-            # Fallback to current method if enhanced dataset not available
-            date_map = {}
+                basin_id = row["basin_id"]
+                horizon = row["horizon"]
+                
+                if basin_id in basin_dates and basin_counters[basin_id] < len(basin_dates[basin_id]):
+                    # Find the next matching horizon
+                    dates_for_basin = basin_dates[basin_id]
+                    date_index = basin_counters[basin_id]
+                    
+                    # Iterate until we find a matching horizon or run out of dates
+                    while date_index < len(dates_for_basin):
+                        if dates_for_basin[date_index][0] == horizon:
+                            results_df.at[i, "date"] = dates_for_basin[date_index][1]
+                            basin_counters[basin_id] = date_index + 1
+                            break
+                        date_index += 1
+                
+        except Exception as e:
+            # If that doesn't work, try an alternative approach
+            print(f"Warning: Error using dataset index for dates: {e}")
+            print("Falling back to alternative date assignment method")
+            
+            # Fallback approach: use the dataset's df_sorted to reconstruct dates
+            results_df["date"] = pd.NaT
             
             # Extract dates for each basin from the test dataset
-            for basin_id in basin_ids:
+            for basin_id in np.unique(basin_ids):
                 basin_data = data_module.test_dataset.df_sorted[
                     data_module.test_dataset.df_sorted[data_module.group_identifier] == basin_id
                 ]
                 if not basin_data.empty:
-                    # Get all input window end dates (sorted)
-                    dates = basin_data["date"].sort_values().values
-                    input_length = data_module.input_length
-                    output_length = data_module.output_length
+                    # Get all dates for this basin (sorted)
+                    dates = pd.to_datetime(basin_data["date"].sort_values().values)
                     
-                    # Calculate target dates for each horizon
-                    target_dates = []
-                    for i in range(len(dates) - input_length - output_length + 1):
-                        end_date = dates[i + input_length - 1]
-                        for h in range(1, output_length + 1):
-                            target_date = end_date + pd.Timedelta(days=h)
-                            target_dates.append(target_date)
+                    # Get basin indices in the results
+                    basin_indices = np.where(basin_ids == basin_id)[0]
                     
-                    date_map[basin_id] = target_dates
-            
-            # Assign target dates to results_df
-            results_df["date"] = pd.NaT
-            for basin_id, dates in date_map.items():
-                mask = results_df["basin_id"] == basin_id
-                if sum(mask) <= len(dates):  # Ensure we have enough dates
-                    results_df.loc[mask, "date"] = dates[:sum(mask)]
-                else:
-                    print(f"Warning: Not enough dates for basin {basin_id}")
+                    # For each horizon, assign dates
+                    for h in horizons:
+                        horizon_mask = results_df["horizon"] == h
+                        basin_horizon_indices = results_df.index[
+                            horizon_mask & (results_df["basin_id"] == basin_id)
+                        ]
+                        
+                        if len(basin_horizon_indices) > 0:
+                            # Calculate the input length end dates
+                            input_length = data_module.input_length
+                            valid_dates = dates[input_length-1:]
+                            
+                            # Create forecast dates by adding horizon days
+                            forecast_dates = valid_dates + pd.Timedelta(days=h)
+                            
+                            # Assign forecast dates to this basin/horizon combination
+                            for i, idx in enumerate(basin_horizon_indices):
+                                if i < len(forecast_dates):
+                                    results_df.at[idx, "date"] = forecast_dates[i]
 
     # Filter for growing season (April-October)
-    seasonal_results = filter_growing_season(results_df)
+    if results_df["date"].isna().all():
+        print("Warning: No valid dates found, skipping seasonal filtering")
+        seasonal_results = results_df
+    else:
+        seasonal_results = filter_growing_season(results_df)
 
     # Get basin_id and horizon pairs from filtered results
     basin_horizon_pairs = seasonal_results[["basin_id", "horizon"]].drop_duplicates()
