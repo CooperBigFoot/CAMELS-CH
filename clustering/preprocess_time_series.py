@@ -8,6 +8,7 @@ import seaborn as sns
 
 def prepare_timeseries_data(
     df: pd.DataFrame,
+    hemisphere_map: dict,
     basin_id_col: str = "gauge_id",
     date_col: str = "date",
     flow_col: str = "streamflow",
@@ -15,29 +16,47 @@ def prepare_timeseries_data(
 ) -> Tuple[np.ndarray, List[str]]:
     """
     Prepare time series data for clustering by aggregating to weekly data and standardizing.
+    Adjusts water year calculation based on hemisphere: for southern hemisphere (e.g., Chile),
+    the water year runs from April to March, while for northern it runs from October to September.
 
     Args:
-        df: DataFrame with daily streamflow data
-        basin_id_col: Column name for basin ID
-        date_col: Column name for date
-        flow_col: Column name for streamflow
-        standardize: Whether to apply z-score standardization
+        df: DataFrame with daily streamflow data.
+        hemisphere_map: Dictionary mapping gauge_id prefixes (string before '_')
+                        to hemisphere strings ('southern' or 'northern').
+        basin_id_col: Column name for basin ID.
+        date_col: Column name for date.
+        flow_col: Column name for streamflow.
+        standardize: Whether to apply z-score standardization.
 
     Returns:
         Tuple containing:
         - Array of (standardized) weekly time series (shape: n_basins x 52)
-        - List of basin IDs corresponding to the time series
+        - List of basin IDs corresponding to the time series.
     """
     # Convert date column to datetime if needed
     if not pd.api.types.is_datetime64_any_dtype(df[date_col]):
         df[date_col] = pd.to_datetime(df[date_col])
 
-    # Add water year
-    df["water_year"] = df[date_col].dt.year.where(
-        df[date_col].dt.month < 10, df[date_col].dt.year + 1
+    # Extract gauge prefix from basin id and determine hemisphere, defaulting to 'northern'
+    df["prefix"] = df[basin_id_col].str.split("_").str[0]
+    df["hemisphere"] = df["prefix"].map(hemisphere_map).fillna("northern")
+
+    month = df[date_col].dt.month
+    year = df[date_col].dt.year
+
+    # For southern hemisphere: water year starts on April 1
+    # -> if month >= 4, water year is the current year, otherwise previous year.
+    southern_wy = np.where(month >= 4, year, year - 1)
+
+    # For northern hemisphere (using original logic): water year = current year if month < 10, else next year.
+    northern_wy = np.where(month < 10, year, year + 1)
+
+    # Assign water_year based on hemisphere
+    df["water_year"] = np.where(
+        df["hemisphere"] == "southern", southern_wy, northern_wy
     )
 
-    # Add week of water year (1-52)
+    # Add week of water year (1-52) by computing days from start of water year
     df["day_of_water_year"] = df.groupby([basin_id_col, "water_year"])[
         date_col
     ].transform(lambda x: (x - x.min()).dt.days)
@@ -61,7 +80,6 @@ def prepare_timeseries_data(
     for week in range(1, 53):
         if week not in wide_df.columns:
             wide_df[week] = np.nan
-
     wide_df = wide_df.reindex(columns=range(1, 53))
 
     basin_ids = wide_df.index.tolist()

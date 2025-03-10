@@ -1,10 +1,11 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Union, List, Dict
+from typing import Union, List, Dict, Optional
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 
 # TODO: Improve docstrings and type hints
+
 
 @dataclass
 class CaravanifyConfig:
@@ -13,6 +14,7 @@ class CaravanifyConfig:
     attributes_dir: Union[str, Path]
     timeseries_dir: Union[str, Path]
     gauge_id_prefix: str
+    shapefile_dir: Optional[Union[str, Path]] = None
     use_caravan_attributes: bool = True
     use_hydroatlas_attributes: bool = False
     use_other_attributes: bool = False
@@ -20,6 +22,8 @@ class CaravanifyConfig:
     def __post_init__(self):
         self.attributes_dir = Path(self.attributes_dir)
         self.timeseries_dir = Path(self.timeseries_dir)
+        if self.shapefile_dir:
+            self.shapefile_dir = Path(self.shapefile_dir)
 
 
 class Caravanify:
@@ -138,3 +142,20 @@ class Caravanify:
     def get_static_attributes(self) -> pd.DataFrame:
         """Return merged static attributes."""
         return self.static_attributes.copy()
+
+    def get_shapefiles(self) -> pd.DataFrame:
+        """Load and return shapefile data."""
+        # Construct the full path to the shapefile
+        shapefile_path = (
+            self.config.shapefile_dir /
+            self.config.gauge_id_prefix /
+            f"{self.config.gauge_id_prefix}_basin_shapes.shp"
+        )
+        if not shapefile_path.exists():
+            raise FileNotFoundError(f"Shapefile {shapefile_path} not found")
+
+        # Use geopandas to read the shapefile
+        import geopandas as gpd
+        gdf = gpd.read_file(shapefile_path)
+        return gdf
+

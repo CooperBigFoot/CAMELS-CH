@@ -36,13 +36,14 @@ class ClusteringConfig:
 
     # Output paths
     output_dir: str = "./clustering_results"
-    elbow_plot_filename: str = "elbow_plot.png"
-    cluster_plot_filename: str = "cluster_plot.png"
-    results_csv_filename: str = "cluster_assignments.csv"
+    elbow_plot_filename: str = "elbow_plot_shifted.png"
+    cluster_plot_filename: str = "cluster_plot_shifted.png"
+    results_csv_filename: str = "cluster_assignments_shifted.csv"
 
     # Optimization method
     optimization_method: str = "elbow"  # 'elbow' or 'silhouette'
 
+    hemisphere_map: dict = None
 
 def load_country_data(country: str, config: ClusteringConfig) -> pd.DataFrame:
     """
@@ -120,6 +121,12 @@ def main(config: ClusteringConfig):
     # Combine cleaned daily data
     combined_daily = pd.concat(all_cleaned_daily, ignore_index=True)
 
+    hemisphere_map = {
+        "CL": "southern",
+        "USA": "northern",
+        "CH": "northern",
+    }
+
     # Generate weekly mean annual cycles for clustering
     ts_data_standardized, basin_ids = prepare_timeseries_data(
         df=combined_daily,
@@ -127,6 +134,7 @@ def main(config: ClusteringConfig):
         date_col="date",
         flow_col="streamflow",
         standardize=True,
+        hemisphere_map=hemisphere_map,
     )
 
     # Proceed with clustering
