@@ -108,6 +108,7 @@ def main(config: ClusteringConfig):
     # Create full paths for output files
     cluster_plot_path = output_dir / config.cluster_plot_filename
     results_csv_path = output_dir / config.results_csv_filename
+    elbow_plot_path = output_dir / config.elbow_plot_filename
 
     # Load data from all countries
     all_cleaned_daily = []
@@ -147,28 +148,28 @@ def main(config: ClusteringConfig):
         warping_window=config.warping_window,
     )
 
-    # # Optimize clusters
-    # print(
-    #     f"Optimizing number of clusters from {config.min_clusters} to {config.max_clusters}..."
-    # )
-    # clusterer.optimize_clusters(
-    #     ts_data_standardized, config.min_clusters, config.max_clusters
-    # )
+    # Optimize clusters
+    print(
+        f"Optimizing number of clusters from {config.min_clusters} to {config.max_clusters}..."
+    )
+    clusterer.optimize_clusters(
+        ts_data_standardized, config.min_clusters, config.max_clusters
+    )
 
-    # # Plot and save optimization results
-    # plt.figure(figsize=(15, 7))
-    # clusterer.plot_cluster_optimization(save_path=elbow_plot_path)
-    # plt.close()
-    # print(f"Saved optimization plot to {elbow_plot_path}")
+    # Plot and save optimization results
+    plt.figure(figsize=(15, 7))
+    clusterer.plot_cluster_optimization(save_path=elbow_plot_path)
+    plt.close()
+    print(f"Saved optimization plot to {elbow_plot_path}")
 
     # Get recommended number of clusters
-    # optimal_clusters = clusterer.recommend_clusters(method=config.optimization_method)
-    # print(f"Recommended number of clusters: {optimal_clusters}")
+    optimal_clusters = clusterer.recommend_clusters(method=config.optimization_method)
+    print(f"Recommended number of clusters: {optimal_clusters}")
 
     # Fit with recommended clusters
-    print(f"Fitting clusterer with {13} clusters...")
+    print(f"Fitting clusterer with {optimal_clusters} clusters...")
     clusterer = TimeSeriesClusterer(
-        n_clusters=13,
+        n_clusters=optimal_clusters,
         max_iter=config.max_iter,
         n_jobs=config.n_jobs,
         warping_window=config.warping_window,
@@ -202,7 +203,7 @@ if __name__ == "__main__":
         attributes_base_dir="/workspace/CARAVANIFY",
         timeseries_base_dir="/workspace/CARAVANIFY",
         output_dir="./clustering_results",
-        min_clusters=4,
+        min_clusters=10,
         max_clusters=20,
         max_iter=75,
         n_jobs=-1,
