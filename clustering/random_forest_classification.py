@@ -654,10 +654,10 @@ def main(config: ClassificationConfig) -> None:
 if __name__ == "__main__":
     # Define configuration
     config = ClassificationConfig(
-        attributes_base_dir="/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY",
-        timeseries_base_dir="/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY",
+        attributes_base_dir="/workspace/CARAVANIFY",
+        timeseries_base_dir="/workspace/CARAVANIFY",
         output_dir="./classification_results",
-        cluster_assignment_path="/Users/cooper/Desktop/CAMELS-CH/clustering_results/cluster_assignments13.csv",
+        cluster_assignment_path="/workspace/CAMELS-CH/clustering_results/cluster_assignments13.csv",
         source_countries=["CH", "CL", "USA"],
         target_country="CA",
         n_clusters=13,
