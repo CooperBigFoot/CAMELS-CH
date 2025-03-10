@@ -29,8 +29,8 @@ class CaravanifyConfig:
 class Caravanify:
     def __init__(self, config: CaravanifyConfig):
         self.config = config
-        self.time_series: Dict[str, pd.DataFrame] = {}  # {gauge_id: DataFrame}
-        self.static_attributes = pd.DataFrame()  # Combined static attributes
+        self._time_series: Dict[str, pd.DataFrame] = {}  # {gauge_id: DataFrame}
+        self._static_attributes = pd.DataFrame()  # Combined static attributes
 
     def get_all_gauge_ids(self) -> List[str]:
         """Get all gauge IDs from the timeseries directory."""
@@ -77,7 +77,7 @@ class Caravanify:
             dfs = list(executor.map(read_single, file_paths))
 
         for df in dfs:
-            self.time_series[df["gauge_id"].iloc[0]] = df
+            self._time_series[df["gauge_id"].iloc[0]] = df
 
     def _load_static_attributes(self, gauge_ids: List[str]) -> None:
         """Load and merge static attributes using efficient concatenation."""
@@ -120,7 +120,7 @@ class Caravanify:
 
         # Concatenate all DataFrames horizontally
         if dfs:
-            self.static_attributes = pd.concat(dfs, axis=1, join="outer").reset_index()
+            self._static_attributes = pd.concat(dfs, axis=1, join="outer").reset_index()
 
     def _validate_gauge_ids(self, gauge_ids: List[str]) -> None:
         """Ensure all gauge IDs start with the configured prefix."""
@@ -131,9 +131,9 @@ class Caravanify:
 
     def get_time_series(self) -> pd.DataFrame:
         """Return concatenated time series data."""
-        if not self.time_series:
+        if not self._time_series:
             return pd.DataFrame()
-        df = pd.concat(self.time_series.values(), ignore_index=True)
+        df = pd.concat(self._time_series.values(), ignore_index=True)
         return df[
             ["gauge_id", "date"]
             + [c for c in df.columns if c not in ("gauge_id", "date")]
@@ -141,7 +141,7 @@ class Caravanify:
 
     def get_static_attributes(self) -> pd.DataFrame:
         """Return merged static attributes."""
-        return self.static_attributes.copy()
+        return self._static_attributes.copy()
 
     def get_shapefiles(self) -> pd.DataFrame:
         """Load and return shapefile data."""
