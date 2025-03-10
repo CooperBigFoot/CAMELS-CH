@@ -132,14 +132,14 @@ class ExperimentConfig:
         # Define group mappings
         self.GROUP_MAPPINGS = {
             "group1": {
-                "name": "Group 1 [0, 3]",
-                "clusters": [0, 3],
-                "ca_group_label": "Group 1 [0, 3]",
+                "name": "Group 1 [3, 5]",
+                "clusters": [3, 5],
+                "ca_group_label": "Group 1 [3, 5]",
             },
             "group2": {
-                "name": "Group 2 [0, 2]",
-                "clusters": [0, 2],
-                "ca_group_label": "Group 2 [0, 2]",
+                "name": "Group 2 [5, 7]",
+                "clusters": [5, 7],
+                "ca_group_label": "Group 2 [5, 7]",
             },
         }
 
