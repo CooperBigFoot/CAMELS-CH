@@ -1,13 +1,14 @@
 import sys
 from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import MinMaxScaler
-
-# Add the parent directory to system path to import the required modules
-sys.path.append(str(Path().absolute().parent))
 
 from src.data_models.caravanify import Caravanify, CaravanifyConfig
 
@@ -132,8 +133,8 @@ def main():
     norm_data["hii"] = hii_values / np.max(hii_values)
 
     # Define thresholds for categories (using tertiles)
-    low_threshold = np.percentile(hii_values, 50)
-    high_threshold = np.percentile(hii_values, 75)
+    low_threshold = np.percentile(norm_data["hii"], 30)
+    high_threshold = np.percentile(norm_data["hii"], 75)
 
     # Assign categories
     def assign_category(hii):
@@ -156,7 +157,7 @@ def main():
 
     # Save to CSV
     output_dir = Path(
-        "/Users/cooper/Desktop/CAMELS-CH/src/human_influence_index/results"
+        "/workspace/CAMELS-CH/src/human_influence_index/results"
     )
     output_dir.mkdir(exist_ok=True)
     output_path = output_dir / "human_influence_classification.csv"
@@ -165,7 +166,7 @@ def main():
 
     # Create histogram of HII values
     plt.figure(figsize=(12, 6))
-    plt.hist(norm_data["hii"], bins=30, color="skyblue", edgecolor="black")
+    plt.hist(norm_data["hii"], bins=60, color="skyblue", edgecolor="black")
     plt.axvline(
         low_threshold,
         color="green",

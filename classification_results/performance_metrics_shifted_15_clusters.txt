@@ -1,0 +1,10 @@
+Random Forest Classification Performance
+----------------------------------------
+Best Parameters:
+  n_estimators: 300
+  min_samples_split: 2
+  min_samples_leaf: 1
+  max_depth: None
+
+Cross-validation accuracy: 0.7175
+Log loss score: 1.3345

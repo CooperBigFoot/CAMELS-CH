@@ -567,9 +567,9 @@ def main(config: ClassificationConfig) -> None:
     mi_heatmap_path = output_dir / "mutual_info_heatmap.png"
     feature_importance_path = output_dir / "feature_importance.png"
     predictions_path = (
-        output_dir / f"cluster_probabilities_{config.n_clusters}_clusters.csv"
+        output_dir / f"cluster_probabilities_shifted_15_clusters.csv"
     )
-    metrics_path = output_dir / f"performance_metrics_{config.n_clusters}_clusters.txt"
+    metrics_path = output_dir / f"performance_metrics_shifted_15_clusters.txt"
 
     # Load and combine data from source countries
     all_data = []
@@ -657,7 +657,7 @@ if __name__ == "__main__":
         attributes_base_dir="/workspace/CARAVANIFY",
         timeseries_base_dir="/workspace/CARAVANIFY",
         output_dir="./classification_results",
-        cluster_assignment_path="/workspace/CAMELS-CH/clustering_results/cluster_assignments13.csv",
+        cluster_assignment_path="/workspace/CAMELS-CH/clustering_results/cluster_assignments_shifted.csv",
         source_countries=["CH", "CL", "USA"],
         target_country="CA",
         n_clusters=13,
