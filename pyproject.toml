@@ -37,4 +37,5 @@ dependencies = [
   "tslearn>=0.6.3",
   "dtaidistance>=2.3.13",
   "h5py>=3.13.0",
+  "dotenv>=0.9.9",
 ]
