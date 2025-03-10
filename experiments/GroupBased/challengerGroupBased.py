@@ -319,14 +319,10 @@ class GroupBasedRunner:
         evaluator.test_results = raw_results
 
 
-        results_df, overall_metrics, basin_metrics = evaluator.evaluate(
+        _, overall_metrics, basin_metrics = evaluator.evaluate(
             model.test_results
         )
 
-        # Save results
-        results_df.to_csv(
-            self.results_dir / group_key / f"detailed_results_{run}.csv", index=True
-        )
 
         overall_summary = evaluator.summarize_metrics(overall_metrics)
         overall_summary.to_csv(
@@ -344,7 +340,6 @@ class GroupBasedRunner:
         return {
             "overall_metrics": overall_metrics,
             "basin_metrics": basin_metrics,
-            "results_df": results_df,
         }
 
     def evaluate_cross_group_performance(self, run):

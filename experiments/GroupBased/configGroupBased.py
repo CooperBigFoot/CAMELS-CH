@@ -25,8 +25,8 @@ class ExperimentConfig:
 
     # Group-based training configuration
     GROUP_TRAINING_ENABLED: bool = True
-    CA_GROUPS_PATH: str = "/workspace/CAMELS-CH/classification_results/final_basin_assignments_for_12_clusters.csv"
-    SOURCE_CLUSTERS_PATH: str = "/workspace/CAMELS-CH/clustering_results/cluster_assignments12.csv"
+    CA_GROUPS_PATH: str = "/workspace/CAMELS-CH/classification_results/final_basin_assignments_for_13_clusters.csv"
+    SOURCE_CLUSTERS_PATH: str = "/workspace/CAMELS-CH/clustering_results/cluster_assignments13.csv"
     GROUP_MAPPINGS: Dict[str, Dict] = None  # Will be initialized in __post_init__
 
     # Learning rates with scheduling
