@@ -25,6 +25,8 @@ from src.data_models.caravanify import Caravanify, CaravanifyConfig
 class ClassificationConfig:
     """Configuration for the time series clustering process."""
 
+    n_clusters: int
+
     # Data directories
     attributes_base_dir: str
     timeseries_base_dir: str
@@ -564,8 +566,10 @@ def main(config: ClassificationConfig) -> None:
     # Define output file paths
     mi_heatmap_path = output_dir / "mutual_info_heatmap.png"
     feature_importance_path = output_dir / "feature_importance.png"
-    predictions_path = output_dir / "cluster_probabilities.csv"
-    metrics_path = output_dir / "performance_metrics.txt"
+    predictions_path = (
+        output_dir / f"cluster_probabilities_{config.n_clusters}_clusters.csv"
+    )
+    metrics_path = output_dir / f"performance_metrics_{config.n_clusters}_clusters.txt"
 
     # Load and combine data from source countries
     all_data = []
@@ -653,9 +657,10 @@ if __name__ == "__main__":
         attributes_base_dir="/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY",
         timeseries_base_dir="/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY",
         output_dir="./classification_results",
-        cluster_assignment_path="/Users/cooper/Desktop/CAMELS-CH/clustering_results/cluster_assignments12.csv",
+        cluster_assignment_path="/Users/cooper/Desktop/CAMELS-CH/clustering_results/cluster_assignments13.csv",
         source_countries=["CH", "CL", "USA"],
         target_country="CA",
+        n_clusters=13,
     )
 
     main(config)
