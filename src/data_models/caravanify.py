@@ -1,25 +1,38 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Union, List, Dict, Optional
+from typing import Union, List, Dict, Optional, Any
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
-
-# TODO: Improve docstrings and type hints
 
 
 @dataclass
 class CaravanifyConfig:
-    """Configuration for loading Caravan-formatted datasets."""
+    """
+    Configuration for loading Caravan-formatted datasets.
+
+    Attributes:
+        attributes_dir: Directory containing attribute CSV files.
+        timeseries_dir: Directory containing timeseries CSV files.
+        gauge_id_prefix: Prefix used to identify gauge IDs.
+        shapefile_dir: Optional directory containing shapefile data.
+        use_caravan_attributes: Flag to load Caravan attributes.
+        use_hydroatlas_attributes: Flag to load HydroAtlas attributes.
+        use_other_attributes: Flag to load other attributes.
+    """
 
     attributes_dir: Union[str, Path]
     timeseries_dir: Union[str, Path]
     gauge_id_prefix: str
     shapefile_dir: Optional[Union[str, Path]] = None
+
     use_caravan_attributes: bool = True
     use_hydroatlas_attributes: bool = False
     use_other_attributes: bool = False
 
     def __post_init__(self):
+        """
+        Convert directory paths provided as strings to Path objects.
+        """
         self.attributes_dir = Path(self.attributes_dir)
         self.timeseries_dir = Path(self.timeseries_dir)
         if self.shapefile_dir:
@@ -28,12 +41,32 @@ class CaravanifyConfig:
 
 class Caravanify:
     def __init__(self, config: CaravanifyConfig):
+        """
+        Initialize a Caravanify instance with the provided configuration.
+
+        Args:
+            config: A CaravanifyConfig object containing dataset directories, gauge ID prefix,
+                    and attribute settings.
+
+        Attributes:
+            time_series: Dictionary mapping gauge_id to its timeseries DataFrame.
+            static_attributes: DataFrame containing merged static attribute data.
+        """
         self.config = config
-        self._time_series: Dict[str, pd.DataFrame] = {}  # {gauge_id: DataFrame}
-        self._static_attributes = pd.DataFrame()  # Combined static attributes
+        self.time_series: Dict[str, pd.DataFrame] = {}  # {gauge_id: DataFrame}
+        self.static_attributes = pd.DataFrame()  # Combined static attributes
 
     def get_all_gauge_ids(self) -> List[str]:
-        """Get all gauge IDs from the timeseries directory."""
+        """
+        Retrieve all gauge IDs from the timeseries directory based on the configured prefix.
+
+        Returns:
+            A sorted list of gauge ID strings.
+
+        Raises:
+            FileNotFoundError: If the timeseries directory does not exist.
+            ValueError: If any gauge IDs in the directory do not match the expected prefix.
+        """
         ts_dir = self.config.timeseries_dir / self.config.gauge_id_prefix
 
         if not ts_dir.exists():
@@ -52,13 +85,35 @@ class Caravanify:
         return sorted(gauge_ids)
 
     def load_stations(self, gauge_ids: List[str]) -> None:
-        """Load data for specified gauge IDs."""
+        """
+        Load station data for the specified gauge IDs.
+
+        This method validates the provided gauge IDs and loads both the timeseries and static attribute data.
+
+        Args:
+            gauge_ids: List of gauge ID strings to load.
+
+        Raises:
+            ValueError: If any gauge ID does not conform to the expected format.
+            FileNotFoundError: If required timeseries files are missing.
+        """
         self._validate_gauge_ids(gauge_ids)
         self._load_timeseries(gauge_ids)
         self._load_static_attributes(gauge_ids)
 
     def _load_timeseries(self, gauge_ids: List[str]) -> None:
-        """Load timeseries CSVs in parallel using multithreading."""
+        """
+        Load timeseries data for the specified gauge IDs from CSV files in parallel using multithreading.
+
+        Each CSV file is expected to have a 'date' column which will be parsed as dates.
+        The gauge ID is inferred from the file name.
+
+        Args:
+            gauge_ids: List of gauge ID strings for which to load timeseries data.
+
+        Raises:
+            FileNotFoundError: If a required timeseries file is not found.
+        """
         ts_dir = self.config.timeseries_dir / self.config.gauge_id_prefix
         file_paths = []
         for gauge_id in gauge_ids:
@@ -77,16 +132,32 @@ class Caravanify:
             dfs = list(executor.map(read_single, file_paths))
 
         for df in dfs:
-            self._time_series[df["gauge_id"].iloc[0]] = df
+            self.time_series[df["gauge_id"].iloc[0]] = df
 
     def _load_static_attributes(self, gauge_ids: List[str]) -> None:
-        """Load and merge static attributes using efficient concatenation."""
+        """
+        Load and merge static attribute data for the specified gauge IDs.
+
+        This method reads various attribute CSV files based on the enabled attribute flags in the configuration,
+        filters the data to include only rows with gauge IDs from the provided list, and merges them horizontally.
+
+        Args:
+            gauge_ids: List of gauge ID strings for which to load static attributes.
+        """
         attr_dir = self.config.attributes_dir / self.config.gauge_id_prefix
         gauge_ids_set = set(gauge_ids)
         dfs = []
 
-        # Helper function to load and process attributes
         def load_attributes(file_name: str) -> Union[pd.DataFrame, None]:
+            """
+            Load attribute data from a CSV file, filter by gauge IDs, and set 'gauge_id' as the index.
+
+            Args:
+                file_name: Name of the CSV file to load.
+
+            Returns:
+                A DataFrame with filtered attribute data, or None if the file does not exist.
+            """
             file_path = attr_dir / file_name
             if not file_path.exists():
                 return None
@@ -96,7 +167,7 @@ class Caravanify:
             df.set_index("gauge_id", inplace=True)
             return df
 
-        # Load enabled attribute types
+        # Load enabled attribute types based on configuration flags
         if self.config.use_other_attributes:
             other_df = load_attributes(
                 f"attributes_other_{self.config.gauge_id_prefix}.csv"
@@ -118,44 +189,147 @@ class Caravanify:
             if caravan_df is not None:
                 dfs.append(caravan_df)
 
-        # Concatenate all DataFrames horizontally
+        # Concatenate all DataFrames horizontally if any were loaded
         if dfs:
-            self._static_attributes = pd.concat(dfs, axis=1, join="outer").reset_index()
+            self.static_attributes = pd.concat(dfs, axis=1, join="outer").reset_index()
 
     def _validate_gauge_ids(self, gauge_ids: List[str]) -> None:
-        """Ensure all gauge IDs start with the configured prefix."""
+        """
+        Validate that each gauge ID in the provided list starts with the configured prefix.
+
+        Args:
+            gauge_ids: List of gauge ID strings to validate.
+
+        Raises:
+            ValueError: If any gauge ID does not start with the expected prefix.
+        """
         prefix = f"{self.config.gauge_id_prefix}_"
         for gid in gauge_ids:
             if not gid.startswith(prefix):
                 raise ValueError(f"Gauge ID {gid} must start with '{prefix}'")
 
     def get_time_series(self) -> pd.DataFrame:
-        """Return concatenated time series data."""
-        if not self._time_series:
+        """
+        Concatenate and return all loaded timeseries data as a single DataFrame.
+
+        The returned DataFrame includes the 'gauge_id' and 'date' columns along with all other available columns.
+
+        Returns:
+            A pandas DataFrame containing the combined timeseries data.
+        """
+        if not self.time_series:
             return pd.DataFrame()
-        df = pd.concat(self._time_series.values(), ignore_index=True)
+        df = pd.concat(self.time_series.values(), ignore_index=True)
         return df[
             ["gauge_id", "date"]
             + [c for c in df.columns if c not in ("gauge_id", "date")]
         ]
 
     def get_static_attributes(self) -> pd.DataFrame:
-        """Return merged static attributes."""
-        return self._static_attributes.copy()
+        """
+        Return a copy of the merged static attributes DataFrame.
+
+        Returns:
+            A pandas DataFrame containing the static attributes.
+        """
+        return self.static_attributes.copy()
 
     def get_shapefiles(self) -> pd.DataFrame:
-        """Load and return shapefile data."""
-        # Construct the full path to the shapefile
+        """
+        Load and return shapefile data as a GeoDataFrame.
+
+        Constructs the shapefile path using the configured shapefile directory and gauge ID prefix,
+        and uses geopandas to read the shapefile.
+
+        Returns:
+            A GeoDataFrame containing the shapefile data.
+
+        Raises:
+            FileNotFoundError: If the shapefile is not found at the constructed path.
+        """
         shapefile_path = (
-            self.config.shapefile_dir /
-            self.config.gauge_id_prefix /
-            f"{self.config.gauge_id_prefix}_basin_shapes.shp"
+            self.config.shapefile_dir
+            / self.config.gauge_id_prefix
+            / f"{self.config.gauge_id_prefix}_basin_shapes.shp"
         )
         if not shapefile_path.exists():
             raise FileNotFoundError(f"Shapefile {shapefile_path} not found")
 
-        # Use geopandas to read the shapefile
         import geopandas as gpd
+
         gdf = gpd.read_file(shapefile_path)
         return gdf
 
+    @staticmethod
+    def filter_by_human_influence(
+        data: Any,
+        categories: Union[str, List[str]],
+        human_influence_path: Union[str, Path],
+    ) -> Any:
+        """
+        Filter data (DataFrame or GeoDataFrame) by human influence category.
+
+        Args:
+            data: DataFrame or GeoDataFrame containing a 'gauge_id' column.
+            categories: String or list of human influence categories to keep (e.g., 'High', 'Medium', 'Low').
+            human_influence_path: Path to a CSV file with human influence classifications,
+                                  which must include 'gauge_id' and 'human_influence_category' columns.
+
+        Returns:
+            Filtered DataFrame or GeoDataFrame with only rows matching the specified human influence categories.
+
+        Raises:
+            TypeError: If the input data is not a pandas DataFrame or GeoDataFrame.
+            ValueError: If the data does not contain a 'gauge_id' column or if invalid categories are provided.
+            IOError: If the human influence CSV file cannot be loaded.
+        """
+        # Validate input data
+        if not isinstance(data, (pd.DataFrame, object)):
+            raise TypeError("Data must be a pandas DataFrame or GeoDataFrame")
+
+        if "gauge_id" not in data.columns:
+            raise ValueError("Data must contain a 'gauge_id' column")
+
+        # Load human influence data
+        try:
+            human_influence_df = pd.read_csv(human_influence_path)
+        except Exception as e:
+            raise IOError(f"Failed to load human influence data: {e}")
+
+        # Verify human influence data has required columns
+        required_cols = ["gauge_id", "human_influence_category"]
+        missing_cols = [
+            col for col in required_cols if col not in human_influence_df.columns
+        ]
+        if missing_cols:
+            raise ValueError(
+                f"Human influence data missing required columns: {missing_cols}"
+            )
+
+        # Convert categories to list if a string was provided
+        if isinstance(categories, str):
+            categories = [categories]
+
+        # Check if specified categories exist in the data
+        available_categories = human_influence_df["human_influence_category"].unique()
+        invalid_categories = [
+            cat for cat in categories if cat not in available_categories
+        ]
+        if invalid_categories:
+            raise ValueError(
+                f"Invalid categories: {invalid_categories}. "
+                f"Available categories: {available_categories.tolist()}"
+            )
+
+        # Filter human influence data to include only specified categories
+        filtered_hi = human_influence_df[
+            human_influence_df["human_influence_category"].isin(categories)
+        ]
+
+        # Get list of gauge_ids that match the criteria
+        valid_gauge_ids = filtered_hi["gauge_id"].unique()
+
+        # Filter the input data based on gauge_ids
+        filtered_data = data[data["gauge_id"].isin(valid_gauge_ids)]
+
+        return filtered_data
