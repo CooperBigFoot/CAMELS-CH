@@ -3,16 +3,17 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from src.models.TSMixer import LitTSMixer, TSMixerConfig
+from src.models.TSMixer import LitTSMixer
 from src.data_models.datamodule import HydroDataModule
 from src.data_models.caravanify import Caravanify, CaravanifyConfig
 from experiments.HyperparameterTune.configHT import ExperimentConfig
-import numpy as np
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor
+from pytorch_lightning.loggers import TensorBoardLogger
 import pytorch_lightning as pl
 import torch
 import pandas as pd
 import optuna
+import os
 
 
 class BenchmarkTuner:
@@ -22,16 +23,20 @@ class BenchmarkTuner:
 
     def setup_directories(self):
         """Create necessary directories for experiment outputs."""
-        self.results_dir = Path("experiments/HyperparameterTune/results")
-        self.results_dir.mkdir(parents=True, exist_ok=True)
+        self.results_dir = Path("experiments/HyperparameterTune/results/benchmark")
+        self.logs_dir = Path("experiments/HyperparameterTune/logs/benchmark")
+
+        for directory in [self.results_dir, self.logs_dir]:
+            directory.mkdir(parents=True, exist_ok=True)
 
     def load_data(self):
-        """Load CA dataset once for all trials."""
+        """Load CA dataset with human influence filtering."""
         print("CONFIGURING CA DATASET")
         ca_config = CaravanifyConfig(
             attributes_dir=self.config.CA_CONFIG["ATTRIBUTE_DIR"],
             timeseries_dir=self.config.CA_CONFIG["TIMESERIES_DIR"],
             gauge_id_prefix=self.config.CA_CONFIG["GAUGE_ID_PREFIX"],
+            human_influence_path=self.config.CA_CONFIG["HUMAN_INFLUENCE_PATH"],
             use_hydroatlas_attributes=True,
             use_caravan_attributes=True,
             use_other_attributes=True,
@@ -39,7 +44,14 @@ class BenchmarkTuner:
 
         self.ca_caravan = Caravanify(ca_config)
         ca_basins = self.ca_caravan.get_all_gauge_ids()
-        print(f"Loading {len(ca_basins)} CA basins")
+
+        # Filter basins by human influence
+        print(f"Found {len(ca_basins)} total CA basins")
+        ca_basins, discarded_ca = self.ca_caravan.filter_gauge_ids_by_human_influence(
+            ca_basins, ["Low", "Medium"]
+        )
+        print(f"Loading {len(ca_basins)} CA basins after human influence filtering")
+        print(f"Discarded {len(discarded_ca)} CA basins with high human influence")
         self.ca_caravan.load_stations(ca_basins)
 
         # Prepare data frames
@@ -57,17 +69,28 @@ class BenchmarkTuner:
         input_length = trial.suggest_int("input_length", 30, 365)
         hidden_size = trial.suggest_int("hidden_size", 32, 128)
         num_layers = trial.suggest_int("num_layers", 2, 15)
-        learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-3, log=True)
+        static_embedding_size = trial.suggest_int("static_embedding_size", 5, 20)
+        learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-3, log=True)
         dropout = trial.suggest_float("dropout", 0.0, 0.5)
+        batch_size = trial.suggest_categorical("batch_size", [256, 512, 1024, 2048])
+
+        # Update config with trial parameters
+        self.config.INPUT_LENGTH = input_length
+        self.config.HIDDEN_SIZE = hidden_size
+        self.config.NUM_LAYERS = num_layers
+        self.config.STATIC_EMBEDDING_SIZE = static_embedding_size
+        self.config.LEARNING_RATE = learning_rate
+        self.config.DROPOUT = dropout
+        self.config.BATCH_SIZE = batch_size
 
         # Create data module with trial hyperparameters
-        preprocessing_configs = self.config.get_preprocessing_config("CA")
+        preprocessing_configs = self.config.get_preprocessing_config()
         data_module = HydroDataModule(
             time_series_df=self.ca_ts_data,
             static_df=self.ca_static_data,
             group_identifier=self.config.GROUP_IDENTIFIER,
             preprocessing_config=preprocessing_configs,
-            batch_size=self.config.BATCH_SIZE,
+            batch_size=batch_size,
             input_length=input_length,
             output_length=self.config.OUTPUT_LENGTH,
             num_workers=self.config.MAX_WORKERS,
@@ -80,29 +103,27 @@ class BenchmarkTuner:
             max_missing_pct=self.config.CA_CONFIG["MAX_MISSING_PCT"],
         )
 
-        # Create TSMixerConfig
-        tsmixer_config = TSMixerConfig(
-            input_len=input_length,
-            input_size=len(self.config.FORCING_FEATURES) + 1,  # Add 1 for target
-            output_len=self.config.OUTPUT_LENGTH,
-            static_size=len(self.config.STATIC_FEATURES) - 1,  # Subtract 1 for gauge_id
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            dropout=dropout,
-            learning_rate=learning_rate,
-            group_identifier=self.config.GROUP_IDENTIFIER,
-            lr_scheduler_patience=self.config.LR_SCHEDULER_PATIENCE,
-            lr_scheduler_factor=self.config.LR_SCHEDULER_FACTOR,
-        )
+        # Prepare data
+        data_module.prepare_data()
+        data_module.setup(stage="fit")
 
-        # Create model with TSMixerConfig
+        # Create model with trial hyperparameters
+        tsmixer_config = self.config.get_tsmixer_config()
         model = LitTSMixer(config=tsmixer_config)
+
+        # Set up TensorBoard logger
+        tb_logger = TensorBoardLogger(
+            save_dir=str(self.logs_dir),
+            name="benchmark_optimization",
+            version=f"trial_{trial.number}",
+        )
 
         # Configure trainer
         trainer = pl.Trainer(
             max_epochs=self.config.MAX_EPOCHS,
             accelerator=self.config.ACCELERATOR,
             devices=1,
+            logger=tb_logger,
             callbacks=[
                 EarlyStopping(monitor="val_loss", patience=5, mode="min"),
                 LearningRateMonitor(logging_interval="epoch"),
@@ -121,12 +142,12 @@ class BenchmarkTuner:
 
         return best_val_loss
 
-    def run_optimization(self, n_trials: int = 50):
+    def run_optimization(self, n_trials: int = 12):
         """Run the hyperparameter optimization study."""
         # Create study
         study = optuna.create_study(
             direction="minimize",
-            study_name="tsmixer_optimization",
+            study_name="tsmixer_benchmark_optimization",
             sampler=optuna.samplers.TPESampler(seed=42),
         )
 
@@ -155,7 +176,7 @@ class BenchmarkTuner:
 
         # Save to CSV
         results_df.to_csv(
-            self.results_dir / "tsmixer_optimization_results.csv", index=False
+            self.results_dir / "benchmark_optimization_results.csv", index=False
         )
 
         # Save best parameters separately
@@ -164,28 +185,29 @@ class BenchmarkTuner:
         best_results = {"best_value": best_value, **best_params}
 
         pd.DataFrame([best_results]).to_csv(
-            self.results_dir / "tsmixer_best_parameters.csv", index=False
+            self.results_dir / "benchmark_best_parameters.csv", index=False
         )
 
-        # Save optimization visualization
+        # Save optimization visualization if plotly is available
         try:
+            import optuna.visualization as vis
             import matplotlib.pyplot as plt
 
             # Plot optimization history
-            fig = optuna.visualization.plot_optimization_history(study)
-            fig.write_image(str(self.results_dir / "optimization_history.png"))
-
-            # Plot parameter importance
-            param_importance = optuna.visualization.plot_param_importances(study)
-            param_importance.write_image(
-                str(self.results_dir / "param_importances.png")
+            fig1 = vis.plot_optimization_history(study)
+            fig1.write_image(
+                str(self.results_dir / "benchmark_optimization_history.png")
             )
 
-            # Plot contour plots for top parameters
-            contour = optuna.visualization.plot_contour(study)
-            contour.write_image(str(self.results_dir / "param_contours.png"))
+            # Plot parameter importance
+            fig2 = vis.plot_param_importances(study)
+            fig2.write_image(str(self.results_dir / "benchmark_param_importances.png"))
 
-        except (ImportError, AttributeError) as e:
+            # Plot contour plots for top parameters
+            fig3 = vis.plot_contour(study)
+            fig3.write_image(str(self.results_dir / "benchmark_param_contours.png"))
+
+        except Exception as e:
             print(f"Could not create visualization: {e}")
 
 
@@ -200,8 +222,7 @@ if __name__ == "__main__":
     # Run optimization
     tuner = BenchmarkTuner(config)
     tuner.load_data()
-    # Adjust number of trials as needed
-    study = tuner.run_optimization(n_trials=50)
+    study = tuner.run_optimization(n_trials=12)
 
     print("\nBest trial:")
     print(f"  Value: {study.best_trial.value:.5f}")

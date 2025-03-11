@@ -3,40 +3,45 @@ import numpy as np
 import torch
 from dataclasses import dataclass
 from typing import Dict, Any, List
+import os
+from src.models.TSMixer import TSMixerConfig
 
 
 @dataclass
 class ExperimentConfig:
+    """Configuration for hyperparameter tuning experiments."""
+
     # Base configuration
     GROUP_IDENTIFIER: str = "gauge_id"
     BATCH_SIZE: int = 1024
     INPUT_LENGTH: int = 100
     OUTPUT_LENGTH: int = 10
     MAX_EPOCHS: int = 50
-    ACCELERATOR: str = "cuda"
-    NUM_RUNS: int = 5
-    MAX_WORKERS: int = 4
+    ACCELERATOR: str = "cuda" if torch.cuda.is_available() else "cpu"
+    NUM_RUNS: int = 1
+    MAX_WORKERS: int = min(6, os.cpu_count())
 
     # Learning rates with scheduling
-    PRETRAIN_LR: float = 1e-3
-    FINETUNE_LR: float = 1e-4
+    LEARNING_RATE: float = 1e-4
     LR_SCHEDULER_PATIENCE: int = 5
     LR_SCHEDULER_FACTOR: float = 0.5
 
     # TSMixer specific configuration
     HIDDEN_SIZE: int = 64
+    STATIC_EMBEDDING_SIZE: int = 10
     NUM_LAYERS: int = 5
     DROPOUT: float = 0.1
-    STATIC_EMBEDDING_SIZE: int = 10
 
     # Dataset configuration
     TARGET: str = "streamflow"
-    STATIC_FEATURES: List[str] = None
-    FORCING_FEATURES: List[str] = None
+    STATIC_FEATURES: List[str] = None  # Will be initialized in __post_init__
+    FORCING_FEATURES: List[str] = None  # Will be initialized in __post_init__
 
     # Domain specific configs
-    CA_CONFIG: Dict[str, Any] = None
-    CH_CONFIG: Dict[str, Any] = None
+    CA_CONFIG: Dict[str, Any] = None  # Will be initialized in __post_init__
+    CH_CONFIG: Dict[str, Any] = None  # Will be initialized in __post_init__
+    CL_CONFIG: Dict[str, Any] = None  # Will be initialized in __post_init__
+    USA_CONFIG: Dict[str, Any] = None  # Will be initialized in __post_init__
 
     def __post_init__(self):
         # Initialize feature lists
@@ -75,6 +80,7 @@ class ExperimentConfig:
             "VAL_YEARS": 2,
             "TEST_YEARS": 3,
             "MAX_MISSING_PCT": 10,
+            "HUMAN_INFLUENCE_PATH": "/workspace/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
         }
 
         # Switzerland configuration
@@ -82,10 +88,35 @@ class ExperimentConfig:
             "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/CH/post_processed/attributes",
             "TIMESERIES_DIR": "/workspace/CARAVANIFY/CH/post_processed/timeseries/csv",
             "GAUGE_ID_PREFIX": "CH",
-            "MIN_TRAIN_YEARS": 20,
-            "VAL_YEARS": 10,
+            "MIN_TRAIN_YEARS": 23,
+            "VAL_YEARS": 7,
             "TEST_YEARS": 0,
             "MAX_MISSING_PCT": 10,
+            "HUMAN_INFLUENCE_PATH": "/workspace/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
+        }
+
+        # Chile configuration
+        self.CL_CONFIG = {
+            "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/CL/post_processed/attributes",
+            "TIMESERIES_DIR": "/workspace/CARAVANIFY/CL/post_processed/timeseries/csv",
+            "GAUGE_ID_PREFIX": "CL",
+            "MIN_TRAIN_YEARS": 8,
+            "VAL_YEARS": 2,
+            "TEST_YEARS": 3,
+            "MAX_MISSING_PCT": 10,
+            "HUMAN_INFLUENCE_PATH": "/workspace/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
+        }
+
+        # USA configuration
+        self.USA_CONFIG = {
+            "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/USA/post_processed/attributes",
+            "TIMESERIES_DIR": "/workspace/CARAVANIFY/USA/post_processed/timeseries/csv",
+            "GAUGE_ID_PREFIX": "USA",
+            "MIN_TRAIN_YEARS": 8,
+            "VAL_YEARS": 2,
+            "TEST_YEARS": 3,
+            "MAX_MISSING_PCT": 10,
+            "HUMAN_INFLUENCE_PATH": "/workspace/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
         }
 
         # Validate configuration
@@ -119,54 +150,46 @@ class ExperimentConfig:
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
 
-    def get_model_config(self) -> Dict:
-        """Get TSMixer model configuration."""
-        return {
-            "input_len": self.INPUT_LENGTH,
-            # +1 for target feature
-            "input_size": len(self.FORCING_FEATURES) + 1,
-            "output_len": self.OUTPUT_LENGTH,
-            "static_size": len(self.STATIC_FEATURES) - 1,  # -1 for gauge_id
-            "hidden_size": self.HIDDEN_SIZE,
-            "static_embedding_size": self.STATIC_EMBEDDING_SIZE,
-            "num_layers": self.NUM_LAYERS,
-            "dropout": self.DROPOUT,
-            "learning_rate": self.PRETRAIN_LR,
-            "group_identifier": self.GROUP_IDENTIFIER,
-            "lr_scheduler_patience": self.LR_SCHEDULER_PATIENCE,
-            "lr_scheduler_factor": self.LR_SCHEDULER_FACTOR,
-        }
-
-    def get_preprocessing_config(self, domain: str) -> Dict:
-        """Get domain-specific preprocessing configuration."""
-        if domain not in ["CH", "CA"]:
-            raise ValueError("Domain must be either 'CH' or 'CA'")
-
-        # Create preprocessing pipelines with domain-specific parameters
-        from sklearn.pipeline import Pipeline
-        from src.preprocessing.transformers import (
-            LogTransformer,
-            GroupedTransformer,
+    def get_tsmixer_config(self) -> TSMixerConfig:
+        """Generate a TSMixerConfig from experiment parameters."""
+        return TSMixerConfig(
+            input_len=self.INPUT_LENGTH,
+            input_size=len(self.FORCING_FEATURES) + 1,  # +1 for target
+            output_len=self.OUTPUT_LENGTH,
+            static_size=len(self.STATIC_FEATURES) - 1,  # -1 for gauge_id
+            hidden_size=self.HIDDEN_SIZE,
+            static_embedding_size=self.STATIC_EMBEDDING_SIZE,
+            num_layers=self.NUM_LAYERS,
+            dropout=self.DROPOUT,
+            learning_rate=self.LEARNING_RATE,
+            group_identifier=self.GROUP_IDENTIFIER,
+            lr_scheduler_patience=self.LR_SCHEDULER_PATIENCE,
+            lr_scheduler_factor=self.LR_SCHEDULER_FACTOR,
         )
-        from sklearn.preprocessing import StandardScaler
+
+    def get_preprocessing_config(self) -> Dict:
+        """Create preprocessing configuration."""
+        from sklearn.pipeline import Pipeline
+        from src.preprocessing.log_scale import LogTransformer
+        from src.preprocessing.grouped import GroupedTransformer
+        from src.preprocessing.standard_scale import StandardScaleTransformer
 
         # Use GroupedTransformer for both features and target
-        feature_pipeline = Pipeline([("scaler", StandardScaler())])
+        feature_pipeline = Pipeline([("scaler", StandardScaleTransformer())])
 
         target_pipeline = GroupedTransformer(
-            Pipeline([("log", LogTransformer()), ("scaler", StandardScaler())]),
+            Pipeline(
+                [("log", LogTransformer()), ("scaler", StandardScaleTransformer())]
+            ),
             columns=[self.TARGET],
             group_identifier=self.GROUP_IDENTIFIER,
+            n_jobs=self.MAX_WORKERS,
         )
 
-        static_pipeline = Pipeline([("scaler", StandardScaler())])
+        static_pipeline = Pipeline([("scaler", StandardScaleTransformer())])
 
         return {
             "features": {"pipeline": feature_pipeline},
             "target": {"pipeline": target_pipeline},
             "static_features": {"pipeline": static_pipeline},
         }
-
-
-# Create configuration instance
-config = ExperimentConfig()
