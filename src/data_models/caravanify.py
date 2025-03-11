@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Union, List, Dict, Optional, Any
+from typing import Union, List, Dict, Optional, Any, Tuple
 import pandas as pd
+import geopandas as gpd
 from concurrent.futures import ThreadPoolExecutor
 
 
@@ -18,12 +19,15 @@ class CaravanifyConfig:
         use_caravan_attributes: Flag to load Caravan attributes.
         use_hydroatlas_attributes: Flag to load HydroAtlas attributes.
         use_other_attributes: Flag to load other attributes.
+        human_influence_path: Path to human influence classification CSV (with gauge_id and human_influence_category columns)
     """
 
     attributes_dir: Union[str, Path]
     timeseries_dir: Union[str, Path]
     gauge_id_prefix: str
     shapefile_dir: Optional[Union[str, Path]] = None
+
+    human_influence_path: Optional[Union[str, Path]] = None
 
     use_caravan_attributes: bool = True
     use_hydroatlas_attributes: bool = False
@@ -37,6 +41,8 @@ class CaravanifyConfig:
         self.timeseries_dir = Path(self.timeseries_dir)
         if self.shapefile_dir:
             self.shapefile_dir = Path(self.shapefile_dir)
+        if self.human_influence_path:
+            self.human_influence_path = Path(self.human_influence_path)
 
 
 class Caravanify:
@@ -234,7 +240,7 @@ class Caravanify:
         """
         return self.static_attributes.copy()
 
-    def get_shapefiles(self) -> pd.DataFrame:
+    def get_shapefiles(self) -> gpd.GeoDataFrame:
         """
         Load and return shapefile data as a GeoDataFrame.
 
@@ -255,44 +261,33 @@ class Caravanify:
         if not shapefile_path.exists():
             raise FileNotFoundError(f"Shapefile {shapefile_path} not found")
 
-        import geopandas as gpd
-
         gdf = gpd.read_file(shapefile_path)
         return gdf
 
-    @staticmethod
-    def filter_by_human_influence(
-        data: Any,
+    def filter_gauge_ids_by_human_influence(
+        self,
+        gauge_ids: List[str],
         categories: Union[str, List[str]],
-        human_influence_path: Union[str, Path],
-    ) -> Any:
+    ) -> Tuple[List[str], List[str]]:
         """
-        Filter data (DataFrame or GeoDataFrame) by human influence category.
+        Filter a list of gauge IDs by human influence category.
 
         Args:
-            data: DataFrame or GeoDataFrame containing a 'gauge_id' column.
-            categories: String or list of human influence categories to keep (e.g., 'High', 'Medium', 'Low').
-            human_influence_path: Path to a CSV file with human influence classifications,
-                                  which must include 'gauge_id' and 'human_influence_category' columns.
+            gauge_ids: List of gauge IDs to filter
+            categories: String or List of human influence categories to keep
+                        (e.g., 'High', 'Medium', 'Low')
 
         Returns:
-            Filtered DataFrame or GeoDataFrame with only rows matching the specified human influence categories.
+            Filtered list of gauge IDs matching the specified influence categories
+            and a list of discarded gauge IDs that did not match the criteria.
 
         Raises:
-            TypeError: If the input data is not a pandas DataFrame or GeoDataFrame.
-            ValueError: If the data does not contain a 'gauge_id' column or if invalid categories are provided.
-            IOError: If the human influence CSV file cannot be loaded.
+            IOError: If the human influence data file cannot be loaded.
+            ValueError: If the specified categories are not found in the data.
         """
-        # Validate input data
-        if not isinstance(data, (pd.DataFrame, object)):
-            raise TypeError("Data must be a pandas DataFrame or GeoDataFrame")
-
-        if "gauge_id" not in data.columns:
-            raise ValueError("Data must contain a 'gauge_id' column")
-
         # Load human influence data
         try:
-            human_influence_df = pd.read_csv(human_influence_path)
+            human_influence_df = pd.read_csv(self.config.human_influence_path)
         except Exception as e:
             raise IOError(f"Failed to load human influence data: {e}")
 
@@ -321,15 +316,22 @@ class Caravanify:
                 f"Available categories: {available_categories.tolist()}"
             )
 
-        # Filter human influence data to include only specified categories
+        # Filter human influence data to include only specified categories and gauge IDs
         filtered_hi = human_influence_df[
-            human_influence_df["human_influence_category"].isin(categories)
+            (human_influence_df["human_influence_category"].isin(categories))
+            & (human_influence_df["gauge_id"].isin(gauge_ids))
         ]
 
         # Get list of gauge_ids that match the criteria
-        valid_gauge_ids = filtered_hi["gauge_id"].unique()
+        filtered_gauge_ids = filtered_hi["gauge_id"].unique().tolist()
 
-        # Filter the input data based on gauge_ids
-        filtered_data = data[data["gauge_id"].isin(valid_gauge_ids)]
+        print(f"Original gauge_ids: {len(gauge_ids)}")
+        print(f"Filtered gauge_ids: {len(filtered_gauge_ids)}")
 
-        return filtered_data
+        if not filtered_gauge_ids:
+            print("No gauge_ids matched the specified human influence categories.")
+            return []
+
+        discarded_gauge_ids = set(gauge_ids) - set(filtered_gauge_ids)
+
+        return filtered_gauge_ids, discarded_gauge_ids
