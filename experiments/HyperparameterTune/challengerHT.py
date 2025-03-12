@@ -161,6 +161,7 @@ class ChallengerTuner:
         static_embedding_size = trial.suggest_int("static_embedding_size", 5, 20)
         learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
         dropout = trial.suggest_float("dropout", 0.0, 0.5)
+        fusion_method = trial.suggest_categorical("fusion_method", ["add", "concat"])
 
         # Update config with trial parameters
         self.config.INPUT_LENGTH = input_length
@@ -169,6 +170,7 @@ class ChallengerTuner:
         self.config.STATIC_EMBEDDING_SIZE = static_embedding_size
         self.config.LEARNING_RATE = learning_rate
         self.config.DROPOUT = dropout
+        self.config.FUSION_METHOD = fusion_method
 
         # Get preprocessing configs
         preprocessing_configs = self.config.get_preprocessing_config()
@@ -225,6 +227,10 @@ class ChallengerTuner:
         # Create model with trial hyperparameters
         tsmixer_config = self.config.get_tsmixer_config()
         model = LitTSMixer(config=tsmixer_config)
+        
+        # Log future forcing info
+        print(f"Trial {trial.number} using fusion method: {fusion_method}")
+        print(f"Future forcing size: {len(self.config.FORCING_FEATURES)}")
 
         # Set up TensorBoard logger
         tb_logger = TensorBoardLogger(

@@ -31,6 +31,7 @@ class ExperimentConfig:
     STATIC_EMBEDDING_SIZE: int = 10
     NUM_LAYERS: int = 5
     DROPOUT: float = 0.1
+    FUSION_METHOD: str = "add"  # Options: "add" or "concat"
 
     # Dataset configuration
     TARGET: str = "streamflow"
@@ -152,11 +153,15 @@ class ExperimentConfig:
 
     def get_tsmixer_config(self) -> TSMixerConfig:
         """Generate a TSMixerConfig from experiment parameters."""
+        # Calculate future_input_size as the number of forcing features (excluding target)
+        future_input_size = len(self.FORCING_FEATURES)
+        
         return TSMixerConfig(
             input_len=self.INPUT_LENGTH,
             input_size=len(self.FORCING_FEATURES) + 1,  # +1 for target
             output_len=self.OUTPUT_LENGTH,
             static_size=len(self.STATIC_FEATURES) - 1,  # -1 for gauge_id
+            future_input_size=future_input_size,  # Add future forcing size
             hidden_size=self.HIDDEN_SIZE,
             static_embedding_size=self.STATIC_EMBEDDING_SIZE,
             num_layers=self.NUM_LAYERS,
@@ -165,6 +170,7 @@ class ExperimentConfig:
             group_identifier=self.GROUP_IDENTIFIER,
             lr_scheduler_patience=self.LR_SCHEDULER_PATIENCE,
             lr_scheduler_factor=self.LR_SCHEDULER_FACTOR,
+            fusion_method=self.FUSION_METHOD,  # Add fusion method parameter
         )
 
     def get_preprocessing_config(self) -> Dict:
