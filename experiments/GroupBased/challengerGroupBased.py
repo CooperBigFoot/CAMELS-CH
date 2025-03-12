@@ -190,7 +190,9 @@ class GroupBasedRunner:
                     "group_key": group_key,
                     "run": run,
                     "timestamp": timestamp,
-                    "epoch": trainer.checkpoint_callback.best_model_path.split("=")[-1].split(".")[0],
+                    "epoch": trainer.checkpoint_callback.best_model_path.split("=")[
+                        -1
+                    ].split(".")[0],
                 },
                 save_path,
             )
@@ -217,29 +219,20 @@ class GroupBasedRunner:
             stage_type, group_key = stage.split("_", 1)
             checkpoint_path = self.checkpoint_dir / group_key
             checkpoint_path.mkdir(exist_ok=True)
-
-            logs_path = Path(
-                f"experiments/GroupBased/logs/{self.config.EXPERIMENT_NAME}/{group_key}"
-            )
-            logs_path.mkdir(parents=True, exist_ok=True)
         else:
             stage_type = stage
             checkpoint_path = self.checkpoint_dir
-
-            logs_path = Path(
-                f"experiments/GroupBased/logs/{self.config.EXPERIMENT_NAME}"
-            )
-            logs_path.mkdir(parents=True, exist_ok=True)
+            group_key = "all"  # Default if no group is specified
 
         from datetime import datetime
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         logger = TensorBoardLogger(
-            save_dir=logs_path,
-            name=f"{stage_type}_run{run}_{timestamp}"
+            save_dir="experiments/GroupBased/logs",  # Base directory
+            name=f"{self.config.EXPERIMENT_NAME}",  # Experiment name
+            version=f"group_{group_key}_run{run}_{timestamp}",  # Version includes group, run, timestamp
         )
-
 
         return pl.Trainer(
             max_epochs=self.config.MAX_EPOCHS,

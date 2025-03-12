@@ -91,6 +91,7 @@ class BenchmarkRunner:
             except Exception as e:
                 print(f"Error in run {run}: {str(e)}")
                 import traceback
+
                 traceback.print_exc()
                 continue
         print("Training complete for all runs.")
@@ -167,7 +168,9 @@ class BenchmarkRunner:
                     "config": self.config.get_benchmark_tsmixer_config().to_dict(),
                     "run": run,
                     "timestamp": timestamp,
-                    "epoch": trainer.checkpoint_callback.best_model_path.split("=")[-1].split(".")[0],
+                    "epoch": trainer.checkpoint_callback.best_model_path.split("=")[
+                        -1
+                    ].split(".")[0],
                 },
                 save_path,
             )
@@ -194,24 +197,17 @@ class BenchmarkRunner:
             stage_type, group_key = stage.split("_", 1)
             checkpoint_path = self.checkpoint_dir / group_key
             checkpoint_path.mkdir(exist_ok=True)
-            logs_path = Path(
-                f"experiments/GroupBased/logs/{self.config.EXPERIMENT_NAME}_benchmark/{group_key}"
-            )
-            logs_path.mkdir(parents=True, exist_ok=True)
         else:
             stage_type = stage
             checkpoint_path = self.checkpoint_dir
-            logs_path = Path(
-                f"experiments/GroupBased/logs/{self.config.EXPERIMENT_NAME}_benchmark"
-            )
-            logs_path.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        logger = TensorBoardLogger(
-            save_dir=logs_path,
-            name=f"{stage_type}_run{run}_{timestamp}"
-        )
 
+        logger = TensorBoardLogger(
+            save_dir="experiments/GroupBased/logs",  # Base directory
+            name=f"{self.config.EXPERIMENT_NAME}_benchmark",  # Experiment name
+            version=f"run_{run}_{timestamp}",  # Version includes run and timestamp
+        )
 
         return pl.Trainer(
             max_epochs=self.config.MAX_EPOCHS,
@@ -240,6 +236,7 @@ class BenchmarkRunner:
         if hasattr(self, "model"):
             del self.model
         import gc
+
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
