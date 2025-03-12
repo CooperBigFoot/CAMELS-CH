@@ -291,7 +291,6 @@ class TSForecastEvaluator:
             color="red",
             alpha=0.8,
             label=f"{horizon}-Day Forecast",
-            linestyle="--",
             linewidth=2,
         )
 
