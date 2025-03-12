@@ -244,8 +244,8 @@ class ChallengerRunner:
             group_identifier=self.config.GROUP_IDENTIFIER,
             preprocessing_config=preprocessing_configs,
             batch_size=self.config.BATCH_SIZE,
-            input_length=self.config.INPUT_LENGTH,
-            output_length=self.config.OUTPUT_LENGTH,
+            input_length=self.config.CHALLENGER_INPUT_LENGTH,  # Use challenger input length
+            output_length=self.config.CHALLENGER_OUTPUT_LENGTH,  # Use challenger output length
             num_workers=min(self.config.MAX_WORKERS, multiprocessing.cpu_count()),
             features=self.config.FORCING_FEATURES + [self.config.TARGET],
             static_features=self.config.STATIC_FEATURES,

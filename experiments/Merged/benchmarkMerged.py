@@ -134,8 +134,8 @@ class BenchmarkRunner:
             group_identifier=self.config.GROUP_IDENTIFIER,
             preprocessing_config=preprocessing_configs,
             batch_size=self.config.BATCH_SIZE,
-            input_length=self.config.INPUT_LENGTH,
-            output_length=self.config.OUTPUT_LENGTH,
+            input_length=self.config.BENCHMARK_INPUT_LENGTH,  # Use benchmark input length
+            output_length=self.config.BENCHMARK_OUTPUT_LENGTH,  # Use benchmark output length
             num_workers=min(self.config.MAX_WORKERS, multiprocessing.cpu_count()),
             features=self.config.FORCING_FEATURES + [self.config.TARGET],
             static_features=self.config.STATIC_FEATURES,

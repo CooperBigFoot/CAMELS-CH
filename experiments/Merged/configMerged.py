@@ -15,23 +15,32 @@ class ExperimentConfig:
     # Base configuration
     GROUP_IDENTIFIER: str = "gauge_id"
     BATCH_SIZE: int = 2048  # Updated batch size
-    INPUT_LENGTH: int = 40
-    OUTPUT_LENGTH: int = 10
     MAX_EPOCHS: int = 30
     ACCELERATOR: str = "cuda" if torch.cuda.is_available() else "cpu"
     NUM_RUNS: int = 1
     MAX_WORKERS: int = min(6, os.cpu_count())
 
     # Learning rates with scheduling
-    LEARNING_RATE: float = 1e-4
     LR_SCHEDULER_PATIENCE: int = 5
     LR_SCHEDULER_FACTOR: float = 0.5
 
-    # Default model configuration (will be overridden by benchmark/challenger configs)
-    HIDDEN_SIZE: int = 32
-    DROPOUT: float = 0.2
-    NUM_LAYERS: int = 10
-    STATIC_EMBEDDING_SIZE: int = 10
+    # Benchmark model configuration
+    BENCHMARK_INPUT_LENGTH: int = 256
+    BENCHMARK_OUTPUT_LENGTH: int = 10
+    BENCHMARK_HIDDEN_SIZE: int = 64
+    BENCHMARK_DROPOUT: float = 0.4
+    BENCHMARK_NUM_LAYERS: int = 2
+    BENCHMARK_STATIC_EMBEDDING_SIZE: int = 20
+    BENCHMARK_LEARNING_RATE: float = 0.00085
+
+    # Challenger model configuration
+    CHALLENGER_INPUT_LENGTH: int = 256
+    CHALLENGER_OUTPUT_LENGTH: int = 10
+    CHALLENGER_HIDDEN_SIZE: int = 128
+    CHALLENGER_DROPOUT: float = 0.3
+    CHALLENGER_NUM_LAYERS: int = 13
+    CHALLENGER_STATIC_EMBEDDING_SIZE: int = 9
+    CHALLENGER_LEARNING_RATE: float = 2e-5
 
     # Dataset configuration
     TARGET: str = "streamflow"
@@ -76,50 +85,50 @@ class ExperimentConfig:
 
         # Central Asia configuration
         self.CA_CONFIG = {
-            "ATTRIBUTE_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CA/post_processed/attributes",
-            "TIMESERIES_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CA/post_processed/timeseries/csv",
+            "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/CA/post_processed/attributes",
+            "TIMESERIES_DIR": "/workspace/CARAVANIFY/CA/post_processed/timeseries/csv",
             "GAUGE_ID_PREFIX": "CA",
             "MIN_TRAIN_YEARS": 8,
             "VAL_YEARS": 2,
             "TEST_YEARS": 3,
             "MAX_MISSING_PCT": 10,
-            "HUMAN_INFLUENCE_PATH": "/Users/cooper/Desktop/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
+            "HUMAN_INFLUENCE_PATH": "/workspace/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
         }
 
         # Switzerland configuration
         self.CH_CONFIG = {
-            "ATTRIBUTE_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CH/post_processed/attributes",
-            "TIMESERIES_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CH/post_processed/timeseries/csv",
+            "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/CH/post_processed/attributes",
+            "TIMESERIES_DIR": "/workspace/CARAVANIFY/CH/post_processed/timeseries/csv",
             "GAUGE_ID_PREFIX": "CH",
             "MIN_TRAIN_YEARS": 23,
             "VAL_YEARS": 7,
             "TEST_YEARS": 0,
             "MAX_MISSING_PCT": 10,
-            "HUMAN_INFLUENCE_PATH": "/Users/cooper/Desktop/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
+            "HUMAN_INFLUENCE_PATH": "/workspace/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
         }
 
         # USA configuration
         self.USA_CONFIG = {
-            "ATTRIBUTE_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/USA/post_processed/attributes",
-            "TIMESERIES_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/USA/post_processed/timeseries/csv",
+            "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/USA/post_processed/attributes",
+            "TIMESERIES_DIR": "/workspace/CARAVANIFY/USA/post_processed/timeseries/csv",
             "GAUGE_ID_PREFIX": "USA",
             "MIN_TRAIN_YEARS": 8,
             "VAL_YEARS": 2,
             "TEST_YEARS": 3,
             "MAX_MISSING_PCT": 10,
-            "HUMAN_INFLUENCE_PATH": "/Users/cooper/Desktop/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
+            "HUMAN_INFLUENCE_PATH": "/workspace/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
         }
 
         # Chile configuration
         self.CL_CONFIG = {
-            "ATTRIBUTE_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CL/post_processed/attributes",
-            "TIMESERIES_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CL/post_processed/timeseries/csv",
+            "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/CL/post_processed/attributes",
+            "TIMESERIES_DIR": "/workspace/CARAVANIFY/CL/post_processed/timeseries/csv",
             "GAUGE_ID_PREFIX": "CL",
             "MIN_TRAIN_YEARS": 8,
             "VAL_YEARS": 2,
             "TEST_YEARS": 3,
             "MAX_MISSING_PCT": 10,
-            "HUMAN_INFLUENCE_PATH": "/Users/cooper/Desktop/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
+            "HUMAN_INFLUENCE_PATH": "/workspace/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
         }
 
         # Validate configuration
@@ -131,8 +140,10 @@ class ExperimentConfig:
             raise ValueError("Batch size must be positive")
         if self.MAX_WORKERS <= 0:
             raise ValueError("Max workers must be positive")
-        if self.INPUT_LENGTH <= 0:
-            raise ValueError("Input length must be positive")
+        if self.BENCHMARK_INPUT_LENGTH <= 0:
+            raise ValueError("Benchmark input length must be positive")
+        if self.CHALLENGER_INPUT_LENGTH <= 0:
+            raise ValueError("Challenger input length must be positive")
 
     def get_run_seed(self, run_index: int) -> int:
         """Generate a unique seed for each experimental run."""
@@ -154,15 +165,15 @@ class ExperimentConfig:
     def get_benchmark_tsmixer_config(self) -> TSMixerConfig:
         """Generate a TSMixerConfig for benchmark with specific hyperparameters."""
         return TSMixerConfig(
-            input_len=256,
+            input_len=self.BENCHMARK_INPUT_LENGTH,
             input_size=len(self.FORCING_FEATURES) + 1,  # +1 for target
-            output_len=self.OUTPUT_LENGTH,
+            output_len=self.BENCHMARK_OUTPUT_LENGTH,
             static_size=len(self.STATIC_FEATURES) - 1,  # -1 for gauge_id
-            hidden_size=64,
-            static_embedding_size=20,
-            num_layers=2,
-            dropout=0.4,
-            learning_rate=0.00085,
+            hidden_size=self.BENCHMARK_HIDDEN_SIZE,
+            static_embedding_size=self.BENCHMARK_STATIC_EMBEDDING_SIZE,
+            num_layers=self.BENCHMARK_NUM_LAYERS,
+            dropout=self.BENCHMARK_DROPOUT,
+            learning_rate=self.BENCHMARK_LEARNING_RATE,
             group_identifier=self.GROUP_IDENTIFIER,
             lr_scheduler_patience=self.LR_SCHEDULER_PATIENCE,
             lr_scheduler_factor=self.LR_SCHEDULER_FACTOR,
@@ -171,15 +182,15 @@ class ExperimentConfig:
     def get_challenger_tsmixer_config(self) -> TSMixerConfig:
         """Generate a TSMixerConfig for challenger with specific hyperparameters."""
         return TSMixerConfig(
-            input_len=348,
+            input_len=self.CHALLENGER_INPUT_LENGTH,
             input_size=len(self.FORCING_FEATURES) + 1,  # +1 for target
-            output_len=self.OUTPUT_LENGTH,
+            output_len=self.CHALLENGER_OUTPUT_LENGTH,
             static_size=len(self.STATIC_FEATURES) - 1,  # -1 for gauge_id
-            hidden_size=256,
-            static_embedding_size=9,
-            num_layers=13,
-            dropout=0.3,
-            learning_rate=2e-5,
+            hidden_size=self.CHALLENGER_HIDDEN_SIZE,
+            static_embedding_size=self.CHALLENGER_STATIC_EMBEDDING_SIZE,
+            num_layers=self.CHALLENGER_NUM_LAYERS,
+            dropout=self.CHALLENGER_DROPOUT,
+            learning_rate=self.CHALLENGER_LEARNING_RATE,
             group_identifier=self.GROUP_IDENTIFIER,
             lr_scheduler_patience=self.LR_SCHEDULER_PATIENCE,
             lr_scheduler_factor=self.LR_SCHEDULER_FACTOR,

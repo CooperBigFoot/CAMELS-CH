@@ -13,7 +13,7 @@ class ExperimentConfig:
 
     # Base configuration
     GROUP_IDENTIFIER: str = "gauge_id"
-    BATCH_SIZE: int = 1024
+    BATCH_SIZE: int = 2048
     INPUT_LENGTH: int = 100
     OUTPUT_LENGTH: int = 10
     MAX_EPOCHS: int = 50
