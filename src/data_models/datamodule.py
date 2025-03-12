@@ -18,6 +18,10 @@ class HydroDataModule(pl.LightningDataModule):
     This module handles data preprocessing, including feature scaling and transformations,
     while maintaining proper separation between training, validation, and test data.
     It supports both grouped and non-grouped preprocessing pipelines.
+    
+    The module now supports future forcing data which is automatically extracted by
+    the underlying HydroDataset for use with models like TSMixer that leverage future 
+    meteorological forcings.
     """
 
     def __init__(
@@ -41,8 +45,30 @@ class HydroDataModule(pl.LightningDataModule):
         test_years: int = 2,
         max_missing_pct: float = 10,
         max_gap_length: int = 30,
+        domain_type: str = "source",  # Added domain_type parameter
     ):
-        """Initialize the HydroDataModule with data and configuration parameters."""
+        """Initialize the HydroDataModule with data and configuration parameters.
+        
+        Args:
+            time_series_df: DataFrame or list of DataFrames with time series data
+            static_df: Optional DataFrame or list of DataFrames with static catchment attributes
+            group_identifier: Column name identifying catchment groups
+            preprocessing_config: Configuration for data preprocessing pipelines
+            batch_size: Batch size for dataloaders
+            input_length: Length of input sequences
+            output_length: Length of output sequences (forecast horizon)
+            num_workers: Number of workers for data loading
+            features: List of feature names to use (includes both input features and future forcing)
+            static_features: Optional list of static feature names
+            target: Name of target variable column
+            domain_id: Identifier for the data domain
+            min_train_years: Minimum years required for training
+            val_years: Number of years to use for validation
+            test_years: Number of years to use for testing
+            max_missing_pct: Maximum percentage of missing values allowed
+            max_gap_length: Maximum allowed gap length in time series
+            domain_type: Type of domain - "source" or "target" (for transfer learning)
+        """
         super().__init__()
 
         # Store configuration parameters
@@ -56,6 +82,7 @@ class HydroDataModule(pl.LightningDataModule):
         self.static_features = static_features if static_features else []
         self.target = target
         self.domain_id = domain_id
+        self.domain_type = domain_type  # Store domain type for dataset creation
         self.min_train_years = min_train_years
         self.val_years = val_years
         self.test_years = test_years
@@ -555,7 +582,10 @@ class HydroDataModule(pl.LightningDataModule):
         Create datasets for training, validation, and testing.
 
         This method is called by PyTorch Lightning to set up datasets
-        for each stage of training.
+        for each stage of training. It ensures datasets include future forcing data.
+        
+        Args:
+            stage: Stage of training ('fit', 'test', or None for both)
         """
         if not hasattr(self, "quality_report"):
             raise RuntimeError("Quality report not found. Did you run prepare_data()?")
@@ -563,43 +593,37 @@ class HydroDataModule(pl.LightningDataModule):
         # Split data
         train_data, val_data, test_data = self._split_data()
 
-        # Create datasets based on stage
+        # Create datasets based on stage with proper domain information
+        # The HydroDataset will automatically extract future forcing data from features
+        common_args = {
+            "input_length": self.input_length,
+            "output_length": self.output_length,
+            "features": self.features,
+            "target": self.target,
+            "static_features": self.static_features,
+            "group_identifier": self.group_identifier,
+            "domain_id": self.domain_id,
+            "domain_type": self.domain_type,  # Pass domain type for transfer learning
+        }
+
         if stage == "fit" or stage is None:
             self._train_dataset = HydroDataset(
                 time_series_df=train_data,
                 static_df=self.processed_static,
-                input_length=self.input_length,
-                output_length=self.output_length,
-                features=self.features,
-                target=self.target,
-                static_features=self.static_features,
-                group_identifier=self.group_identifier,
-                domain_id=self.domain_id,
+                **common_args
             )
 
             self._val_dataset = HydroDataset(
                 time_series_df=val_data,
                 static_df=self.processed_static,
-                input_length=self.input_length,
-                output_length=self.output_length,
-                features=self.features,
-                target=self.target,
-                static_features=self.static_features,
-                group_identifier=self.group_identifier,
-                domain_id=self.domain_id,
+                **common_args
             )
 
         if stage == "test" or stage is None:
             self._test_dataset = HydroDataset(
                 time_series_df=test_data,
                 static_df=self.processed_static,
-                input_length=self.input_length,
-                output_length=self.output_length,
-                features=self.features,
-                target=self.target,
-                static_features=self.static_features,
-                group_identifier=self.group_identifier,
-                domain_id=self.domain_id,
+                **common_args
             )
 
     def inverse_transform_predictions(
@@ -716,7 +740,21 @@ class HydroTransferDataModule(pl.LightningDataModule):
         num_workers: int = 4,
         mode: str = "min_size",
     ):
+        """
+        Initialize a transfer learning data module.
+        
+        Args:
+            source_datamodule: HydroDataModule for source domain
+            target_datamodule: HydroDataModule for target domain  
+            num_workers: Number of workers for data loading
+            mode: Mode for CombinedLoader ('min_size', 'max_size', etc.)
+        """
         super().__init__()
+        
+        # Set appropriate domain types
+        source_datamodule.domain_type = "source"
+        target_datamodule.domain_type = "target"
+        
         self.source_dm = source_datamodule
         self.target_dm = target_datamodule
         self.num_workers = num_workers

@@ -21,3 +21,4 @@ checkpoints
 lightning_logs
 clustering_results/basins
 .env
+src/models/TSMixer.pdf

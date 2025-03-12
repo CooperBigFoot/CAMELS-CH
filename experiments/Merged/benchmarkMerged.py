@@ -155,8 +155,13 @@ class BenchmarkRunner:
     def train_model(self, data_module, run):
         """Train TSMixer on given data."""
         print("SETTING UP MODEL FOR TRAINING")
+        
+        # Log information about future forcing features
+        print(f"Using {len(self.config.FORCING_FEATURES)} features as future forcing inputs")
+        print(f"Future forcing fusion method: {self.config.FUSION_METHOD}")
 
         # Create a TSMixer model with benchmark hyperparameters
+        # The config now includes future_input_size and fusion_method
         model = LitTSMixer(self.config.get_benchmark_tsmixer_config())
 
         # Train the model

@@ -24,6 +24,9 @@ class ExperimentConfig:
     LR_SCHEDULER_PATIENCE: int = 5
     LR_SCHEDULER_FACTOR: float = 0.5
 
+    # Future forcing configuration
+    FUSION_METHOD: str = "add"  # Options: "add" or "concat"
+
     # Benchmark model configuration
     BENCHMARK_INPUT_LENGTH: int = 256
     BENCHMARK_OUTPUT_LENGTH: int = 10
@@ -164,11 +167,15 @@ class ExperimentConfig:
 
     def get_benchmark_tsmixer_config(self) -> TSMixerConfig:
         """Generate a TSMixerConfig for benchmark with specific hyperparameters."""
+        # Calculate future_input_size as the number of forcing features (excluding target)
+        future_input_size = len(self.FORCING_FEATURES)
+        
         return TSMixerConfig(
             input_len=self.BENCHMARK_INPUT_LENGTH,
             input_size=len(self.FORCING_FEATURES) + 1,  # +1 for target
             output_len=self.BENCHMARK_OUTPUT_LENGTH,
             static_size=len(self.STATIC_FEATURES) - 1,  # -1 for gauge_id
+            future_input_size=future_input_size,  # Add future forcing size
             hidden_size=self.BENCHMARK_HIDDEN_SIZE,
             static_embedding_size=self.BENCHMARK_STATIC_EMBEDDING_SIZE,
             num_layers=self.BENCHMARK_NUM_LAYERS,
@@ -177,15 +184,20 @@ class ExperimentConfig:
             group_identifier=self.GROUP_IDENTIFIER,
             lr_scheduler_patience=self.LR_SCHEDULER_PATIENCE,
             lr_scheduler_factor=self.LR_SCHEDULER_FACTOR,
+            fusion_method=self.FUSION_METHOD,  # Add fusion method
         )
 
     def get_challenger_tsmixer_config(self) -> TSMixerConfig:
         """Generate a TSMixerConfig for challenger with specific hyperparameters."""
+        # Calculate future_input_size as the number of forcing features (excluding target)
+        future_input_size = len(self.FORCING_FEATURES)
+        
         return TSMixerConfig(
             input_len=self.CHALLENGER_INPUT_LENGTH,
             input_size=len(self.FORCING_FEATURES) + 1,  # +1 for target
             output_len=self.CHALLENGER_OUTPUT_LENGTH,
             static_size=len(self.STATIC_FEATURES) - 1,  # -1 for gauge_id
+            future_input_size=future_input_size,  # Add future forcing size
             hidden_size=self.CHALLENGER_HIDDEN_SIZE,
             static_embedding_size=self.CHALLENGER_STATIC_EMBEDDING_SIZE,
             num_layers=self.CHALLENGER_NUM_LAYERS,
@@ -194,6 +206,7 @@ class ExperimentConfig:
             group_identifier=self.GROUP_IDENTIFIER,
             lr_scheduler_patience=self.LR_SCHEDULER_PATIENCE,
             lr_scheduler_factor=self.LR_SCHEDULER_FACTOR,
+            fusion_method=self.FUSION_METHOD,  # Add fusion method
         )
 
     def get_preprocessing_config(self) -> Dict:

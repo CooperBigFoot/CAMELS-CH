@@ -158,6 +158,10 @@ class GroupBasedRunner:
     def train_model(self, data_module, group_key, run):
         """Train a model for a specific group."""
         print(f"SETTING UP MODEL FOR GROUP {group_key} TRAINING")
+        
+        # Log information about future forcing features
+        print(f"Using {len(self.config.FORCING_FEATURES)} features as future forcing inputs")
+        print(f"Future forcing fusion method: {self.config.FUSION_METHOD}")
 
         # Create TSMixer model
         model = LitTSMixer(self.config.get_challenger_tsmixer_config())

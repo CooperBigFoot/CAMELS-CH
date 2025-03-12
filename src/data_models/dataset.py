@@ -9,7 +9,8 @@ class HydroDataset(Dataset):
     """Dataset class for hydrological data with enhanced domain support.
 
     Handles time series and static features while providing domain identification
-    capabilities for transfer learning scenarios with multiple domains.
+    capabilities for transfer learning scenarios with multiple domains. Each sample
+    includes historical data, future target values, and future forcing data.
     """
 
     def __init__(
@@ -47,6 +48,10 @@ class HydroDataset(Dataset):
         self.group_identifier = group_identifier
         self.domain_id = domain_id
         self.domain_type = domain_type
+        
+        # Determine forcing features (all features except target)
+        self.forcing_features = [f for f in self.features if f != target]
+        self.forcing_indices = [i for i, f in enumerate(self.features) if f != target]
 
         # Process static features
         if static_features:
@@ -160,6 +165,10 @@ class HydroDataset(Dataset):
         # Extract sequence data
         X = self.features_data[gauge_id][start_idx : start_idx + self.input_length]
         y = self.target_data[gauge_id][start_idx + self.input_length : end_idx]
+        
+        # Extract future forcing data (excluding target)
+        future_full = self.features_data[gauge_id][start_idx + self.input_length : end_idx]
+        future = future_full[:, self.forcing_indices]
 
         # Retrieve the original DataFrame indices for this sequence
         slice_idx = self.index_data[gauge_id][start_idx:end_idx].tolist()
@@ -181,6 +190,7 @@ class HydroDataset(Dataset):
         return {
             "X": X,
             "y": y,
+            "future": future, 
             "static": static,
             "domain_id": domain_tensor,
             "domain_name": self.domain_id,
