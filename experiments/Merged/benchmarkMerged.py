@@ -163,9 +163,9 @@ class BenchmarkRunner:
         trainer = self.create_trainer("train", run)
         trainer.fit(model, data_module)
 
-        # Save model
-        save_path = self.model_dir / f"tsmixer_benchmark_{run}.pt"
-        torch.save(model.state_dict(), save_path)
+        # Save full Lightning checkpoint (with global_step and all metadata)
+        save_path = self.model_dir / f"tsmixer_benchmark_{run}.ckpt"
+        trainer.save_checkpoint(save_path)
 
         return model
 

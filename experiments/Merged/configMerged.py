@@ -85,8 +85,8 @@ class ExperimentConfig:
 
         # Central Asia configuration
         self.CA_CONFIG = {
-            "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/CA/post_processed/attributes",
-            "TIMESERIES_DIR": "/workspace/CARAVANIFY/CA/post_processed/timeseries/csv",
+            "ATTRIBUTE_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CA/post_processed/attributes",
+            "TIMESERIES_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CA/post_processed/timeseries/csv",
             "GAUGE_ID_PREFIX": "CA",
             "MIN_TRAIN_YEARS": 8,
             "VAL_YEARS": 2,
@@ -97,8 +97,8 @@ class ExperimentConfig:
 
         # Switzerland configuration
         self.CH_CONFIG = {
-            "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/CH/post_processed/attributes",
-            "TIMESERIES_DIR": "/workspace/CARAVANIFY/CH/post_processed/timeseries/csv",
+            "ATTRIBUTE_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CH/post_processed/attributes",
+            "TIMESERIES_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CH/post_processed/timeseries/csv",
             "GAUGE_ID_PREFIX": "CH",
             "MIN_TRAIN_YEARS": 23,
             "VAL_YEARS": 7,
@@ -109,8 +109,8 @@ class ExperimentConfig:
 
         # USA configuration
         self.USA_CONFIG = {
-            "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/USA/post_processed/attributes",
-            "TIMESERIES_DIR": "/workspace/CARAVANIFY/USA/post_processed/timeseries/csv",
+            "ATTRIBUTE_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/USA/post_processed/attributes",
+            "TIMESERIES_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/USA/post_processed/timeseries/csv",
             "GAUGE_ID_PREFIX": "USA",
             "MIN_TRAIN_YEARS": 8,
             "VAL_YEARS": 2,
@@ -121,8 +121,8 @@ class ExperimentConfig:
 
         # Chile configuration
         self.CL_CONFIG = {
-            "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/CL/post_processed/attributes",
-            "TIMESERIES_DIR": "/workspace/CARAVANIFY/CL/post_processed/timeseries/csv",
+            "ATTRIBUTE_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CL/post_processed/attributes",
+            "TIMESERIES_DIR": "/Users/cooper/Desktop/CAMELS-CH/data/CARAVANIFY/CL/post_processed/timeseries/csv",
             "GAUGE_ID_PREFIX": "CL",
             "MIN_TRAIN_YEARS": 8,
             "VAL_YEARS": 2,
