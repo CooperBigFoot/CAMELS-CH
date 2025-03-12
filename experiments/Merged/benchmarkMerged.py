@@ -63,7 +63,7 @@ class BenchmarkRunner:
         )
 
         self.ca_caravan = Caravanify(ca_config)
-        ca_basins = self.ca_caravan.get_all_gauge_ids()[:3]
+        ca_basins = self.ca_caravan.get_all_gauge_ids()
         # Filter basins by human influence
         print(f"Found {len(ca_basins)} total CA basins")
         ca_basins, discarded_ca = self.ca_caravan.filter_gauge_ids_by_human_influence(

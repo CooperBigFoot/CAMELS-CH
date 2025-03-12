@@ -63,7 +63,7 @@ class ChallengerRunner:
         )
 
         self.ca_caravan = Caravanify(ca_config)
-        ca_basins = self.ca_caravan.get_all_gauge_ids()[:10]
+        ca_basins = self.ca_caravan.get_all_gauge_ids()
         # Filter basins by human influence
         print(f"Found {len(ca_basins)} total CA basins")
         ca_basins, discarded_ca = self.ca_caravan.filter_gauge_ids_by_human_influence(
@@ -86,7 +86,7 @@ class ChallengerRunner:
         )
 
         self.ch_caravan = Caravanify(ch_config)
-        ch_basins = self.ch_caravan.get_all_gauge_ids()[:10]
+        ch_basins = self.ch_caravan.get_all_gauge_ids()
         # Filter basins by human influence
         print(f"Found {len(ch_basins)} total CH basins")
         ch_basins, discarded_ch = self.ch_caravan.filter_gauge_ids_by_human_influence(
@@ -109,7 +109,7 @@ class ChallengerRunner:
         )
 
         self.cl_caravan = Caravanify(cl_config)
-        cl_basins = self.cl_caravan.get_all_gauge_ids()[:10]
+        cl_basins = self.cl_caravan.get_all_gauge_ids()
         # Filter basins by human influence
         print(f"Found {len(cl_basins)} total CL basins")
         cl_basins, discarded_cl = self.cl_caravan.filter_gauge_ids_by_human_influence(
@@ -131,7 +131,7 @@ class ChallengerRunner:
             use_other_attributes=True,
         )
         self.usa_caravan = Caravanify(usa_config)
-        usa_basins = self.usa_caravan.get_all_gauge_ids()[:10]
+        usa_basins = self.usa_caravan.get_all_gauge_ids()
         # Filter basins by human influence
         print(f"Found {len(usa_basins)} total USA basins")
         usa_basins, discarded_usa = (
