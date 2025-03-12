@@ -189,7 +189,7 @@ class GroupBasedRunner:
         print(f"SETTING UP MODEL FOR GROUP {group_key} TRAINING")
 
         # Create TSMixer model
-        model = LitTSMixer(self.config.get_tsmixer_config())
+        model = LitTSMixer(self.config.get_challenger_tsmixer_config())
 
         # Train the model
         trainer = self.create_trainer(f"train_{group_key}", run)
@@ -200,7 +200,9 @@ class GroupBasedRunner:
 
         if best_checkpoint:
             # Load best model for both saving and returning
-            best_model = LitTSMixer.load_from_checkpoint(best_checkpoint, config=self.config.get_tsmixer_config())
+            best_model = LitTSMixer.load_from_checkpoint(
+                best_checkpoint, config=self.config.get_challenger_tsmixer_config()
+            )
 
             # Save full model (architecture + weights)
             from datetime import datetime
@@ -312,17 +314,12 @@ class GroupBasedRunner:
         trainer.test(model, data_module)
         raw_results = model.test_results
 
-
         evaluator = TSForecastEvaluator(
             data_module, horizons=list(range(1, self.config.OUTPUT_LENGTH + 1))
         )
         evaluator.test_results = raw_results
 
-
-        _, overall_metrics, basin_metrics = evaluator.evaluate(
-            model.test_results
-        )
-
+        _, overall_metrics, basin_metrics = evaluator.evaluate(model.test_results)
 
         overall_summary = evaluator.summarize_metrics(overall_metrics)
         overall_summary.to_csv(

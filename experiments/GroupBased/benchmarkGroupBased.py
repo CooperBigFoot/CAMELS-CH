@@ -169,7 +169,7 @@ class BenchmarkRunner:
         print("SETTING UP MODEL FOR TRAINING")
 
         # Create a TSMixer model
-        model = LitTSMixer(self.config.get_tsmixer_config())
+        model = LitTSMixer(self.config.get_benchmark_tsmixer_config())
 
         # Train the model
         trainer = self.create_trainer("train", run)
@@ -180,7 +180,7 @@ class BenchmarkRunner:
 
         if best_checkpoint:
             # Load best model for saving
-            best_model = LitTSMixer.load_from_checkpoint(best_checkpoint, config=self.config.get_tsmixer_config())
+            best_model = LitTSMixer.load_from_checkpoint(best_checkpoint, config=self.config.get_benchmark_tsmixer_config())
 
             # Save with validation loss and timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -195,9 +195,8 @@ class BenchmarkRunner:
             # Save model with metadata
             torch.save(
                 {
-                    "state_dict": best_model.state_dict(),
-                    "config": self.config.get_tsmixer_config().to_dict(),
-                    "val_loss": val_loss,
+                    "state_dict": model.state_dict(),
+                    "config": self.config.get_benchmark_tsmixer_config().to_dict(),
                     "run": run,
                     "timestamp": timestamp,
                     "epoch": trainer.checkpoint_callback.best_model_path.split("=")[

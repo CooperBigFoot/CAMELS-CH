@@ -14,7 +14,7 @@ class ExperimentConfig:
     EXPERIMENT_NAME: str = "merged_dataset"
     # Base configuration
     GROUP_IDENTIFIER: str = "gauge_id"
-    BATCH_SIZE: int = 1024
+    BATCH_SIZE: int = 2048  # Updated batch size
     INPUT_LENGTH: int = 40
     OUTPUT_LENGTH: int = 10
     MAX_EPOCHS: int = 30
@@ -27,7 +27,7 @@ class ExperimentConfig:
     LR_SCHEDULER_PATIENCE: int = 5
     LR_SCHEDULER_FACTOR: float = 0.5
 
-    # Model configuration
+    # Default model configuration (will be overridden by benchmark/challenger configs)
     HIDDEN_SIZE: int = 32
     DROPOUT: float = 0.2
     NUM_LAYERS: int = 10
@@ -151,18 +151,35 @@ class ExperimentConfig:
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
 
-    def get_tsmixer_config(self) -> TSMixerConfig:
-        """Generate a TSMixerConfig from experiment parameters."""
+    def get_benchmark_tsmixer_config(self) -> TSMixerConfig:
+        """Generate a TSMixerConfig for benchmark with specific hyperparameters."""
         return TSMixerConfig(
-            input_len=self.INPUT_LENGTH,
+            input_len=256,
             input_size=len(self.FORCING_FEATURES) + 1,  # +1 for target
             output_len=self.OUTPUT_LENGTH,
             static_size=len(self.STATIC_FEATURES) - 1,  # -1 for gauge_id
-            hidden_size=self.HIDDEN_SIZE,
-            static_embedding_size=self.STATIC_EMBEDDING_SIZE,
-            num_layers=self.NUM_LAYERS,
-            dropout=self.DROPOUT,
-            learning_rate=self.LEARNING_RATE,
+            hidden_size=64,
+            static_embedding_size=20,
+            num_layers=2,
+            dropout=0.4,
+            learning_rate=0.00085,
+            group_identifier=self.GROUP_IDENTIFIER,
+            lr_scheduler_patience=self.LR_SCHEDULER_PATIENCE,
+            lr_scheduler_factor=self.LR_SCHEDULER_FACTOR,
+        )
+
+    def get_challenger_tsmixer_config(self) -> TSMixerConfig:
+        """Generate a TSMixerConfig for challenger with specific hyperparameters."""
+        return TSMixerConfig(
+            input_len=348,
+            input_size=len(self.FORCING_FEATURES) + 1,  # +1 for target
+            output_len=self.OUTPUT_LENGTH,
+            static_size=len(self.STATIC_FEATURES) - 1,  # -1 for gauge_id
+            hidden_size=256,
+            static_embedding_size=9,
+            num_layers=13,
+            dropout=0.3,
+            learning_rate=2e-5,
             group_identifier=self.GROUP_IDENTIFIER,
             lr_scheduler_patience=self.LR_SCHEDULER_PATIENCE,
             lr_scheduler_factor=self.LR_SCHEDULER_FACTOR,

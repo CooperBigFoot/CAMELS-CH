@@ -15,7 +15,7 @@ class ExperimentConfig:
     EXPERIMENT_NAME: str = "group_based_transfer"
     # Base configuration
     GROUP_IDENTIFIER: str = "gauge_id"
-    BATCH_SIZE: int = 1024
+    BATCH_SIZE: int = 2048  # Updated batch size
     INPUT_LENGTH: int = 40
     OUTPUT_LENGTH: int = 10
     MAX_EPOCHS: int = 30
@@ -26,7 +26,9 @@ class ExperimentConfig:
     # Group-based training configuration
     GROUP_TRAINING_ENABLED: bool = True
     CA_GROUPS_PATH: str = "/workspace/CAMELS-CH/classification_results/final_basin_assignments_for_13_clusters.csv"
-    SOURCE_CLUSTERS_PATH: str = "/workspace/CAMELS-CH/clustering_results/cluster_assignments13.csv"
+    SOURCE_CLUSTERS_PATH: str = (
+        "/workspace/CAMELS-CH/clustering_results/cluster_assignments13.csv"
+    )
     GROUP_MAPPINGS: Dict[str, Dict] = None  # Will be initialized in __post_init__
 
     # Learning rates with scheduling
@@ -34,7 +36,7 @@ class ExperimentConfig:
     LR_SCHEDULER_PATIENCE: int = 5
     LR_SCHEDULER_FACTOR: float = 0.5
 
-    # Model configuration
+    # Model configuration (default; will be overridden by benchmark/challenger configs)
     HIDDEN_SIZE: int = 32
     DROPOUT: float = 0.2
     NUM_LAYERS: int = 10
@@ -179,7 +181,7 @@ class ExperimentConfig:
             torch.backends.cudnn.benchmark = False
 
     def get_tsmixer_config(self) -> TSMixerConfig:
-        """Generate a TSMixerConfig from experiment parameters."""
+        """Generate a default TSMixerConfig from experiment parameters."""
         return TSMixerConfig(
             input_len=self.INPUT_LENGTH,
             input_size=len(self.FORCING_FEATURES) + 1,  # +1 for target
@@ -190,6 +192,40 @@ class ExperimentConfig:
             num_layers=self.NUM_LAYERS,
             dropout=self.DROPOUT,
             learning_rate=self.LEARNING_RATE,
+            group_identifier=self.GROUP_IDENTIFIER,
+            lr_scheduler_patience=self.LR_SCHEDULER_PATIENCE,
+            lr_scheduler_factor=self.LR_SCHEDULER_FACTOR,
+        )
+
+    def get_benchmark_tsmixer_config(self) -> TSMixerConfig:
+        """Generate a TSMixerConfig for benchmark with specific hyperparameters."""
+        return TSMixerConfig(
+            input_len=256,
+            input_size=len(self.FORCING_FEATURES) + 1,  # +1 for target
+            output_len=self.OUTPUT_LENGTH,
+            static_size=len(self.STATIC_FEATURES) - 1,
+            hidden_size=64,
+            static_embedding_size=20,
+            num_layers=2,
+            dropout=0.4,
+            learning_rate=0.00085,
+            group_identifier=self.GROUP_IDENTIFIER,
+            lr_scheduler_patience=self.LR_SCHEDULER_PATIENCE,
+            lr_scheduler_factor=self.LR_SCHEDULER_FACTOR,
+        )
+
+    def get_challenger_tsmixer_config(self) -> TSMixerConfig:
+        """Generate a TSMixerConfig for challenger with specific hyperparameters."""
+        return TSMixerConfig(
+            input_len=348,
+            input_size=len(self.FORCING_FEATURES) + 1,
+            output_len=self.OUTPUT_LENGTH,
+            static_size=len(self.STATIC_FEATURES) - 1,
+            hidden_size=256,
+            static_embedding_size=9,
+            num_layers=13,
+            dropout=0.3,
+            learning_rate=2e-5,
             group_identifier=self.GROUP_IDENTIFIER,
             lr_scheduler_patience=self.LR_SCHEDULER_PATIENCE,
             lr_scheduler_factor=self.LR_SCHEDULER_FACTOR,
@@ -351,7 +387,7 @@ class ExperimentConfig:
             )
 
             source_caravan = Caravanify(source_config)
-            source_caravan.load_stations(basins) 
+            source_caravan.load_stations(basins)
 
             data["source_ts_data"].append(source_caravan.get_time_series())
             data["source_static_data"].append(source_caravan.get_static_attributes())

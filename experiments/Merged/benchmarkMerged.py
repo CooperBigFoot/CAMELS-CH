@@ -63,7 +63,7 @@ class BenchmarkRunner:
         )
 
         self.ca_caravan = Caravanify(ca_config)
-        ca_basins = self.ca_caravan.get_all_gauge_ids()
+        ca_basins = self.ca_caravan.get_all_gauge_ids()[:3]
         # Filter basins by human influence
         print(f"Found {len(ca_basins)} total CA basins")
         ca_basins, discarded_ca = self.ca_caravan.filter_gauge_ids_by_human_influence(
@@ -156,8 +156,8 @@ class BenchmarkRunner:
         """Train TSMixer on given data."""
         print("SETTING UP MODEL FOR TRAINING")
 
-        # Create a TSMixer model
-        model = LitTSMixer(self.config.get_tsmixer_config())
+        # Create a TSMixer model with benchmark hyperparameters
+        model = LitTSMixer(self.config.get_benchmark_tsmixer_config())
 
         # Train the model
         trainer = self.create_trainer("train", run)

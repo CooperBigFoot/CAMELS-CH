@@ -267,8 +267,8 @@ class ChallengerRunner:
         """Train TSMixer on the given data."""
         print("SETTING UP MODEL FOR TRAINING")
 
-        # Create a TSMixer model
-        model = LitTSMixer(self.config.get_tsmixer_config())
+        # Create a TSMixer model with challenger hyperparameters
+        model = LitTSMixer(self.config.get_challenger_tsmixer_config())
 
         # Train the model
         trainer = self.create_trainer("train", run)
