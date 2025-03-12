@@ -266,6 +266,10 @@ class ChallengerRunner:
     def train_model(self, data_module, run):
         """Train TSMixer on the given data."""
         print("SETTING UP MODEL FOR TRAINING")
+        
+        # Log information about future forcing features
+        print(f"Using {len(self.config.FORCING_FEATURES)} features as future forcing inputs")
+        print(f"Future forcing fusion method: {self.config.FUSION_METHOD}")
 
         # Create a TSMixer model with challenger hyperparameters
         model = LitTSMixer(self.config.get_challenger_tsmixer_config())
