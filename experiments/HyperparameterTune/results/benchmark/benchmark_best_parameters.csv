@@ -1,0 +1,2 @@
+best_value,input_length,hidden_size,num_layers,static_embedding_size,learning_rate,dropout,batch_size
+0.051039524376392365,234,48,2,20,0.0008536189862866829,0.40419867405823057,1024

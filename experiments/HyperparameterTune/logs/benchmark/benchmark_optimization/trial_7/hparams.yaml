@@ -1,0 +1,12 @@
+dropout: 0.36450358402049365
+group_identifier: gauge_id
+hidden_size: 51
+input_len: 289
+input_size: 10
+learning_rate: 0.0002592475660475158
+lr_scheduler_factor: 0.5
+lr_scheduler_patience: 5
+num_layers: 2
+output_len: 10
+static_embedding_size: 18
+static_size: 10
