@@ -72,7 +72,7 @@ class BenchmarkTuner:
         static_embedding_size = trial.suggest_int("static_embedding_size", 5, 20)
         learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-3, log=True)
         dropout = trial.suggest_float("dropout", 0.0, 0.5)
-        batch_size = trial.suggest_categorical("batch_size", [256, 512, 1024, 2048])
+        fusion_method = trial.suggest_categorical("fusion_method", ["add", "concat"])
 
         # Update config with trial parameters
         self.config.INPUT_LENGTH = input_length
@@ -81,7 +81,7 @@ class BenchmarkTuner:
         self.config.STATIC_EMBEDDING_SIZE = static_embedding_size
         self.config.LEARNING_RATE = learning_rate
         self.config.DROPOUT = dropout
-        self.config.BATCH_SIZE = batch_size
+        self.config.FUSION_METHOD = fusion_method
 
         # Create data module with trial hyperparameters
         preprocessing_configs = self.config.get_preprocessing_config()
@@ -90,7 +90,7 @@ class BenchmarkTuner:
             static_df=self.ca_static_data,
             group_identifier=self.config.GROUP_IDENTIFIER,
             preprocessing_config=preprocessing_configs,
-            batch_size=batch_size,
+            batch_size=self.config.BATCH_SIZE,
             input_length=input_length,
             output_length=self.config.OUTPUT_LENGTH,
             num_workers=self.config.MAX_WORKERS,
