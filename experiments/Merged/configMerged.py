@@ -92,7 +92,7 @@ class ExperimentConfig:
             "VAL_YEARS": 2,
             "TEST_YEARS": 3,
             "MAX_MISSING_PCT": 10,
-            "HUMAN_INFLUENCE_PATH": "/workspace/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
+            "HUMAN_INFLUENCE_PATH": "/Users/cooper/Desktop/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
         }
 
         # Switzerland configuration
@@ -104,7 +104,7 @@ class ExperimentConfig:
             "VAL_YEARS": 7,
             "TEST_YEARS": 0,
             "MAX_MISSING_PCT": 10,
-            "HUMAN_INFLUENCE_PATH": "/workspace/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
+            "HUMAN_INFLUENCE_PATH": "/Users/cooper/Desktop/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
         }
 
         # USA configuration
@@ -116,7 +116,7 @@ class ExperimentConfig:
             "VAL_YEARS": 2,
             "TEST_YEARS": 3,
             "MAX_MISSING_PCT": 10,
-            "HUMAN_INFLUENCE_PATH": "/workspace/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
+            "HUMAN_INFLUENCE_PATH": "/Users/cooper/Desktop/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
         }
 
         # Chile configuration
@@ -128,7 +128,7 @@ class ExperimentConfig:
             "VAL_YEARS": 2,
             "TEST_YEARS": 3,
             "MAX_MISSING_PCT": 10,
-            "HUMAN_INFLUENCE_PATH": "/workspace/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
+            "HUMAN_INFLUENCE_PATH": "/Users/cooper/Desktop/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
         }
 
         # Validate configuration

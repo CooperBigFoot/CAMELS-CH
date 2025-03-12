@@ -166,52 +166,14 @@ class GroupBasedRunner:
         trainer = self.create_trainer(f"train_{group_key}", run)
         trainer.fit(model, data_module)
 
-        # Save best model from checkpoint
-        best_checkpoint = trainer.checkpoint_callback.best_model_path
-
-        if best_checkpoint:
-            best_model = LitTSMixer.load_from_checkpoint(
-                best_checkpoint, config=self.config.get_challenger_tsmixer_config()
-            )
-            from datetime import datetime
-
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            val_loss = trainer.checkpoint_callback.best_model_score.item()
-            model_filename = (
-                f"tsmixer_{group_key}_run{run}_valloss{val_loss:.4f}_{timestamp}.pt"
-            )
-            save_path = self.model_dir / group_key / model_filename
-
-            torch.save(
-                {
-                    "state_dict": best_model.state_dict(),
-                    "config": self.config.get_challenger_tsmixer_config().to_dict(),
-                    "val_loss": val_loss,
-                    "group_key": group_key,
-                    "run": run,
-                    "timestamp": timestamp,
-                    "epoch": trainer.checkpoint_callback.best_model_path.split("=")[
-                        -1
-                    ].split(".")[0],
-                },
-                save_path,
-            )
-
-            print(f"Saved best model to {save_path} (val_loss: {val_loss:.4f})")
-            return best_model
-        else:
-            save_path = self.model_dir / group_key / f"tsmixer_{group_key}_run{run}.pt"
-            torch.save(
-                {
-                    "state_dict": model.state_dict(),
-                    "config": self.config.get_challenger_tsmixer_config().to_dict(),
-                    "group_key": group_key,
-                    "run": run,
-                },
-                save_path,
-            )
-            print(f"No best checkpoint found, saved current model to {save_path}")
-            return model
+        # Save full Lightning checkpoint (with global_step and all metadata)
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_path = self.model_dir / group_key / f"tsmixer_{group_key}_run{run}_{timestamp}.ckpt"
+        trainer.save_checkpoint(save_path)
+        
+        print(f"Saved complete model checkpoint to {save_path}")
+        return model
 
     def create_trainer(self, stage, run):
         """Create a PyTorch Lightning trainer with appropriate callbacks."""

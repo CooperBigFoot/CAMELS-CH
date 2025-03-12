@@ -147,49 +147,14 @@ class BenchmarkRunner:
         trainer = self.create_trainer("train", run)
         trainer.fit(model, data_module)
 
-        # Retrieve the best checkpoint path (if available)
-        best_checkpoint = trainer.checkpoint_callback.best_model_path
-
-        if best_checkpoint:
-            best_model = LitTSMixer.load_from_checkpoint(
-                best_checkpoint, config=self.config.get_benchmark_tsmixer_config()
-            )
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            val_loss = trainer.checkpoint_callback.best_model_score.item()
-            model_filename = (
-                f"tsmixer_benchmark_run{run}_valloss{val_loss:.4f}_{timestamp}.pt"
-            )
-            save_path = self.model_dir / model_filename
-
-            # Save the best model along with its metadata
-            torch.save(
-                {
-                    "state_dict": model.state_dict(),
-                    "config": self.config.get_benchmark_tsmixer_config().to_dict(),
-                    "run": run,
-                    "timestamp": timestamp,
-                    "epoch": trainer.checkpoint_callback.best_model_path.split("=")[
-                        -1
-                    ].split(".")[0],
-                },
-                save_path,
-            )
-
-            print(f"Saved best model to {save_path} (val_loss: {val_loss:.4f})")
-            return best_model
-        else:
-            # If no checkpoint was saved, save the current model
-            save_path = self.model_dir / f"tsmixer_benchmark_run{run}.pt"
-            torch.save(
-                {
-                    "state_dict": model.state_dict(),
-                    "config": self.config.get_benchmark_tsmixer_config().to_dict(),
-                    "run": run,
-                },
-                save_path,
-            )
-            print(f"No best checkpoint found, saved current model to {save_path}")
-            return model
+        # Save full Lightning checkpoint (with global_step and all metadata)
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_path = self.model_dir / f"tsmixer_benchmark_run{run}_{timestamp}.ckpt"
+        trainer.save_checkpoint(save_path)
+        
+        print(f"Saved complete model checkpoint to {save_path}")
+        return model
 
     def create_trainer(self, stage, run):
         """Create a PyTorch Lightning trainer with appropriate callbacks."""
