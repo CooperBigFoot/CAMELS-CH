@@ -202,20 +202,28 @@ class GroupBasedFineTuneRunner:
         return model
 
     def fine_tune_model(self, data_module, group_key, run):
-        """Fine-tune model only on CA data with reduced learning rate."""
+        """
+        Fine-tune model only on CA data with reduced learning rate.
+        
+        Args:
+            data_module: The original data module containing all datasets
+            group_key: The group identifier key
+            run: Current run number
+            
+        Returns:
+            The fine-tuned model instance
+        """
         # Load initial model from previous training stage
         initial_model = self.group_models[group_key]
 
         # Create a new model config with reduced learning rate
-        finetune_config = self.config.get_tsmixer_config()
+        finetune_config = self.config.get_challenger_tsmixer_config()  # Using challenger config
         finetune_config.learning_rate /= 10  # Reduce learning rate by 10x
 
         # Create a new model and load initial weights
         finetuned_model = LitTSMixer(finetune_config)
         
-        # Freeze backbone
-        for param in finetuned_model.model.backbone.parameters():
-            param.requires_grad = False
+        # NOTE: Backbone remains trainable - no freezing applied
 
         # Load initial model weights
         initial_state_dict = initial_model.state_dict()
@@ -225,25 +233,44 @@ class GroupBasedFineTuneRunner:
         ca_ts_data = data_module.train_dataset.df_sorted[
             data_module.train_dataset.df_sorted[self.config.GROUP_IDENTIFIER].str.startswith('CA_')
         ]
+        
+        # Create data module with proportional splitting
         ca_data_module = HydroDataModule(
             time_series_df=ca_ts_data,
             static_df=data_module.processed_static,
             group_identifier=self.config.GROUP_IDENTIFIER,
             preprocessing_config=data_module.preprocessing_config,
             batch_size=self.config.BATCH_SIZE,
-            input_length=self.config.INPUT_LENGTH,
-            output_length=self.config.OUTPUT_LENGTH,
+            input_length=self.config.CHALLENGER_INPUT_LENGTH,  # Use challenger input length
+            output_length=self.config.CHALLENGER_OUTPUT_LENGTH,  # Use challenger output length
             num_workers=min(self.config.MAX_WORKERS, multiprocessing.cpu_count()),
             features=self.config.FORCING_FEATURES + [self.config.TARGET],
             static_features=self.config.STATIC_FEATURES,
             target=self.config.TARGET,
+            # Use proportional splitting
+            use_proportional_split=self.config.USE_PROPORTIONAL_SPLIT,
+            train_prop=self.config.TRAIN_PROP,
+            val_prop=self.config.VAL_PROP,
+            test_prop=self.config.TEST_PROP,
+            # Legacy parameters (used when not using proportional split)
             min_train_years=self.config.CA_CONFIG["MIN_TRAIN_YEARS"],
             val_years=self.config.CA_CONFIG["VAL_YEARS"],
             test_years=self.config.CA_CONFIG["TEST_YEARS"],
             max_missing_pct=self.config.CA_CONFIG["MAX_MISSING_PCT"],
         )
+        
         ca_data_module.prepare_data()
         ca_data_module.setup(stage="fit")
+        
+        # Log data splitting information
+        if self.config.USE_PROPORTIONAL_SPLIT:
+            print(f"\nFine-tuning with proportional splitting:")
+            print(f"  - Training: {self.config.TRAIN_PROP*100:.1f}% of data")
+            print(f"  - Validation: {self.config.VAL_PROP*100:.1f}% of data")
+            print(f"  - Testing: {self.config.TEST_PROP*100:.1f}% of data")
+            print(f"  - Train dataset size: {len(ca_data_module.train_dataset)}")
+            print(f"  - Validation dataset size: {len(ca_data_module.val_dataset)}")
+            print(f"  - Test dataset size: {len(ca_data_module.test_dataset)}")
 
         # Train fine-tuned model
         trainer = self.create_trainer(f"finetune_{group_key}", run)
