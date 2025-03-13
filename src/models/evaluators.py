@@ -77,8 +77,41 @@ class TSForecastEvaluator:
     def evaluate(
         self, test_results: Dict[str, torch.Tensor]
     ) -> Tuple[pd.DataFrame, Dict, Dict]:
-        """Evaluate model test results and compute metrics"""
+        """
+        Evaluate model test results and compute metrics.
+        
+        Args:
+            test_results: Dictionary containing model outputs and observations
+                
+        Returns:
+            Tuple containing:
+                - DataFrame with predictions, observations, and metadata
+                - Dictionary with overall metrics by horizon
+                - Dictionary with per-basin metrics by horizon
+        """
+        # Create evaluation dataframe from test results
+        df = self._prepare_evaluation_dataframe(test_results)
+        
+        # Calculate overall metrics for each horizon
+        overall_metrics = self._calculate_overall_metrics(df)
+        
+        # Calculate per-basin metrics
+        basin_metrics = self._calculate_basin_metrics(df)
+        
+        return df, overall_metrics, basin_metrics
 
+    def _prepare_evaluation_dataframe(
+        self, test_results: Dict[str, torch.Tensor]
+    ) -> pd.DataFrame:
+        """
+        Create a flattened dataframe with predictions, observations, and metadata.
+        
+        Args:
+            test_results: Dictionary containing model outputs and observations
+                
+        Returns:
+            DataFrame with predictions, observations, basin IDs, horizons and dates
+        """
         # Data extraction
         basin_ids = np.array(test_results["basin_ids"])
         preds = test_results["predictions"].cpu().numpy()
@@ -185,8 +218,18 @@ class TSForecastEvaluator:
             }
         )
 
-        # Calculate overall metrics - use only the specified horizons for evaluation
-        # even if we had to adjust for data extraction
+        return df
+
+    def _calculate_overall_metrics(self, df: pd.DataFrame) -> Dict[int, Dict[str, float]]:
+        """
+        Calculate overall metrics for each forecast horizon.
+        
+        Args:
+            df: DataFrame with predictions and observations
+                
+        Returns:
+            Dictionary with metrics for each horizon
+        """
         overall_metrics = {}
         for h in self.horizons:
             if h > max(df["horizon"]):
@@ -199,8 +242,21 @@ class TSForecastEvaluator:
             else:
                 print(f"Warning: No data available for horizon {h}")
                 overall_metrics[h] = {metric: np.nan for metric in ["MSE", "MAE", "NSE", "RMSE"]}
+        
+        return overall_metrics
 
-        # Calculate per-basin metrics
+    def _calculate_basin_metrics(
+        self, df: pd.DataFrame
+    ) -> Dict[str, Dict[int, Dict[str, float]]]:
+        """
+        Calculate per-basin metrics for each forecast horizon.
+        
+        Args:
+            df: DataFrame with predictions and observations
+                
+        Returns:
+            Nested dictionary with metrics by basin and horizon
+        """
         basin_metrics = {}
         for basin in df["basin_id"].unique():
             basin_metrics[basin] = {}
@@ -215,8 +271,8 @@ class TSForecastEvaluator:
                     basin_metrics[basin][h] = self._calculate_metrics(horizon_data)
                 else:
                     basin_metrics[basin][h] = {metric: np.nan for metric in ["MSE", "MAE", "NSE", "RMSE"]}
-
-        return df, overall_metrics, basin_metrics
+        
+        return basin_metrics
 
     def _calculate_metrics(self, data: pd.DataFrame) -> Dict[str, float]:
         """Helper method to calculate metrics for a subset of data."""
