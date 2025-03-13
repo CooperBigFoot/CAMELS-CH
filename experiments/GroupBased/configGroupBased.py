@@ -16,7 +16,7 @@ class ExperimentConfig:
     # Base configuration
     GROUP_IDENTIFIER: str = "gauge_id"
     BATCH_SIZE: int = 2048  # Updated batch size
-    MAX_EPOCHS: int = 30
+    MAX_EPOCHS: int = 55
     ACCELERATOR: str = "cuda" if torch.cuda.is_available() else "cpu"
     NUM_RUNS: int = 1
     MAX_WORKERS: int = os.cpu_count()
@@ -43,13 +43,14 @@ class ExperimentConfig:
     FUSION_METHOD: str = "add"  # Options: "add" or "concat"
 
     # Benchmark model configuration
-    BENCHMARK_INPUT_LENGTH: int = 256
+    BENCHMARK_INPUT_LENGTH: int = 33
     BENCHMARK_OUTPUT_LENGTH: int = 10
-    BENCHMARK_HIDDEN_SIZE: int = 64
-    BENCHMARK_DROPOUT: float = 0.4
-    BENCHMARK_NUM_LAYERS: int = 2
-    BENCHMARK_STATIC_EMBEDDING_SIZE: int = 20
-    BENCHMARK_LEARNING_RATE: float = 0.00085
+    BENCHMARK_HIDDEN_SIZE: int = 127
+    BENCHMARK_DROPOUT: float = 0.2
+    BENCHMARK_NUM_LAYERS: int = 15
+    BENCHMARK_STATIC_EMBEDDING_SIZE: int = 16
+    BENCHMARK_LEARNING_RATE: float = 6.5e-5
+    BENCHMARK_FUSION_METHOD: str = "add"  # Options: "add" or "concat"
 
     # Challenger model configuration
     CHALLENGER_INPUT_LENGTH: int = 256
@@ -59,6 +60,7 @@ class ExperimentConfig:
     CHALLENGER_NUM_LAYERS: int = 13
     CHALLENGER_STATIC_EMBEDDING_SIZE: int = 9
     CHALLENGER_LEARNING_RATE: float = 2e-5
+    CHALLENGER_FUSION_METHOD: str = "add"  # Options: "add" or "concat"
 
     # Dataset configuration
     TARGET: str = "streamflow"
@@ -227,7 +229,7 @@ class ExperimentConfig:
             group_identifier=self.GROUP_IDENTIFIER,
             lr_scheduler_patience=self.LR_SCHEDULER_PATIENCE,
             lr_scheduler_factor=self.LR_SCHEDULER_FACTOR,
-            fusion_method=self.FUSION_METHOD,  # Add fusion method
+            fusion_method=self.BENCHMARK_FUSION_METHOD,  # Add fusion method
         )
 
     def get_challenger_tsmixer_config(self) -> TSMixerConfig:
@@ -249,7 +251,7 @@ class ExperimentConfig:
             group_identifier=self.GROUP_IDENTIFIER,
             lr_scheduler_patience=self.LR_SCHEDULER_PATIENCE,
             lr_scheduler_factor=self.LR_SCHEDULER_FACTOR,
-            fusion_method=self.FUSION_METHOD,  # Add fusion method
+            fusion_method=self.CHALLENGER_FUSION_METHOD,  # Add fusion method
         )
 
     def get_preprocessing_config(self) -> Dict:
