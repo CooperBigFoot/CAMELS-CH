@@ -20,6 +20,12 @@ class ExperimentConfig:
     NUM_RUNS: int = 1
     MAX_WORKERS: int = min(6, os.cpu_count())
 
+    # Data splitting configuration
+    USE_PROPORTIONAL_SPLIT: bool = True  # Enable proportional splitting
+    TRAIN_PROP: float = 0.5             # 50% of data for training
+    VAL_PROP: float = 0.25              # 25% of data for validation
+    TEST_PROP: float = 0.25             # 25% of data for testing
+
     # Learning rates with scheduling
     LR_SCHEDULER_PATIENCE: int = 5
     LR_SCHEDULER_FACTOR: float = 0.5
@@ -147,6 +153,14 @@ class ExperimentConfig:
             raise ValueError("Benchmark input length must be positive")
         if self.CHALLENGER_INPUT_LENGTH <= 0:
             raise ValueError("Challenger input length must be positive")
+            
+        # Validate split proportions
+        if self.USE_PROPORTIONAL_SPLIT:
+            total_prop = self.TRAIN_PROP + self.VAL_PROP + self.TEST_PROP
+            if not 0.999 <= total_prop <= 1.001:  # Allow for small floating point errors
+                raise ValueError(f"Split proportions must sum to 1.0, got {total_prop}")
+            if any(p <= 0 for p in [self.TRAIN_PROP, self.VAL_PROP, self.TEST_PROP]):
+                raise ValueError("All split proportions must be positive")
 
     def get_run_seed(self, run_index: int) -> int:
         """Generate a unique seed for each experimental run."""
