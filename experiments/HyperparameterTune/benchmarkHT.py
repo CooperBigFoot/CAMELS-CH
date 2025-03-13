@@ -124,7 +124,7 @@ class BenchmarkTuner:
 
         # Prepare data
         data_module.prepare_data()
-        data_module.setup(stage="fit")
+        data_module.setup()
 
         # Create model with trial hyperparameters
         tsmixer_config = self.config.get_tsmixer_config()

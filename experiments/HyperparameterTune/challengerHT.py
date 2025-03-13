@@ -234,7 +234,7 @@ class ChallengerTuner:
 
         # Prepare data
         merged_data_module.prepare_data()
-        merged_data_module.setup(stage="fit")
+        merged_data_module.setup()
         
         # Log dataset sizes
         train_size = len(merged_data_module.train_dataset) if hasattr(merged_data_module, 'train_dataset') else 0
