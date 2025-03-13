@@ -57,10 +57,11 @@ class BenchmarkTuner:
         # Prepare data frames
         ts_columns = self.config.FORCING_FEATURES + [self.config.TARGET]
         static_columns = self.config.STATIC_FEATURES
+        
+        # Add required date column for data splitting
+        ts_columns_with_date = ts_columns + ["date"] + [self.config.GROUP_IDENTIFIER]
 
-        self.ca_ts_data = self.ca_caravan.get_time_series()[
-            ts_columns + ["date"] + [self.config.GROUP_IDENTIFIER]
-        ]
+        self.ca_ts_data = self.ca_caravan.get_time_series()[ts_columns_with_date]
         self.ca_static_data = self.ca_caravan.get_static_attributes()[static_columns]
 
     def objective(self, trial: optuna.Trial) -> float:
@@ -97,11 +98,29 @@ class BenchmarkTuner:
             features=self.config.FORCING_FEATURES + [self.config.TARGET],
             static_features=self.config.STATIC_FEATURES,
             target=self.config.TARGET,
+            # Use proportional splitting
+            use_proportional_split=self.config.USE_PROPORTIONAL_SPLIT,
+            train_prop=self.config.TRAIN_PROP,
+            val_prop=self.config.VAL_PROP,
+            test_prop=self.config.TEST_PROP,
+            # Legacy parameters (used only if use_proportional_split=False)
             min_train_years=self.config.CA_CONFIG["MIN_TRAIN_YEARS"],
             val_years=self.config.CA_CONFIG["VAL_YEARS"],
             test_years=self.config.CA_CONFIG["TEST_YEARS"],
             max_missing_pct=self.config.CA_CONFIG["MAX_MISSING_PCT"],
         )
+
+        # Log data split information
+        if self.config.USE_PROPORTIONAL_SPLIT:
+            print(f"\nUsing proportional splitting with:")
+            print(f"  - Training: {self.config.TRAIN_PROP*100:.1f}% of data")
+            print(f"  - Validation: {self.config.VAL_PROP*100:.1f}% of data")
+            print(f"  - Testing: {self.config.TEST_PROP*100:.1f}% of data")
+        else:
+            print("\nUsing fixed-year splitting with:")
+            print(f"  - Min train years: {self.config.CA_CONFIG['MIN_TRAIN_YEARS']}")
+            print(f"  - Validation years: {self.config.CA_CONFIG['VAL_YEARS']}")
+            print(f"  - Test years: {self.config.CA_CONFIG['TEST_YEARS']}")
 
         # Prepare data
         data_module.prepare_data()
@@ -139,6 +158,14 @@ class BenchmarkTuner:
 
         # Log additional information
         trial.set_user_attr("best_epoch", trainer.current_epoch)
+        
+        # Log dataset sizes
+        train_size = len(data_module.train_dataset) if hasattr(data_module, 'train_dataset') else 0
+        val_size = len(data_module.val_dataset) if hasattr(data_module, 'val_dataset') else 0
+        test_size = len(data_module.test_dataset) if hasattr(data_module, 'test_dataset') else 0
+        trial.set_user_attr("train_size", train_size)
+        trial.set_user_attr("val_size", val_size)
+        trial.set_user_attr("test_size", test_size)
 
         return best_val_loss
 
@@ -168,6 +195,10 @@ class BenchmarkTuner:
                 "number": trial.number,
                 "value": trial.value,
                 "best_epoch": trial.user_attrs.get("best_epoch", None),
+                # Include dataset sizes in results
+                "train_size": trial.user_attrs.get("train_size", None),
+                "val_size": trial.user_attrs.get("val_size", None),
+                "test_size": trial.user_attrs.get("test_size", None),
                 **trial.params,  # Includes all hyperparameters
             }
             results.append(trial_data)
@@ -214,6 +245,13 @@ class BenchmarkTuner:
 if __name__ == "__main__":
     # Initialize config
     config = ExperimentConfig()
+    
+    # Log split configuration
+    print("\nEXPERIMENT CONFIGURATION:")
+    if config.USE_PROPORTIONAL_SPLIT:
+        print(f"Using proportional data splitting: {config.TRAIN_PROP:.1f}/{config.VAL_PROP:.1f}/{config.TEST_PROP:.1f}")
+    else:
+        print("Using fixed-year data splitting")
 
     # Set CUDA precision
     if config.ACCELERATOR == "cuda":

@@ -128,28 +128,23 @@ class ChallengerTuner:
         ts_columns = self.config.FORCING_FEATURES + [self.config.TARGET]
         static_columns = self.config.STATIC_FEATURES
 
+        # Add date column required for data splitting
+        ts_columns_with_date = ts_columns + ["date"] + [self.config.GROUP_IDENTIFIER]
+        
         # CA data
-        self.ca_ts_data = self.ca_caravan.get_time_series()[
-            ts_columns + ["date"] + [self.config.GROUP_IDENTIFIER]
-        ]
+        self.ca_ts_data = self.ca_caravan.get_time_series()[ts_columns_with_date]
         self.ca_static_data = self.ca_caravan.get_static_attributes()[static_columns]
 
         # CH data
-        self.ch_ts_data = self.ch_caravan.get_time_series()[
-            ts_columns + ["date"] + [self.config.GROUP_IDENTIFIER]
-        ]
+        self.ch_ts_data = self.ch_caravan.get_time_series()[ts_columns_with_date]
         self.ch_static_data = self.ch_caravan.get_static_attributes()[static_columns]
 
         # CL data
-        self.cl_ts_data = self.cl_caravan.get_time_series()[
-            ts_columns + ["date"] + [self.config.GROUP_IDENTIFIER]
-        ]
+        self.cl_ts_data = self.cl_caravan.get_time_series()[ts_columns_with_date]
         self.cl_static_data = self.cl_caravan.get_static_attributes()[static_columns]
 
         # USA data
-        self.usa_ts_data = self.usa_caravan.get_time_series()[
-            ts_columns + ["date"] + [self.config.GROUP_IDENTIFIER]
-        ]
+        self.usa_ts_data = self.usa_caravan.get_time_series()[ts_columns_with_date]
         self.usa_static_data = self.usa_caravan.get_static_attributes()[static_columns]
 
     def objective(self, trial: optuna.Trial) -> float:
@@ -199,6 +194,18 @@ class ChallengerTuner:
             self.usa_static_data,
         ]
 
+        # Log splitting configuration
+        if self.config.USE_PROPORTIONAL_SPLIT:
+            print(f"\nUsing proportional splitting with:")
+            print(f"  - Training: {self.config.TRAIN_PROP*100:.1f}% of data")
+            print(f"  - Validation: {self.config.VAL_PROP*100:.1f}% of data")
+            print(f"  - Testing: {self.config.TEST_PROP*100:.1f}% of data")
+        else:
+            print("\nUsing fixed-year splitting with:")
+            print(f"  - Min train years: {self.config.CA_CONFIG['MIN_TRAIN_YEARS']}")
+            print(f"  - Validation years: {self.config.CA_CONFIG['VAL_YEARS']}")
+            print(f"  - Test years: {self.config.CA_CONFIG['TEST_YEARS']}")
+
         # Create merged data module using CA training parameters
         print(f"\n=== CREATING MERGED DATASET FOR TRIAL {trial.number} ===")
         merged_data_module = HydroDataModule(
@@ -213,7 +220,12 @@ class ChallengerTuner:
             features=self.config.FORCING_FEATURES + [self.config.TARGET],
             static_features=self.config.STATIC_FEATURES,
             target=self.config.TARGET,
-            # Use CA config for all parameters
+            # Use proportional splitting
+            use_proportional_split=self.config.USE_PROPORTIONAL_SPLIT,
+            train_prop=self.config.TRAIN_PROP,
+            val_prop=self.config.VAL_PROP,
+            test_prop=self.config.TEST_PROP,
+            # Legacy parameters (used only if use_proportional_split=False)
             min_train_years=self.config.CA_CONFIG["MIN_TRAIN_YEARS"],
             val_years=self.config.CA_CONFIG["VAL_YEARS"],
             test_years=self.config.CA_CONFIG["TEST_YEARS"],
@@ -223,6 +235,17 @@ class ChallengerTuner:
         # Prepare data
         merged_data_module.prepare_data()
         merged_data_module.setup(stage="fit")
+        
+        # Log dataset sizes
+        train_size = len(merged_data_module.train_dataset) if hasattr(merged_data_module, 'train_dataset') else 0
+        val_size = len(merged_data_module.val_dataset) if hasattr(merged_data_module, 'val_dataset') else 0
+        test_size = len(merged_data_module.test_dataset) if hasattr(merged_data_module, 'test_dataset') else 0
+        print(f"Dataset sizes - Train: {train_size}, Validation: {val_size}, Test: {test_size}")
+        
+        # Store for later logging
+        trial.set_user_attr("train_size", train_size)
+        trial.set_user_attr("val_size", val_size)
+        trial.set_user_attr("test_size", test_size)
 
         # Create model with trial hyperparameters
         tsmixer_config = self.config.get_tsmixer_config()
@@ -289,6 +312,10 @@ class ChallengerTuner:
                 "number": trial.number,
                 "value": trial.value,
                 "best_epoch": trial.user_attrs.get("best_epoch", None),
+                # Include dataset sizes in results
+                "train_size": trial.user_attrs.get("train_size", None),
+                "val_size": trial.user_attrs.get("val_size", None),
+                "test_size": trial.user_attrs.get("test_size", None),
                 **trial.params,  # Includes all hyperparameters
             }
             results.append(trial_data)
@@ -344,6 +371,13 @@ class ChallengerTuner:
 if __name__ == "__main__":
     # Initialize config
     config = ExperimentConfig()
+    
+    # Log split configuration
+    print("\nEXPERIMENT CONFIGURATION:")
+    if config.USE_PROPORTIONAL_SPLIT:
+        print(f"Using proportional data splitting: {config.TRAIN_PROP:.1f}/{config.VAL_PROP:.1f}/{config.TEST_PROP:.1f}")
+    else:
+        print("Using fixed-year data splitting")
 
     # Set CUDA precision
     if config.ACCELERATOR == "cuda":
