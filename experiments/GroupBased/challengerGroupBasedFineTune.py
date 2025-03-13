@@ -96,7 +96,7 @@ class GroupBasedFineTuneRunner:
                     # Load pretrained model from checkpoint
                     initial_model = LitTSMixer.load_from_checkpoint(
                         self.config.PRETRAINED_CHECKPOINT_PATH,
-                        config=self.config.get_challenger_tsmixer_config()
+                        config=self.config.get_benchmark_tsmixer_config()
                     )
                     self.group_models[group_key] = initial_model
                     print("Successfully loaded pretrained model")
@@ -181,9 +181,9 @@ class GroupBasedFineTuneRunner:
 
     def train_model(self, data_module, group_key, run, stage="initial"):
         """Train a model for a specific group."""
-        config = self.config.get_challenger_tsmixer_config()
+        config = self.config.get_benchmark_tsmixer_config()
         
-        # Use challenger config for initial training
+        # Use benchmark config for initial training
         model = LitTSMixer(config)
         trainer = self.create_trainer(f"train_{group_key}_{stage}", run)
         trainer.fit(model, data_module)
@@ -219,7 +219,7 @@ class GroupBasedFineTuneRunner:
         initial_model = self.group_models[group_key]
 
         # Create a new model config with reduced learning rate
-        finetune_config = self.config.get_challenger_tsmixer_config()  # Using challenger config
+        finetune_config = self.config.get_benchmark_tsmixer_config()  # Using benchmark config
         finetune_config.learning_rate /= 10  # Reduce learning rate by 10x
 
         # Create a new model and load initial weights
@@ -243,8 +243,8 @@ class GroupBasedFineTuneRunner:
             group_identifier=self.config.GROUP_IDENTIFIER,
             preprocessing_config=data_module.preprocessing_config,
             batch_size=self.config.BATCH_SIZE,
-            input_length=self.config.CHALLENGER_INPUT_LENGTH,  # Use challenger input length
-            output_length=self.config.CHALLENGER_OUTPUT_LENGTH,  # Use challenger output length
+            input_length=self.config.BENCHMARK_INPUT_LENGTH,  # Use BENCHMARK input length
+            output_length=self.config.BENCHMARK_OUTPUT_LENGTH,  # Use benchmark output length
             num_workers=min(self.config.MAX_WORKERS, multiprocessing.cpu_count()),
             features=self.config.FORCING_FEATURES + [self.config.TARGET],
             static_features=self.config.STATIC_FEATURES,
