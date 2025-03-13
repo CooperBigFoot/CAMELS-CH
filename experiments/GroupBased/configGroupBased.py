@@ -22,7 +22,7 @@ class ExperimentConfig:
     MAX_WORKERS: int = os.cpu_count()
     
     # Path to pretrained checkpoint for fine-tuning
-    PRETRAINED_CHECKPOINT_PATH: Optional[str] = "/workspace/CAMELS-CH/experiments/GroupBased/saved_models/group_based_transfer/group1/tsmixer_group1_run0_20250313_134032.ckpt"
+    PRETRAINED_CHECKPOINT_PATH: Optional[str] = "/workspace/CAMELS-CH/experiments/GroupBased/saved_models/group_based_transfer/group1/tsmixer_group1_run0_20250313_174948.ckpt"
     
     # Input/Output lengths used by both benchmark and challenger models
     INPUT_LENGTH: int = 256  # Default to challenger input length
