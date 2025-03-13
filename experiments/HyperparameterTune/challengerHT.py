@@ -151,7 +151,7 @@ class ChallengerTuner:
         """Optuna objective function for hyperparameter optimization."""
         # Suggest hyperparameters
         input_length = trial.suggest_int("input_length", 30, 365)
-        hidden_size = trial.suggest_int("hidden_size", 32, 256)
+        hidden_size = trial.suggest_int("hidden_size", 32, 128)
         num_layers = trial.suggest_int("num_layers", 2, 15)
         static_embedding_size = trial.suggest_int("static_embedding_size", 5, 20)
         learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
