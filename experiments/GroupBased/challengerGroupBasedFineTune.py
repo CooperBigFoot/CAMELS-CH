@@ -178,7 +178,7 @@ class GroupBasedFineTuneRunner:
         )
 
         data_module.prepare_data()
-        data_module.setup(stage="fit")
+        data_module.setup()
 
         return data_module
 
@@ -277,7 +277,7 @@ class GroupBasedFineTuneRunner:
         )
         
         ca_data_module.prepare_data()
-        ca_data_module.setup(stage="fit")
+        ca_data_module.setup()
         
         # Log data splitting information
         if self.config.USE_PROPORTIONAL_SPLIT:
