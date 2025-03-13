@@ -323,10 +323,10 @@ class GroupBasedFineTuneRunner:
         """Create a PyTorch Lightning trainer with appropriate callbacks."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        logger = pl.loggers.CSVLogger(
-            save_dir=self.logs_dir,
-            name=f"{stage}_run{run}_{timestamp}",
-            flush_logs_every_n_steps=100,
+        logger = pl.loggers.TensorBoardLogger(
+            save_dir="experiments/GroupBased/logs",  # Base directory
+            name=f"{self.config.EXPERIMENT_NAME}_finetune",  # Experiment name
+            version=f"{stage}_run{run}_{timestamp}",  # Version includes stage, run, timestamp
         )
 
         return pl.Trainer(
