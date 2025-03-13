@@ -144,6 +144,12 @@ class GroupBasedRunner:
             features=self.config.FORCING_FEATURES + [self.config.TARGET],
             static_features=self.config.STATIC_FEATURES,
             target=self.config.TARGET,
+            # Use proportional splitting
+            use_proportional_split=self.config.USE_PROPORTIONAL_SPLIT,
+            train_prop=self.config.TRAIN_PROP,
+            val_prop=self.config.VAL_PROP,
+            test_prop=self.config.TEST_PROP,
+            # Legacy parameters (used when not using proportional split)
             min_train_years=self.config.CA_CONFIG["MIN_TRAIN_YEARS"],
             val_years=self.config.CA_CONFIG["VAL_YEARS"],
             test_years=self.config.CA_CONFIG["TEST_YEARS"],
@@ -153,6 +159,22 @@ class GroupBasedRunner:
 
         data_module.prepare_data()
         data_module.setup(stage="fit")
+        
+        # Log data splitting method
+        if self.config.USE_PROPORTIONAL_SPLIT:
+            print(f"\nUsing proportional splitting for group {group_key} with:")
+            print(f"  - Training: {self.config.TRAIN_PROP*100:.1f}% of data")
+            print(f"  - Validation: {self.config.VAL_PROP*100:.1f}% of data")
+            print(f"  - Testing: {self.config.TEST_PROP*100:.1f}% of data")
+            print(f"  - Train dataset size: {len(data_module.train_dataset)}")
+            print(f"  - Validation dataset size: {len(data_module.val_dataset)}")
+            print(f"  - Test dataset size: {len(data_module.test_dataset)}")
+        else:
+            print(f"\nUsing fixed-year splitting for group {group_key} with:")
+            print(f"  - Min train years: {self.config.CA_CONFIG['MIN_TRAIN_YEARS']}")
+            print(f"  - Validation years: {self.config.CA_CONFIG['VAL_YEARS']}")
+            print(f"  - Test years: {self.config.CA_CONFIG['TEST_YEARS']}")
+            
         return data_module
 
     def train_model(self, data_module, group_key, run):
@@ -235,6 +257,13 @@ class GroupBasedRunner:
 if __name__ == "__main__":
     # Initialize config
     config = ExperimentConfig()
+    
+    # Log split configuration
+    print("\nEXPERIMENT CONFIGURATION:")
+    if config.USE_PROPORTIONAL_SPLIT:
+        print(f"Using proportional data splitting: {config.TRAIN_PROP:.1f}/{config.VAL_PROP:.1f}/{config.TEST_PROP:.1f}")
+    else:
+        print("Using fixed-year data splitting")
 
     # Set CUDA precision if applicable
     if config.ACCELERATOR == "cuda":

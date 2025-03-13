@@ -250,7 +250,12 @@ class ChallengerRunner:
             features=self.config.FORCING_FEATURES + [self.config.TARGET],
             static_features=self.config.STATIC_FEATURES,
             target=self.config.TARGET,
-            # Use CA config for all parameters
+            # Use proportional splitting
+            use_proportional_split=self.config.USE_PROPORTIONAL_SPLIT,
+            train_prop=self.config.TRAIN_PROP,
+            val_prop=self.config.VAL_PROP,
+            test_prop=self.config.TEST_PROP,
+            # Legacy parameters (used when not using proportional split)
             min_train_years=self.config.CA_CONFIG["MIN_TRAIN_YEARS"],
             val_years=self.config.CA_CONFIG["VAL_YEARS"],
             test_years=self.config.CA_CONFIG["TEST_YEARS"],
@@ -260,6 +265,21 @@ class ChallengerRunner:
         # Explicitly prepare and set up the data module
         dm.prepare_data()
         dm.setup(stage="fit")
+        
+        # Log data splitting method
+        if self.config.USE_PROPORTIONAL_SPLIT:
+            print(f"\nUsing proportional splitting with:")
+            print(f"  - Training: {self.config.TRAIN_PROP*100:.1f}% of data")
+            print(f"  - Validation: {self.config.VAL_PROP*100:.1f}% of data")
+            print(f"  - Testing: {self.config.TEST_PROP*100:.1f}% of data")
+            print(f"  - Train dataset size: {len(dm.train_dataset)}")
+            print(f"  - Validation dataset size: {len(dm.val_dataset)}")
+            print(f"  - Test dataset size: {len(dm.test_dataset)}")
+        else:
+            print("\nUsing fixed-year splitting with:")
+            print(f"  - Min train years: {self.config.CA_CONFIG['MIN_TRAIN_YEARS']}")
+            print(f"  - Validation years: {self.config.CA_CONFIG['VAL_YEARS']}")
+            print(f"  - Test years: {self.config.CA_CONFIG['TEST_YEARS']}")
 
         return dm
 
@@ -334,6 +354,13 @@ class ChallengerRunner:
 if __name__ == "__main__":
     # Initialize config
     config = ExperimentConfig()
+    
+    # Log split configuration
+    print("\nEXPERIMENT CONFIGURATION:")
+    if config.USE_PROPORTIONAL_SPLIT:
+        print(f"Using proportional data splitting: {config.TRAIN_PROP:.1f}/{config.VAL_PROP:.1f}/{config.TEST_PROP:.1f}")
+    else:
+        print("Using fixed-year data splitting")
 
     # Set CUDA precision
     if config.ACCELERATOR == "cuda":
