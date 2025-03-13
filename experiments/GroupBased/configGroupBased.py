@@ -20,7 +20,14 @@ class ExperimentConfig:
     ACCELERATOR: str = "cuda" if torch.cuda.is_available() else "cpu"
     NUM_RUNS: int = 1
     MAX_WORKERS: int = os.cpu_count()
-
+    
+    # Path to pretrained checkpoint for fine-tuning
+    PRETRAINED_CHECKPOINT_PATH: Optional[str] = None
+    
+    # Input/Output lengths used by both benchmark and challenger models
+    INPUT_LENGTH: int = 256  # Default to challenger input length
+    OUTPUT_LENGTH: int = 10
+    
     # Data splitting configuration
     USE_PROPORTIONAL_SPLIT: bool = True  # Enable proportional splitting
     TRAIN_PROP: float = 0.5             # 50% of data for training

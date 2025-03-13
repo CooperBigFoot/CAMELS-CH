@@ -79,7 +79,7 @@ class GroupBasedFineTuneRunner:
         self.save_aggregated_results(all_results)
 
     def run_single_experiment(self, run: int):
-        """Run a single experiment by training a model for each group and fine-tuning."""
+        """Run a single experiment by either loading a pretrained model or training from scratch, then fine-tuning."""
         training_data = self.config.extract_source_basins_for_training()
         group_results = {}
 
@@ -92,9 +92,26 @@ class GroupBasedFineTuneRunner:
             # Prepare data modules for this group
             data_module = self.prepare_data_module(group_key, group_data)
 
-            # Train initial model
-            initial_model = self.train_model(data_module, group_key, run, stage="initial")
-            self.group_models[group_key] = initial_model
+            # Either load pretrained model or train from scratch
+            if self.config.PRETRAINED_CHECKPOINT_PATH:
+                print(f"Loading pretrained model from: {self.config.PRETRAINED_CHECKPOINT_PATH}")
+                try:
+                    # Load pretrained model from checkpoint
+                    initial_model = LitTSMixer.load_from_checkpoint(
+                        self.config.PRETRAINED_CHECKPOINT_PATH,
+                        config=self.config.get_challenger_tsmixer_config()
+                    )
+                    self.group_models[group_key] = initial_model
+                    print("Successfully loaded pretrained model")
+                except Exception as e:
+                    print(f"Error loading pretrained model: {str(e)}")
+                    print("Falling back to training initial model from scratch")
+                    initial_model = self.train_model(data_module, group_key, run, stage="initial")
+                    self.group_models[group_key] = initial_model
+            else:
+                print("No pretrained model specified. Training initial model from scratch.")
+                initial_model = self.train_model(data_module, group_key, run, stage="initial")
+                self.group_models[group_key] = initial_model
 
             # Fine-tune model on CA data
             finetuned_model = self.fine_tune_model(data_module, group_key, run)
