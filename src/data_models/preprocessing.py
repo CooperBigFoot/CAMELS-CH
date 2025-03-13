@@ -383,19 +383,29 @@ def find_valid_data_period(
 def check_data_period(
     start_date: Optional[pd.Timestamp],
     end_date: Optional[pd.Timestamp],
-    min_train_years: float,
-    val_years: float,
-    test_years: float,
+    min_train_years: float = 5,  # Default minimum training period
+    val_years: float = None,
+    test_years: float = None,
+    train_prop: float = None,
+    val_prop: float = None,
+    test_prop: float = None,
+    use_proportional_split: bool = False,
+    min_valid_days: int = 365,  # Minimum valid period length in days
 ) -> Tuple[bool, Optional[str]]:
     """
-    Check if period has sufficient data for training after reserving validation and test periods.
+    Check if period has sufficient data, enforcing minimum training period regardless of splitting method.
 
     Args:
         start_date: Start date of available data period
         end_date: End date of available data period
-        min_train_years: Minimum required years for training
-        val_years: Fixed validation period in years
-        test_years: Fixed test period in years
+        min_train_years: Minimum required years for training (enforced in both methods)
+        val_years: Fixed validation period in years (for fixed-year method)
+        test_years: Fixed test period in years (for fixed-year method)
+        train_prop: Proportion of data for training (for proportional method)
+        val_prop: Proportion of data for validation (for proportional method)
+        test_prop: Proportion of data for testing (for proportional method)
+        use_proportional_split: Whether to use proportional splitting
+        min_valid_days: Minimum required length of valid period in days
 
     Returns:
         Tuple of (meets_requirement, reason)
@@ -403,27 +413,47 @@ def check_data_period(
     if start_date is None or end_date is None:
         return False, "Missing start or end date"
 
-    if not isinstance(start_date, pd.Timestamp) or not isinstance(
-        end_date, pd.Timestamp
-    ):
+    if not isinstance(start_date, pd.Timestamp) or not isinstance(end_date, pd.Timestamp):
         return False, "Invalid date format"
 
     if start_date > end_date:
         return False, "Start date is after end date"
 
-    # Calculate required validation and test periods
-    required_val_test_days = int((val_years + test_years) * 365.25)
-
-    # Calculate available training days after reserving val/test periods
+    # Calculate total available days
     total_days = (end_date - start_date).days
-    available_train_days = total_days - required_val_test_days
-    available_train_years = available_train_days / 365.25
+    total_years = total_days / 365.25
+    
+    if total_days < min_valid_days:
+        return False, f"Insufficient data period ({total_days} days, minimum {min_valid_days} required)"
+    
+    if use_proportional_split:
+        # For proportional splits, calculate segment sizes
+        train_days = int(total_days * train_prop)
+        val_days = int(total_days * val_prop)
+        test_days = total_days - (train_days + val_days)
+        
+        # Convert training days to years for validation against minimum requirement
+        train_years = train_days / 365.25
+        
+        if train_years < min_train_years:
+            required_total_years = min_train_years / train_prop
+            return False, (f"Insufficient training period ({train_years:.2f} years, minimum {min_train_years} required). "
+                           f"Need {required_total_years:.2f} total years with current proportions.")
+        
+        MIN_SEGMENT_DAYS = 30
+        if val_days < MIN_SEGMENT_DAYS:
+            return False, f"Validation segment too small ({val_days} days, minimum {MIN_SEGMENT_DAYS} required)"
+        if test_days < MIN_SEGMENT_DAYS:
+            return False, f"Test segment too small ({test_days} days, minimum {MIN_SEGMENT_DAYS} required)"
+    else:
+        required_val_test_days = int((val_years + test_years) * 365.25)
+        available_train_days = total_days - required_val_test_days
+        available_train_years = available_train_days / 365.25
 
-    if available_train_years < min_train_years:
-        return (
-            False,
-            f"Insufficient training data ({available_train_years:.2f} years available, {min_train_years} required)",
-        )
+        if available_train_days < 0:
+            return False, f"Insufficient data for validation and test periods ({total_days} days available, {required_val_test_days} required)"
+        if available_train_years < min_train_years:
+            return False, f"Insufficient training data ({available_train_years:.2f} years available, {min_train_years} required)"
 
     return True, None
 

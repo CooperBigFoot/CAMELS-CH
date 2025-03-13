@@ -19,9 +19,8 @@ class HydroDataModule(pl.LightningDataModule):
     while maintaining proper separation between training, validation, and test data.
     It supports both grouped and non-grouped preprocessing pipelines.
     
-    The module now supports future forcing data which is automatically extracted by
-    the underlying HydroDataset for use with models like TSMixer that leverage future 
-    meteorological forcings.
+    The module now supports both fixed-year splits and proportional splits (e.g. 50% training,
+    20% validation, 30% testing) controlled via a flag.
     """
 
     def __init__(
@@ -40,12 +39,18 @@ class HydroDataModule(pl.LightningDataModule):
         static_features: List[str] = None,
         target: str = "streamflow",
         domain_id: Union[str, int] = "training",
+        # New proportion parameters
+        train_prop: float = 0.5,
+        val_prop: float = 0.2,
+        test_prop: float = 0.3,
+        # Keep original year-based parameters for backward compatibility
         min_train_years: int = 10,
         val_years: int = 1,
         test_years: int = 2,
         max_missing_pct: float = 10,
         max_gap_length: int = 30,
-        domain_type: str = "source",  # Added domain_type parameter
+        domain_type: str = "source",
+        use_proportional_split: bool = False,  # Flag to control which splitting method to use
     ):
         """Initialize the HydroDataModule with data and configuration parameters.
         
@@ -62,12 +67,16 @@ class HydroDataModule(pl.LightningDataModule):
             static_features: Optional list of static feature names
             target: Name of target variable column
             domain_id: Identifier for the data domain
-            min_train_years: Minimum years required for training
-            val_years: Number of years to use for validation
-            test_years: Number of years to use for testing
+            train_prop: Proportion of valid data to use for training (when use_proportional_split=True)
+            val_prop: Proportion of valid data to use for validation (when use_proportional_split=True)
+            test_prop: Proportion of valid data to use for testing (when use_proportional_split=True)
+            min_train_years: Minimum years required for training (when use_proportional_split=False)
+            val_years: Number of years to use for validation (when use_proportional_split=False)
+            test_years: Number of years to use for testing (when use_proportional_split=False)
             max_missing_pct: Maximum percentage of missing values allowed
             max_gap_length: Maximum allowed gap length in time series
             domain_type: Type of domain - "source" or "target" (for transfer learning)
+            use_proportional_split: If True, use proportional splitting; otherwise use fixed-year splits
         """
         super().__init__()
 
@@ -82,12 +91,31 @@ class HydroDataModule(pl.LightningDataModule):
         self.static_features = static_features if static_features else []
         self.target = target
         self.domain_id = domain_id
-        self.domain_type = domain_type  # Store domain type for dataset creation
+        self.domain_type = domain_type
+        
+        # Store both splitting methods' parameters
+        self.use_proportional_split = use_proportional_split
+        
+        # Store proportion-based parameters
+        self.train_prop = train_prop
+        self.val_prop = val_prop
+        self.test_prop = test_prop
+        
+        # Store year-based parameters
         self.min_train_years = min_train_years
         self.val_years = val_years
         self.test_years = test_years
+        
         self.max_missing_pct = max_missing_pct
         self.max_gap_length = max_gap_length
+
+        # Validate that proportions sum to 1 when using proportional splitting
+        if self.use_proportional_split:
+            if not np.isclose(self.train_prop + self.val_prop + self.test_prop, 1.0, atol=1e-5):
+                raise ValueError(
+                    f"Train ({self.train_prop}), validation ({self.val_prop}), and test ({self.test_prop}) "
+                    f"proportions must sum to 1.0, but they sum to {self.train_prop + self.val_prop + self.test_prop}"
+                )
 
         # Process and validate input data
         self.time_series_df, self.static_df = self._process_input_data(
@@ -437,41 +465,89 @@ class HydroDataModule(pl.LightningDataModule):
         train_df, val_df, test_df = self._split_data()
         self._apply_preprocessing(train_df)
 
-    def _split_data(self) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    def _split_data(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         Split data into training, validation, and test sets.
+        
+        Uses either fixed time spans or proportional splits based on configuration.
 
         Returns:
             Tuple of DataFrames for train, validation, and test sets
         """
         train_data, val_data, test_data = [], [], []
 
-        for gauge_id, basin_data in self.processed_time_series.groupby(
-            self.group_identifier
-        ):
-            periods = self.quality_report["valid_periods"][gauge_id]
-            valid_end = min(
-                period["end"] for period in periods.values() if period["end"]
-            )
-
-            test_start = valid_end - pd.Timedelta(days=int(self.test_years * 365.25))
-            val_start = test_start - pd.Timedelta(days=int(self.val_years * 365.25))
-
+        for gauge_id, basin_data in self.processed_time_series.groupby(self.group_identifier):
+            # Sort data by date
             basin_data = basin_data.sort_values("date")
-            test_mask = basin_data["date"] >= test_start
-            val_mask = (basin_data["date"] >= val_start) & (
-                basin_data["date"] < test_start
-            )
-            train_mask = basin_data["date"] < val_start
+            
+            if self.use_proportional_split:
+                # Proportional split method
+                # Get valid period from quality report
+                periods = self.quality_report["valid_periods"][gauge_id]
+                
+                # Determine overall valid period (overlap of all required columns)
+                valid_starts = [period["start"] for period in periods.values() if period["start"] is not None]
+                valid_ends = [period["end"] for period in periods.values() if period["end"] is not None]
+                
+                if not valid_starts or not valid_ends:
+                    print(f"Warning: Basin {gauge_id} has no valid periods, skipping")
+                    continue
+                    
+                overall_start = max(valid_starts)
+                overall_end = min(valid_ends)
+                
+                # Calculate total valid duration in days
+                total_valid_days = (overall_end - overall_start).days
+                
+                # Define a minimum valid period (e.g., 1 year) to ensure meaningful splits
+                MIN_VALID_DAYS = 365
+                if total_valid_days < MIN_VALID_DAYS:
+                    print(f"Warning: Basin {gauge_id} has valid period less than {MIN_VALID_DAYS} days, skipping")
+                    continue
+                
+                # Calculate split boundary dates using the proportions
+                train_days = int(total_valid_days * self.train_prop)
+                val_days = int(total_valid_days * self.val_prop)
+                test_days = total_valid_days - (train_days + val_days)
+                
+                # Calculate boundary dates
+                train_end = overall_start + pd.Timedelta(days=train_days)
+                val_end = train_end + pd.Timedelta(days=val_days)
+                
+                # Create masks for each segment
+                train_mask = basin_data["date"] < train_end
+                val_mask = (basin_data["date"] >= train_end) & (basin_data["date"] < val_end)
+                test_mask = basin_data["date"] >= val_end
+            else:
+                # Original fixed-years method
+                periods = self.quality_report["valid_periods"][gauge_id]
+                valid_end = min([period["end"] for period in periods.values() if period["end"] is not None])
+                
+                test_start = valid_end - pd.Timedelta(days=int(self.test_years * 365.25))
+                val_start = test_start - pd.Timedelta(days=int(self.val_years * 365.25))
+                
+                test_mask = basin_data["date"] >= test_start
+                val_mask = (basin_data["date"] >= val_start) & (basin_data["date"] < test_start)
+                train_mask = basin_data["date"] < val_start
 
+            # Append data segments to respective lists
             train_data.append(basin_data[train_mask])
             val_data.append(basin_data[val_mask])
             test_data.append(basin_data[test_mask])
 
+            # Log info about segment sizes for debugging
+            train_size = basin_data[train_mask].shape[0]
+            val_size = basin_data[val_mask].shape[0]
+            test_size = basin_data[test_mask].shape[0]
+            
+            if train_size == 0 or val_size == 0 or test_size == 0:
+                print(f"Warning: Basin {gauge_id} has empty split segments: "
+                      f"train={train_size}, val={val_size}, test={test_size}")
+
         return (
-            pd.concat(train_data, ignore_index=True),
-            pd.concat(val_data, ignore_index=True),
-            pd.concat(test_data, ignore_index=True),
+            pd.concat(train_data, ignore_index=True) if train_data else pd.DataFrame(),
+            pd.concat(val_data, ignore_index=True) if val_data else pd.DataFrame(),
+            pd.concat(test_data, ignore_index=True) if test_data else pd.DataFrame(),
         )
 
     def _apply_preprocessing(self, train_df: pd.DataFrame) -> None:
