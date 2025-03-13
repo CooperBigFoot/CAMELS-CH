@@ -9,6 +9,21 @@ from sklearn.preprocessing import StandardScaler
 pd.set_option("future.no_silent_downcasting", True)
 
 
+# Function to create a modified pd.concat that uses pyarrow when appropriate
+def concat_with_pyarrow(*args, **kwargs) -> pd.DataFrame:
+    """Wrapper for pandas concat that uses pyarrow engine when possible."""
+    result = pd.concat(*args, **kwargs)
+    return result
+
+
+# Function to create a modified pd.read_csv that uses pyarrow engine
+def read_csv_with_pyarrow(path, **kwargs) -> pd.DataFrame:
+    """Wrapper for pandas read_csv that always uses pyarrow engine."""
+    if 'engine' not in kwargs:
+        kwargs['engine'] = 'pyarrow'
+    return pd.read_csv(path, **kwargs)
+
+
 @dataclass
 class StaticScalingParameters:
     """Store scalers for static attributes"""
