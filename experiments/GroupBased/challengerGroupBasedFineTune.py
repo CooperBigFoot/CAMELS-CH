@@ -184,36 +184,24 @@ class GroupBasedFineTuneRunner:
 
     def train_model(self, data_module, group_key, run, stage="initial"):
         """Train a model for a specific group."""
-        config = self.config.get_tsmixer_config()
+        config = self.config.get_challenger_tsmixer_config()
         
-        # Use standard config for initial training
+        # Use challenger config for initial training
         model = LitTSMixer(config)
         trainer = self.create_trainer(f"train_{group_key}_{stage}", run)
         trainer.fit(model, data_module)
 
-        # Save best model
+        # Save full Lightning checkpoint (with global_step and all metadata)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_path = self.model_dir / group_key / f"tsmixer_{group_key}_{stage}_run{run}_{timestamp}.ckpt"
+        trainer.save_checkpoint(save_path)
+        
+        print(f"Saved complete model checkpoint to {save_path}")
+        
+        # Optionally load best checkpoint if available
         best_checkpoint = trainer.checkpoint_callback.best_model_path
         if best_checkpoint:
             best_model = LitTSMixer.load_from_checkpoint(best_checkpoint, config=config)
-            
-            val_loss = trainer.checkpoint_callback.best_model_score.item()
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            
-            model_filename = f"tsmixer_{group_key}_{stage}_run{run}_valloss{val_loss:.4f}_{timestamp}.pt"
-            save_path = self.model_dir / group_key / model_filename
-
-            torch.save(
-                {
-                    "state_dict": best_model.state_dict(),
-                    "config": config.to_dict(),
-                    "val_loss": val_loss,
-                    "group_key": group_key,
-                    "run": run,
-                    "stage": stage,
-                    "timestamp": timestamp,
-                },
-                save_path,
-            )
             return best_model
         
         return model
@@ -292,29 +280,18 @@ class GroupBasedFineTuneRunner:
         # Train fine-tuned model
         trainer = self.create_trainer(f"finetune_{group_key}", run)
         trainer.fit(finetuned_model, ca_data_module)
-
-        # Save fine-tuned model
+        
+        # Save full Lightning checkpoint (with global_step and all metadata)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_path = self.model_dir / group_key / f"tsmixer_{group_key}_finetuned_run{run}_{timestamp}.ckpt"
+        trainer.save_checkpoint(save_path)
+        
+        print(f"Saved complete fine-tuned model checkpoint to {save_path}")
+        
+        # Optionally load best checkpoint if available
         best_checkpoint = trainer.checkpoint_callback.best_model_path
         if best_checkpoint:
             best_model = LitTSMixer.load_from_checkpoint(best_checkpoint, config=finetune_config)
-            
-            val_loss = trainer.checkpoint_callback.best_model_score.item()
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            
-            model_filename = f"tsmixer_{group_key}_finetuned_run{run}_valloss{val_loss:.4f}_{timestamp}.pt"
-            save_path = self.model_dir / group_key / model_filename
-
-            torch.save(
-                {
-                    "state_dict": best_model.state_dict(),
-                    "config": finetune_config.to_dict(),
-                    "val_loss": val_loss,
-                    "group_key": group_key,
-                    "run": run,
-                    "timestamp": timestamp,
-                },
-                save_path,
-            )
             return best_model
         
         return finetuned_model

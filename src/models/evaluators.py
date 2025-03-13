@@ -15,37 +15,83 @@ class TSForecastEvaluator:
 
     def __init__(
         self,
-        datamodule,
         horizons: List[int],
-        models: Dict[str, pl.LightningModule] = None,
+        models_and_datamodules: Dict[str, Tuple[pl.LightningModule, pl.LightningDataModule]] = None,
+        default_datamodule = None,  # Optional fallback datamodule
         benchmark_model: str = None,
         trainer_kwargs: Dict = None,
     ):
-        self.datamodule = datamodule
-        self.horizons = horizons
+        """
+        Initialize the time series forecast evaluator.
         
-
-        # Create deep copies of the models to avoid shared state issues
-        self.models = {}
-        if models:
-            for name, model in models.items():
-                self.models[name] = copy.deepcopy(model)
-
+        Args:
+            horizons: List of forecast horizons to evaluate (in days)
+            models_and_datamodules: Dictionary mapping model names to (model, datamodule) tuples
+            default_datamodule: Optional default datamodule to use if no specific one is provided
+            benchmark_model: Optional name of the model to use as benchmark for comparisons
+            trainer_kwargs: Optional dictionary of kwargs to pass to PyTorch Lightning Trainer
+        """
+        self.horizons = horizons
+        self.default_datamodule = default_datamodule
         self.benchmark_model = benchmark_model
         self.trainer_kwargs = trainer_kwargs or {"accelerator": "cpu", "devices": 1}
         self.results = {}
+        
+        # Initialize storage for models and their datamodules
+        self.models = {}
+        self.datamodules = {}
+        
+        # Store models and datamodules if provided
+        if models_and_datamodules:
+            for name, (model, datamodule) in models_and_datamodules.items():
+                self.models[name] = copy.deepcopy(model)
+                self.datamodules[name] = datamodule
+    
+    def register_model(
+        self, 
+        name: str, 
+        model: pl.LightningModule, 
+        datamodule: Optional[pl.LightningDataModule] = None
+    ):
+        """
+        Register a new model with its specific datamodule.
+        
+        Args:
+            name: Name identifier for the model
+            model: PyTorch Lightning model to register
+            datamodule: Optional datamodule specific to this model
+        """
+        self.models[name] = copy.deepcopy(model)
+        if datamodule:
+            self.datamodules[name] = datamodule
+        elif name not in self.datamodules and self.default_datamodule is None:
+            print(f"Warning: No datamodule provided for model '{name}' and no default datamodule available")
 
     def test_models(self, datamodule=None):
-        """Test all registered models and evaluate results"""
-        if datamodule is None:
-            datamodule = self.datamodule
-
+        """
+        Test all registered models and evaluate results.
+        
+        Args:
+            datamodule: Optional datamodule to use as fallback if no model-specific datamodule exists
+            
+        Returns:
+            Dictionary with test results for all models
+        """
         for name, model in self.models.items():
+            # Determine which datamodule to use in priority order:
+            # 1. Model-specific datamodule
+            # 2. Method parameter datamodule
+            # 3. Default datamodule
+            model_datamodule = self.datamodules.get(name, datamodule or self.default_datamodule)
+            
+            if model_datamodule is None:
+                raise ValueError(f"No datamodule found for model '{name}'")
+                
             print(f"Testing {name}...")
 
             # Create a trainer and run test
             trainer = pl.Trainer(**self.trainer_kwargs)
-            trainer.test(model, datamodule=datamodule)
+            trainer.test(model, datamodule=model_datamodule)
 
             # Verify model has test results
             if not hasattr(model, "test_results"):
@@ -65,23 +111,59 @@ class TSForecastEvaluator:
             print(f"Configured horizons: {self.horizons}")
 
             # Extract and evaluate results
-            df, metrics, basin_metrics = self.evaluate(model.test_results)
+            df, metrics, basin_metrics = self.evaluate(model.test_results, model_datamodule)
             self.results[name] = {
                 "df": df,
                 "metrics": metrics,
                 "basin_metrics": basin_metrics,
+                "datamodule": model_datamodule  # Store reference to used datamodule
             }
 
         return self.results
+    
+    def test_specific_model(self, name: str, datamodule=None):
+        """
+        Test a specific model by name.
+        
+        Args:
+            name: Name of the model to test
+            datamodule: Optional datamodule to use for testing
+            
+        Returns:
+            Dictionary with test results for the specified model
+        """
+        if name not in self.models:
+            raise ValueError(f"Model '{name}' not found")
+            
+        model = self.models[name]
+        model_datamodule = datamodule or self.datamodules.get(name, self.default_datamodule)
+        
+        if model_datamodule is None:
+            raise ValueError(f"No datamodule found for model '{name}'")
+        
+        trainer = pl.Trainer(**self.trainer_kwargs)
+        trainer.test(model, datamodule=model_datamodule)
+        
+        df, metrics, basin_metrics = self.evaluate(model.test_results, model_datamodule)
+        
+        self.results[name] = {
+            "df": df,
+            "metrics": metrics,
+            "basin_metrics": basin_metrics,
+            "datamodule": model_datamodule
+        }
+        
+        return self.results[name]
 
     def evaluate(
-        self, test_results: Dict[str, torch.Tensor]
+        self, test_results: Dict[str, torch.Tensor], datamodule=None
     ) -> Tuple[pd.DataFrame, Dict, Dict]:
         """
         Evaluate model test results and compute metrics.
         
         Args:
             test_results: Dictionary containing model outputs and observations
+            datamodule: Specific datamodule to use for evaluation
                 
         Returns:
             Tuple containing:
@@ -90,7 +172,7 @@ class TSForecastEvaluator:
                 - Dictionary with per-basin metrics by horizon
         """
         # Create evaluation dataframe from test results
-        df = self._prepare_evaluation_dataframe(test_results)
+        df = self._prepare_evaluation_dataframe(test_results, datamodule)
         
         # Calculate overall metrics for each horizon
         overall_metrics = self._calculate_overall_metrics(df)
@@ -101,13 +183,14 @@ class TSForecastEvaluator:
         return df, overall_metrics, basin_metrics
 
     def _prepare_evaluation_dataframe(
-        self, test_results: Dict[str, torch.Tensor]
+        self, test_results: Dict[str, torch.Tensor], datamodule=None
     ) -> pd.DataFrame:
         """
         Create a flattened dataframe with predictions, observations, and metadata.
         
         Args:
             test_results: Dictionary containing model outputs and observations
+            datamodule: Specific datamodule to use for inverse transformations
                 
         Returns:
             DataFrame with predictions, observations, basin IDs, horizons and dates
@@ -195,13 +278,14 @@ class TSForecastEvaluator:
                 f"Unexpected prediction shape {preds.shape}, expected 2D array [batch_size, pred_len]"
             )
 
-        # Inverse transformations if datamodule supports it
-        if hasattr(self.datamodule, "inverse_transform_predictions"):
+        # Use the model-specific datamodule for inverse transforms if provided
+        dm_for_transform = datamodule or self.default_datamodule
+        if dm_for_transform and hasattr(dm_for_transform, "inverse_transform_predictions"):
             try:
-                preds_flat = self.datamodule.inverse_transform_predictions(
+                preds_flat = dm_for_transform.inverse_transform_predictions(
                     preds_flat, basin_ids_expanded
                 )
-                obs_flat = self.datamodule.inverse_transform_predictions(
+                obs_flat = dm_for_transform.inverse_transform_predictions(
                     obs_flat, basin_ids_expanded
                 )
             except Exception as e:
@@ -308,13 +392,32 @@ class TSForecastEvaluator:
 
     def plot_rolling_forecast(
         self,
-        df: pd.DataFrame,
+        model_name: str,
         horizon: int,
         group_identifier: str,
         fig_size: tuple = (12, 6),
         title: str = None,
     ) -> tuple:
-        """Create a rolling forecast plot for a specific basin and horizon."""
+        """
+        Create a rolling forecast plot for a specific basin and horizon.
+        
+        Args:
+            model_name: Name of the model to use for the plot
+            horizon: Forecast horizon to visualize
+            group_identifier: Basin ID or group identifier to plot
+            fig_size: Figure size as (width, height)
+            title: Custom title for the plot
+            
+        Returns:
+            Tuple containing the figure and axes objects
+        """
+        # Get the model-specific results
+        if model_name not in self.results:
+            available_models = list(self.results.keys())
+            raise ValueError(f"Model '{model_name}' not found in results. Available models: {available_models}")
+            
+        df = self.results[model_name]["df"]
+        
         # Validate horizon
         if horizon not in self.horizons:
             raise ValueError(
@@ -414,13 +517,13 @@ class TSForecastEvaluator:
     ) -> Dict:
         """
         Compare two models across all horizons based on a specified metric.
-
+        
         Args:
             model1_name: Name of first model (benchmark)
             model2_name: Name of second model (challenger)
             metric: Metric to compare (default: NSE)
             threshold: Threshold for significant difference (default: 0.05)
-
+            
         Returns:
             Dictionary with comparison results and DataFrames
         """
