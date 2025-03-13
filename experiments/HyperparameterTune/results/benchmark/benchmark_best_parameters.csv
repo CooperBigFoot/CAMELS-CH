@@ -1,2 +1,2 @@
-best_value,input_length,hidden_size,num_layers,static_embedding_size,learning_rate,dropout,batch_size
-0.051039524376392365,234,48,2,20,0.0008536189862866829,0.40419867405823057,1024
+best_value,input_length,hidden_size,num_layers,static_embedding_size,learning_rate,dropout,fusion_method
+0.05941728875041008,33,127,15,16,6.523041476282556e-05,0.19775843754018985,add
