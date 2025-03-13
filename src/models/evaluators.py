@@ -23,6 +23,7 @@ class TSForecastEvaluator:
     ):
         self.datamodule = datamodule
         self.horizons = horizons
+        
 
         # Create deep copies of the models to avoid shared state issues
         self.models = {}
@@ -741,6 +742,434 @@ class TSForecastEvaluator:
             y_max = max(comparison[metric_col1].max(), comparison[metric_col2].max())
             ax.set_ylim(top=y_max * 1.2)
         
+        sns.despine()
+        plt.tight_layout()
+        
+        return fig, ax
+
+    def identify_improved_basins(
+        self, 
+        model1_name: str, 
+        model2_name: str, 
+        metric: str = "NSE", 
+        threshold: float = 0.05
+    ) -> Dict[str, List[str]]:
+        """
+        Identify basins where the challenger model improves or worsens compared to benchmark.
+        
+        Args:
+            model1_name: Name of benchmark model
+            model2_name: Name of challenger model
+            metric: Metric to compare (default: NSE)
+            threshold: Threshold for significant difference (default: 0.05)
+            
+        Returns:
+            Dictionary with 'improved' and 'worsened' lists of basin IDs
+        """
+        if model1_name not in self.results or model2_name not in self.results:
+            missing = []
+            if model1_name not in self.results:
+                missing.append(model1_name)
+            if model2_name not in self.results:
+                missing.append(model2_name)
+            raise ValueError(f"Models not found in results: {', '.join(missing)}")
+            
+        # Extract basin metrics for both models
+        benchmark_metrics = self.results[model1_name]["basin_metrics"]
+        challenger_metrics = self.results[model2_name]["basin_metrics"]
+        
+        # Flatten the nested dictionaries into DataFrames
+        benchmark_df = self.flatten_basin_metrics(benchmark_metrics)
+        challenger_df = self.flatten_basin_metrics(challenger_metrics)
+        
+        # Merge DataFrames on basin_id and horizon
+        comparison = pd.merge(
+            challenger_df,
+            benchmark_df,
+            on=["basin_id", "horizon"],
+            suffixes=("_challenger", "_benchmark")
+        )
+        
+        # Calculate improvement for each basin-horizon pair
+        comparison[f"delta_{metric}"] = comparison[f"{metric}_challenger"] - comparison[f"{metric}_benchmark"]
+        
+        # Group by basin_id to get average improvement across horizons
+        basin_improvement = comparison.groupby("basin_id")[f"delta_{metric}"].mean().reset_index()
+        
+        # Identify improved and worsened basins based on threshold
+        improved_basins = basin_improvement[basin_improvement[f"delta_{metric}"] >= threshold]["basin_id"].tolist()
+        worsened_basins = basin_improvement[basin_improvement[f"delta_{metric}"] <= -threshold]["basin_id"].tolist()
+        
+        # For basins with changes within threshold, find those that are consistently better/worse
+        marginal_basins = basin_improvement[
+            (basin_improvement[f"delta_{metric}"] > -threshold) & 
+            (basin_improvement[f"delta_{metric}"] < threshold)
+        ]["basin_id"].tolist()
+        
+        consistent_improved = []
+        consistent_worsened = []
+        
+        for basin in marginal_basins:
+            basin_data = comparison[comparison["basin_id"] == basin]
+            if (basin_data[f"delta_{metric}"] > 0).all():
+                consistent_improved.append(basin)
+            elif (basin_data[f"delta_{metric}"] < 0).all():
+                consistent_worsened.append(basin)
+        
+        # Combine significantly improved with consistently improved
+        all_improved = list(set(improved_basins + consistent_improved))
+        all_worsened = list(set(worsened_basins + consistent_worsened))
+        
+        return {
+            "improved": all_improved,
+            "worsened": all_worsened,
+            "improvement_data": basin_improvement  # Include the full data for additional analysis
+        }
+
+    def plot_delta_vs_benchmark(
+        self,
+        model1_name: str,
+        model2_name: str,
+        metric: str = "NSE",
+        horizon: Optional[int] = None,
+        figsize: Tuple[int, int] = (10, 8),
+        alpha: float = 0.6,
+        color: str = "steelblue",
+        title: Optional[str] = None
+    ) -> Tuple[plt.Figure, plt.Axes]:
+        """
+        Plot the relationship between benchmark performance and improvement.
+        
+        Args:
+            model1_name: Name of benchmark model
+            model2_name: Name of challenger model
+            metric: Metric to compare (default: NSE)
+            horizon: Specific forecast horizon to analyze (None for average across horizons)
+            figsize: Figure size as (width, height)
+            alpha: Transparency of scatter points
+            color: Base color for the plot
+            title: Custom title for the plot
+            
+        Returns:
+            Matplotlib figure and axes object
+        """
+        from scipy import stats
+        
+        if model1_name not in self.results or model2_name not in self.results:
+            missing = []
+            if model1_name not in self.results:
+                missing.append(model1_name)
+            if model2_name not in self.results:
+                missing.append(model2_name)
+            raise ValueError(f"Models not found in results: {', '.join(missing)}")
+        
+        # Extract basin metrics for both models
+        benchmark_metrics = self.results[model1_name]["basin_metrics"]
+        challenger_metrics = self.results[model2_name]["basin_metrics"]
+        
+        # Flatten the nested dictionaries into DataFrames
+        benchmark_df = self.flatten_basin_metrics(benchmark_metrics)
+        challenger_df = self.flatten_basin_metrics(challenger_metrics)
+        
+        # Merge DataFrames on basin_id and horizon
+        comparison = pd.merge(
+            challenger_df,
+            benchmark_df,
+            on=["basin_id", "horizon"],
+            suffixes=("_challenger", "_benchmark")
+        )
+        
+        # Calculate improvement
+        comparison[f"delta_{metric}"] = comparison[f"{metric}_challenger"] - comparison[f"{metric}_benchmark"]
+        
+        # Filter by horizon if specified
+        if horizon is not None:
+            if horizon not in comparison["horizon"].unique():
+                raise ValueError(f"Horizon {horizon} not found in data")
+            plot_data = comparison[comparison["horizon"] == horizon].copy()
+            horizon_label = f" (Horizon: {horizon})"
+        else:
+            # Group by basin_id to get average across horizons
+            plot_data = comparison.groupby("basin_id").agg({
+                f"{metric}_benchmark": "mean",
+                f"delta_{metric}": "mean"
+            }).reset_index()
+            horizon_label = " (Average Across Horizons)"
+        
+        # Calculate correlation
+        corr, p_value = stats.pearsonr(
+            plot_data[f"{metric}_benchmark"], 
+            plot_data[f"delta_{metric}"]
+        )
+        
+        # Create figure
+        fig, ax = plt.subplots(figsize=figsize)
+        
+        # Scatter plot with regression line
+        sns.regplot(
+            x=f"{metric}_benchmark",
+            y=f"delta_{metric}",
+            data=plot_data,
+            scatter_kws={"alpha": alpha, "color": color},
+            line_kws={"color": "red"},
+            ax=ax
+        )
+        
+        # Add horizontal line at y=0
+        ax.axhline(y=0, color="black", linestyle="--", alpha=0.5)
+        
+        # Add text with correlation information
+        ax.text(
+            0.05, 0.95, 
+            f"Correlation: {corr:.3f} (p={p_value:.4f})",
+            transform=ax.transAxes,
+            fontsize=12,
+            verticalalignment="top",
+            bbox=dict(boxstyle="round", facecolor="white", alpha=0.8)
+        )
+        
+        # Set labels and title
+        ax.set_xlabel(f"Benchmark {metric}", fontsize=12)
+        ax.set_ylabel(f"Δ{metric} (Challenger - Benchmark)", fontsize=12)
+        
+        if title is None:
+            title = f"Relationship Between Benchmark Performance and Improvement{horizon_label}"
+        ax.set_title(title, fontsize=14)
+        
+        # Add improvement zones with different background colors
+        ylim = ax.get_ylim()
+        xlim = ax.get_xlim()
+        
+        # Color the background to show improvement/degradation regions
+        rect_improved = plt.Rectangle(
+            (xlim[0], 0), xlim[1] - xlim[0], ylim[1], 
+            color='green', alpha=0.1, zorder=-100
+        )
+        rect_worsened = plt.Rectangle(
+            (xlim[0], ylim[0]), xlim[1] - xlim[0], -ylim[0], 
+            color='red', alpha=0.1, zorder=-100
+        )
+        ax.add_patch(rect_improved)
+        ax.add_patch(rect_worsened)
+        
+        # Add legend for improvement zones
+        improved_patch = plt.Rectangle((0, 0), 1, 1, color='green', alpha=0.1)
+        worsened_patch = plt.Rectangle((0, 0), 1, 1, color='red', alpha=0.1)
+        ax.legend(
+            [improved_patch, worsened_patch], 
+            ["Improvement Region", "Degradation Region"],
+            loc='lower right'
+        )
+        
+        # Apply styling
+        sns.despine()
+        plt.tight_layout()
+        
+        return fig, ax
+
+    def plot_nse_comparison(
+        self, 
+        model1_name: str, 
+        model2_name: str, 
+        metric: str = "NSE", 
+        figsize: Tuple[int, int] = (14, 6),
+        plot_type: str = "bar",  # Added parameter for plot type
+        violin: bool = False,    # Option to use violin plots instead of box plots
+        individual_points: bool = True  # Option to show individual data points
+    ) -> Tuple[plt.Figure, plt.Axes]:
+        """
+        Create a bar chart or box plot comparing metric values across horizons.
+        
+        Args:
+            model1_name: Name of first model (benchmark)
+            model2_name: Name of second model (challenger) 
+            metric: Metric to compare (default: NSE)
+            figsize: Figure size as (width, height)
+            plot_type: Type of plot ('bar' or 'box')
+            violin: If True and plot_type='box', use violin plots instead
+            individual_points: If True and plot_type='box', show individual points
+                
+        Returns:
+            Matplotlib figure and axes object
+        """
+        if model1_name not in self.results or model2_name not in self.results:
+            missing = []
+            if model1_name not in self.results:
+                missing.append(model1_name)
+            if model2_name not in self.results:
+                missing.append(model2_name)
+            raise ValueError(f"Models not found in results: {', '.join(missing)}")
+        
+        # For bar plots, use overall metrics
+        if plot_type == "bar":
+            # Extract overall metrics for both models
+            benchmark_metrics = self.summarize_metrics(self.results[model1_name]["metrics"])
+            challenger_metrics = self.summarize_metrics(self.results[model2_name]["metrics"])
+            
+            # Reset index to ensure horizon is a column
+            benchmark_metrics = benchmark_metrics.reset_index()
+            challenger_metrics = challenger_metrics.reset_index()
+            
+            # Merge data
+            comparison = pd.merge(
+                challenger_metrics,
+                benchmark_metrics,
+                on="horizon",
+                suffixes=(f"_{model2_name}", f"_{model1_name}")
+            )
+            
+            # Create figure and axis
+            fig, ax = plt.subplots(figsize=figsize)
+            
+            # Define plot style
+            palette = sns.color_palette("Blues", n_colors=2)
+            bar_width = 0.4
+            x_pos = np.arange(len(comparison))
+            
+            # Create bars
+            metric_col1 = f"{metric}_{model2_name}"
+            metric_col2 = f"{metric}_{model1_name}"
+            
+            ax.bar(
+                x_pos - bar_width / 2,
+                comparison[metric_col1],
+                width=bar_width,
+                label=model2_name,
+                color=palette[0],
+            )
+            
+            ax.bar(
+                x_pos + bar_width / 2,
+                comparison[metric_col2],
+                width=bar_width,
+                label=model1_name,
+                color=palette[1],
+            )
+            
+            # Customize plot
+            ax.set_xticks(x_pos)
+            ax.set_xticklabels(comparison["horizon"])
+            ax.set_xlabel("Forecast Horizon (days)", fontsize=12)
+            ax.set_ylabel(f"Average {metric}", fontsize=12)
+            ax.set_title(f"Model Performance Comparison by Horizon ({metric})", fontsize=14)
+            ax.legend()
+            ax.grid(True, alpha=0.3, linestyle="--")
+            
+            # Add value labels
+            for i, (val1, val2) in enumerate(zip(comparison[metric_col1], comparison[metric_col2])):
+                ax.text(i - bar_width / 2, val1 + 0.02, f"{val1:.2f}", ha="center")
+                ax.text(i + bar_width / 2, val2 + 0.02, f"{val2:.2f}", ha="center")
+            
+            # Set y-axis limit with some padding
+            if metric == "NSE":
+                ax.set_ylim(top=1.1)  # NSE can theoretically exceed 1
+            else:
+                y_max = max(comparison[metric_col1].max(), comparison[metric_col2].max())
+                ax.set_ylim(top=y_max * 1.2)
+        
+        # For box plots, use basin-level metrics
+        else:
+            # Extract basin metrics for both models
+            benchmark_basin_metrics = self.results[model1_name]["basin_metrics"]
+            challenger_basin_metrics = self.results[model2_name]["basin_metrics"]
+            
+            # Flatten the nested dictionaries into DataFrames
+            benchmark_df = self.flatten_basin_metrics(benchmark_basin_metrics)
+            challenger_df = self.flatten_basin_metrics(challenger_basin_metrics)
+            
+            # Rename columns to identify model
+            benchmark_df["model"] = model1_name
+            challenger_df["model"] = model2_name
+            
+            # Rename metric column to common name
+            benchmark_df = benchmark_df.rename(columns={metric: "metric_value"})
+            challenger_df = challenger_df.rename(columns={metric: "metric_value"})
+            
+            # Combine data
+            combined_df = pd.concat([benchmark_df, challenger_df])
+            
+            # Create figure
+            fig, ax = plt.subplots(figsize=figsize)
+            
+            # Determine horizons to plot
+            horizons = sorted(combined_df["horizon"].unique())
+            
+            # Set color palette
+            palette = {"challenger": sns.color_palette("Blues")[3], 
+                      "benchmark": sns.color_palette("Blues")[5]}
+            model_colors = {model1_name: palette["benchmark"], model2_name: palette["challenger"]}
+            
+            if violin:
+                # Create violin plots
+                sns.violinplot(
+                    x="horizon",
+                    y="metric_value",
+                    hue="model",
+                    data=combined_df,
+                    palette=model_colors,
+                    split=True,
+                    inner="quartile",
+                    ax=ax
+                )
+            else:
+                # Create box plots
+                sns.boxplot(
+                    x="horizon",
+                    y="metric_value",
+                    hue="model",
+                    data=combined_df,
+                    palette=model_colors,
+                    ax=ax
+                )
+                
+                # Add individual points if requested
+                if individual_points:
+                    sns.stripplot(
+                        x="horizon",
+                        y="metric_value",
+                        hue="model",
+                        data=combined_df,
+                        palette=model_colors,
+                        dodge=True,
+                        alpha=0.3,
+                        size=3,
+                        ax=ax,
+                        legend=False
+                    )
+            
+            # Add median value labels to boxes/violins
+            for i, horizon in enumerate(horizons):
+                for j, model in enumerate([model1_name, model2_name]):
+                    median = combined_df[(combined_df["horizon"] == horizon) & 
+                                        (combined_df["model"] == model)]["metric_value"].median()
+                    
+                    # Position for label depends on whether using violins or not
+                    if violin:
+                        x_pos = i + (0.15 if j == 0 else -0.15)
+                    else:
+                        x_pos = i - 0.2 + (j * 0.4)
+                        
+                    ax.text(
+                        x_pos, median + 0.03,
+                        f"{median:.2f}",
+                        ha='center', va='bottom',
+                        color='black', fontweight='bold',
+                        fontsize=8
+                    )
+            
+            # Customize plot
+            ax.set_xlabel("Forecast Horizon (days)", fontsize=12)
+            ax.set_ylabel(f"{metric} Value", fontsize=12)
+            ax.set_title(f"Distribution of {metric} Values by Horizon", fontsize=14)
+            
+            # Adjust legend to show model names
+            handles, labels = ax.get_legend_handles_labels()
+            ax.legend(handles[:2], labels[:2], title="Model")
+            
+            # Add grid lines for better readability
+            ax.grid(True, axis='y', alpha=0.3, linestyle='--')
+        
+        # Apply styling to either plot type
         sns.despine()
         plt.tight_layout()
         
