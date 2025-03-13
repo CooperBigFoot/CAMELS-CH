@@ -154,7 +154,7 @@ class BenchmarkRunner:
 
         # Explicitly prepare and set up the data module
         dm.prepare_data()
-        dm.setup(stage="fit")
+        dm.setup()
 
         # Log data splitting method
         if self.config.USE_PROPORTIONAL_SPLIT:

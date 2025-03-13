@@ -15,7 +15,7 @@ class ExperimentConfig:
     # Base configuration
     GROUP_IDENTIFIER: str = "gauge_id"
     BATCH_SIZE: int = 2048  # Updated batch size
-    MAX_EPOCHS: int = 30
+    MAX_EPOCHS: int = 100
     ACCELERATOR: str = "cuda" if torch.cuda.is_available() else "cpu"
     NUM_RUNS: int = 1
     MAX_WORKERS: int = min(6, os.cpu_count())
