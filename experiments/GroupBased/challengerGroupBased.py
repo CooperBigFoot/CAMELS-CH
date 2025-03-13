@@ -158,7 +158,7 @@ class GroupBasedRunner:
         )
 
         data_module.prepare_data()
-        data_module.setup(stage="fit")
+        data_module.setup()
         
         # Log data splitting method
         if self.config.USE_PROPORTIONAL_SPLIT:

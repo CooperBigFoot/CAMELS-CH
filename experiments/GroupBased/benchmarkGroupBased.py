@@ -143,14 +143,14 @@ class BenchmarkRunner:
         )
 
         dm.prepare_data()
-        dm.setup(stage="fit")
+        dm.setup()
         
         # Log data splitting method
         if self.config.USE_PROPORTIONAL_SPLIT:
             print(f"\nUsing proportional splitting with:")
-            print(f"  - Training: {self.config.TRAIN_PROP*100:.1f}% of data")
-            print(f"  - Validation: {self.config.VAL_PROP*100:.1f}% of data")
-            print(f"  - Testing: {self.config.TEST_PROP*100:.1f}% of data")
+            print(f"  - Training: {self.config.TRAIN_PROP*100:.2f}% of data")
+            print(f"  - Validation: {self.config.VAL_PROP*100:.2f}% of data")
+            print(f"  - Testing: {self.config.TEST_PROP*100:.2f}% of data")
             print(f"  - Train dataset size: {len(dm.train_dataset)}")
             print(f"  - Validation dataset size: {len(dm.val_dataset)}")
             print(f"  - Test dataset size: {len(dm.test_dataset)}")
@@ -241,7 +241,7 @@ if __name__ == "__main__":
     # Log split configuration
     print("\nEXPERIMENT CONFIGURATION:")
     if config.USE_PROPORTIONAL_SPLIT:
-        print(f"Using proportional data splitting: {config.TRAIN_PROP:.1f}/{config.VAL_PROP:.1f}/{config.TEST_PROP:.1f}")
+        print(f"Using proportional data splitting: {config.TRAIN_PROP:.2f}/{config.VAL_PROP:.2f}/{config.TEST_PROP:.2f}")
     else:
         print("Using fixed-year data splitting")
 
