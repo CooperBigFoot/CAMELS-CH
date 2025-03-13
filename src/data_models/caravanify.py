@@ -129,8 +129,8 @@ class Caravanify:
             file_paths.append(fp)
 
         def read_single(fp: Path) -> pd.DataFrame:
-            # Consider adding engine='pyarrow' if installed for faster parsing
-            df = pd.read_csv(fp, parse_dates=["date"])  # , engine='pyarrow')
+            # Always use pyarrow engine for faster parsing
+            df = pd.read_csv(fp, parse_dates=["date"], engine='pyarrow')
             df["gauge_id"] = fp.stem
             return df
 
@@ -287,7 +287,7 @@ class Caravanify:
         """
         # Load human influence data
         try:
-            human_influence_df = pd.read_csv(self.config.human_influence_path)
+            human_influence_df = pd.read_csv(self.config.human_influence_path, engine="pyarrow")
         except Exception as e:
             raise IOError(f"Failed to load human influence data: {e}")
 
