@@ -14,6 +14,7 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 from typing import Dict, Optional
 from pytorch_lightning import LightningModule
+import warnings
 
 
 #########################################
@@ -24,53 +25,65 @@ class TiDEConfig:
         self,
         input_len: int,
         output_len: int,
-        output_dim: int = 1,
-        past_cov_dim: int = 0,
-        future_cov_dim: int = 0,
-        static_dim: int = 0,
+        output_size: int = 1,  # renamed from output_dim
+        past_feature_size: int = 0,  # renamed from past_cov_dim
+        future_input_size: int = 0,  # renamed from future_cov_dim
+        static_size: int = 0,  # renamed from static_dim
         num_encoder_layers: int = 1,
         num_decoder_layers: int = 1,
-        decoder_output_dim: int = 16,
+        decoder_output_size: int = 16,  # renamed from decoder_output_dim
         hidden_size: int = 128,
-        temporal_decoder_hidden: int = 32,
-        temporal_width_past: int = 0,  # if >0, project past covariates
-        temporal_width_future: int = 0,  # if >0, project future forcing features
+        temporal_decoder_hidden_size: int = 32,  # renamed from temporal_decoder_hidden
+        past_feature_projection_size: int = 0,  # renamed from temporal_width_past
+        future_forcing_projection_size: int = 0,  # renamed from temporal_width_future
         use_layer_norm: bool = False,
         dropout: float = 0.1,
         learning_rate: float = 1e-3,
+        # Legacy parameters (optional)
+        output_dim: Optional[int] = None,
+        past_cov_dim: Optional[int] = None,
+        future_cov_dim: Optional[int] = None,
+        static_dim: Optional[int] = None,
+        decoder_output_dim: Optional[int] = None,
+        temporal_decoder_hidden: Optional[int] = None,
+        temporal_width_past: Optional[int] = None,
+        temporal_width_future: Optional[int] = None,
     ):
         """
+        Initialize TiDE configuration with standardized parameter naming.
+
         Args:
-            input_len: Length of historical input (lookback window).
-            output_len: Forecast horizon (number of prediction steps).
-            output_dim: Number of target components (usually 1).
-            past_cov_dim: Number of past covariate features (appended after target in x).
-            future_cov_dim: Number of future forcing features (provided in future).
-            static_dim: Dimension of static (time‐invariant) features.
-            num_encoder_layers: Number of residual layers in the encoder.
-            num_decoder_layers: Number of residual layers in the decoder.
-            decoder_output_dim: Hidden dimension at decoder output (before temporal decoding).
-            hidden_size: Hidden layer size for residual blocks.
-            temporal_decoder_hidden: Hidden size in the temporal decoder block.
-            temporal_width_past: If >0, project past covariates to this dimension.
-            temporal_width_future: If >0, project future covariates to this dimension.
-            use_layer_norm: Whether to apply LayerNorm after each residual block.
-            dropout: Dropout probability.
+            input_len: Historical lookback window length.
+            output_len: Forecast horizon.
+            output_size: Number of target components.
+            past_feature_size: Number of dynamic features besides target.
+            future_input_size: Number of future forcing features.
+            static_size: Dimension of static features.
+            num_encoder_layers: Encoder layer count.
+            num_decoder_layers: Decoder layer count.
+            decoder_output_size: Decoder output size.
+            hidden_size: Hidden layer size.
+            temporal_decoder_hidden_size: Hidden size in temporal decoder.
+            past_feature_projection_size: Projection size for past features.
+            future_forcing_projection_size: Projection size for future forcing.
+            use_layer_norm: Whether to apply LayerNorm.
+            dropout: Dropout rate.
             learning_rate: Optimizer learning rate.
+            (Legacy parameters are supported via deprecation warnings.)
         """
         self.input_len = input_len
         self.output_len = output_len
-        self.output_dim = output_dim
-        self.past_cov_dim = past_cov_dim
-        self.future_cov_dim = future_cov_dim
-        self.static_dim = static_dim
+        self.output_size = output_size
+        self.past_feature_size = past_feature_size
+        self.future_input_size = future_input_size
+        self.static_size = static_size
         self.num_encoder_layers = num_encoder_layers
         self.num_decoder_layers = num_decoder_layers
-        self.decoder_output_dim = decoder_output_dim
+        self.decoder_output_size = decoder_output_size
         self.hidden_size = hidden_size
-        self.temporal_decoder_hidden = temporal_decoder_hidden
-        self.temporal_width_past = temporal_width_past
-        self.temporal_width_future = temporal_width_future
+        self.temporal_decoder_hidden_size = temporal_decoder_hidden_size
+        self.past_feature_projection_size = past_feature_projection_size
+        self.future_forcing_projection_size = future_forcing_projection_size
         self.use_layer_norm = use_layer_norm
         self.dropout = dropout
         self.learning_rate = learning_rate
@@ -146,26 +159,26 @@ class TiDEModel(nn.Module):
         self.config = config
         L = config.input_len
         H = config.output_len
-        out_dim = config.output_dim
-        past_cov_dim = config.past_cov_dim
-        future_cov_dim = config.future_cov_dim
-        static_dim = config.static_dim
+        out_dim = config.output_size
+        past_cov_dim = config.past_feature_size
+        future_cov_dim = config.future_input_size
+        static_dim = config.static_size
 
         # Corrected enc_dim calculation
         enc_dim = L * out_dim
 
         # Handle past covariates contribution
         if past_cov_dim > 0:
-            if config.temporal_width_past > 0:
-                past_contrib = L * config.temporal_width_past
+            if config.past_feature_projection_size > 0:
+                past_contrib = L * config.past_feature_projection_size
             else:
                 past_contrib = L * past_cov_dim
             enc_dim += past_contrib
 
         # Handle future covariates contribution
         if future_cov_dim > 0:
-            if config.temporal_width_future > 0:
-                future_contrib = H * config.temporal_width_future
+            if config.future_forcing_projection_size > 0:
+                future_contrib = H * config.future_forcing_projection_size
             else:
                 future_contrib = H * future_cov_dim
             enc_dim += future_contrib
@@ -213,7 +226,7 @@ class TiDEModel(nn.Module):
         decoder_layers.append(
             TiDEResBlock(
                 config.hidden_size,
-                config.decoder_output_dim * H,
+                config.decoder_output_size * H,
                 config.hidden_size,
                 config.dropout,
                 config.use_layer_norm,
@@ -223,18 +236,18 @@ class TiDEModel(nn.Module):
 
         # Temporal decoder: fuses the decoder output with future features.
         # Its input dimension is decoder_output_dim plus (if future_cov_dim>0, projected future features).
-        temporal_in_dim = config.decoder_output_dim
+        temporal_in_dim = config.decoder_output_size
         if future_cov_dim > 0:
             # If a projection is used, the future features are mapped to temporal_width_future.
             temporal_in_dim += (
-                config.temporal_width_future
-                if config.temporal_width_future > 0
+                config.future_forcing_projection_size
+                if config.future_forcing_projection_size > 0
                 else future_cov_dim
             )
         self.temporal_decoder = TiDEResBlock(
             temporal_in_dim,
             out_dim,
-            config.temporal_decoder_hidden,
+            config.temporal_decoder_hidden_size,
             config.dropout,
             config.use_layer_norm,
         )
@@ -243,10 +256,10 @@ class TiDEModel(nn.Module):
         self.lookback_skip = nn.Linear(L, H)
 
         # Optional projections for past and future covariates.
-        if past_cov_dim > 0 and config.temporal_width_past > 0:
+        if past_cov_dim > 0 and config.past_feature_projection_size > 0:
             self.past_projection = TiDEResBlock(
                 past_cov_dim,
-                config.temporal_width_past,
+                config.past_feature_projection_size,
                 config.hidden_size,
                 config.dropout,
                 config.use_layer_norm,
@@ -254,10 +267,10 @@ class TiDEModel(nn.Module):
         else:
             self.past_projection = None
 
-        if future_cov_dim > 0 and config.temporal_width_future > 0:
+        if future_cov_dim > 0 and config.future_forcing_projection_size > 0:
             self.future_projection = TiDEResBlock(
                 future_cov_dim,
-                config.temporal_width_future,
+                config.future_forcing_projection_size,
                 config.hidden_size,
                 config.dropout,
                 config.use_layer_norm,
@@ -281,13 +294,13 @@ class TiDEModel(nn.Module):
         """
         B, L, _ = x.shape
         H = self.config.output_len
-        out_dim = self.config.output_dim
+        out_dim = self.config.output_size
 
         # Split x into target and past covariates.
         x_target = x[:, :, :out_dim]  # [B, L, out_dim]
-        if self.config.past_cov_dim > 0:
+        if self.config.past_feature_size > 0:
             x_past = x[
-                :, :, out_dim : out_dim + self.config.past_cov_dim
+                :, :, out_dim : out_dim + self.config.past_feature_size
             ]  # [B, L, past_cov_dim]
             if self.past_projection is not None:
                 x_past = self.past_projection(x_past)  # [B, L, temporal_width_past]
@@ -295,7 +308,7 @@ class TiDEModel(nn.Module):
             x_past = None
 
         # Process future covariates if provided.
-        if self.config.future_cov_dim > 0 and future is not None:
+        if self.config.future_input_size > 0 and future is not None:
             if self.future_projection is not None:
                 future_proj = self.future_projection(
                     future

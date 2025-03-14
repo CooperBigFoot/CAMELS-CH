@@ -56,16 +56,16 @@ class TSMixerDomainAdaptationConfig(TSMixerConfig):
         static_size: int,
         hidden_size: int = 64,
         static_embedding_size: int = 10,
-        num_layers: int = 5,
+        num_mixing_layers: int = 5,  # renamed from num_layers
         dropout: float = 0.1,
         learning_rate: float = 1e-3,
         group_identifier: str = "gauge_id",
-        lr_scheduler_patience: int = 2,
-        lr_scheduler_factor: float = 0.5,
-        lambda_adv: float = 1.0,
-        initial_lambda: float = 0.0,
+        scheduler_patience: int = 2,  # renamed from lr_scheduler_patience
+        scheduler_factor: float = 0.5,  # renamed from lr_scheduler_factor
+        domain_adaptation_lambda: float = 1.0,  # renamed from lambda_adv
+        initial_adaptation_lambda: float = 0.0,  # renamed from initial_lambda
         domain_loss_weight: float = 1.0,
-        discriminator_hidden_dim: int = 16,
+        discriminator_hidden_size: int = 16,  # renamed from discriminator_hidden_dim
         use_target_labels: bool = False,
         target_loss_weight: float = 1.0,
         use_zero_static: bool = True,
@@ -79,15 +79,15 @@ class TSMixerDomainAdaptationConfig(TSMixerConfig):
             static_size: Number of static features
             hidden_size: Size of hidden layers in network
             static_embedding_size: Size of static feature embeddings
-            num_layers: Number of ResBlock layers
+            num_mixing_layers: Number of ResBlock layers
             dropout: Dropout rate
             learning_rate: Initial learning rate
             group_identifier: Column name for the group/basin identifier
-            lr_scheduler_patience: Patience for learning rate scheduler
-            lr_scheduler_factor: Factor by which to reduce learning rate
-            lambda_adv: Weight for gradient reversal scaling (final value)
+            scheduler_patience: Patience for learning rate scheduler
+            scheduler_factor: Factor by which to reduce learning rate
+            domain_adaptation_lambda: Weight for gradient reversal scaling (final value)
             domain_loss_weight: Weight for domain loss in total loss function
-            discriminator_hidden_dim: Hidden dimension size for domain discriminator
+            discriminator_hidden_size: Hidden dimension size for domain discriminator
             use_target_labels: Whether to use target labels for training
             target_loss_weight: Weight for target loss in total loss function
             use_zero_static: Whether to zero out static features for domain adaptation
@@ -100,18 +100,18 @@ class TSMixerDomainAdaptationConfig(TSMixerConfig):
             static_size=static_size,
             hidden_size=hidden_size,
             static_embedding_size=static_embedding_size,
-            num_layers=num_layers,
+            num_layers=num_mixing_layers,  # pass renamed parameter
             dropout=dropout,
             learning_rate=learning_rate,
             group_identifier=group_identifier,
-            lr_scheduler_patience=lr_scheduler_patience,
-            lr_scheduler_factor=lr_scheduler_factor,
+            lr_scheduler_patience=scheduler_patience,
+            lr_scheduler_factor=scheduler_factor,
         )
 
-        self.lambda_adv = lambda_adv
-        self.initial_lambda = initial_lambda
+        self.domain_adaptation_lambda = domain_adaptation_lambda
+        self.initial_adaptation_lambda = initial_adaptation_lambda
         self.domain_loss_weight = domain_loss_weight
-        self.discriminator_hidden_dim = discriminator_hidden_dim
+        self.discriminator_hidden_size = discriminator_hidden_size
 
         self.use_target_labels = use_target_labels
         self.target_loss_weight = target_loss_weight
@@ -150,9 +150,9 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
         # Domain adaptation components
         feature_dim = self.config.input_len * self.config.input_size
         self.domain_discriminator = DomainDiscriminator(
-            feature_dim=feature_dim, hidden_dim=self.config.discriminator_hidden_dim
+            feature_dim=feature_dim, hidden_dim=self.config.discriminator_hidden_size
         )
-        self.current_lambda = self.config.initial_lambda
+        self.current_lambda = self.config.initial_adaptation_lambda
 
         # Loss functions
         self.mse_criterion = MSELoss()
@@ -274,13 +274,13 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
 
         if not hasattr(self.trainer, "max_epochs") or self.trainer.max_epochs is None:
             print("Warning: trainer.max_epochs not set, using constant lambda")
-            return self.config.lambda_adv
+            return self.config.domain_adaptation_lambda
 
         current_epoch = self.trainer.current_epoch
         max_epochs = self.trainer.max_epochs
         progress = current_epoch / max_epochs
 
-        return self.get_lambda_value(progress) * self.config.lambda_adv
+        return self.get_lambda_value(progress) * self.config.domain_adaptation_lambda
 
     def on_train_epoch_start(self) -> None:
         """Update lambda value at the beginning of each epoch."""
@@ -494,8 +494,8 @@ class LitTSMixerDomainAdaptation(pl.LightningModule):
             "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer,
                 mode="min",
-                patience=self.config.lr_scheduler_patience,
-                factor=self.config.lr_scheduler_factor,
+                patience=self.config.scheduler_patience,
+                factor=self.config.scheduler_factor,
             ),
             "monitor": "val_loss",
         }

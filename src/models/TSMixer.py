@@ -26,16 +26,16 @@ class TSMixerConfig:
         future_input_size: Optional[int] = None,  # Number of future forcing features
         hidden_size: int = 64,
         static_embedding_size: int = 10,
-        num_layers: int = 5,
+        num_mixing_layers: int = 5,  # renamed from num_layers
         dropout: float = 0.1,
         learning_rate: float = 1e-3,
         group_identifier: str = "gauge_id",
-        lr_scheduler_patience: int = 2,
-        lr_scheduler_factor: float = 0.5,
+        scheduler_patience: int = 2,  # renamed from lr_scheduler_patience
+        scheduler_factor: float = 0.5,  # renamed from lr_scheduler_factor
         fusion_method: str = "add",  # Options: "add" or "concat"
     ):
         """Initialize TSMixer configuration.
-        
+
         Args:
             input_len: Length of the input sequence
             input_size: Number of input features
@@ -44,27 +44,31 @@ class TSMixerConfig:
             future_input_size: Number of future forcing features (defaults to input_size minus 1)
             hidden_size: Size of hidden layers
             static_embedding_size: Size of static feature embedding
-            num_layers: Number of mixing layers
+            num_mixing_layers: Number of mixing layers
             dropout: Dropout rate
             learning_rate: Initial learning rate
             group_identifier: Name of the column identifying catchment groups
-            lr_scheduler_patience: Patience for learning rate scheduler
-            lr_scheduler_factor: Factor for learning rate reduction
+            scheduler_patience: Patience for learning rate scheduler
+            scheduler_factor: Factor for learning rate reduction
             fusion_method: Method to fuse historical and future representations ("add" or "concat")
         """
         self.input_len = input_len
         self.input_size = input_size
         self.output_len = output_len
         self.static_size = static_size
-        self.future_input_size = future_input_size if future_input_size is not None else max(1, input_size - 1)
+        self.future_input_size = (
+            future_input_size
+            if future_input_size is not None
+            else max(1, input_size - 1)
+        )
         self.hidden_size = hidden_size
         self.static_embedding_size = static_embedding_size
-        self.num_layers = num_layers
+        self.num_mixing_layers = num_mixing_layers
         self.dropout = dropout
         self.learning_rate = learning_rate
         self.group_identifier = group_identifier
-        self.lr_scheduler_patience = lr_scheduler_patience
-        self.lr_scheduler_factor = lr_scheduler_factor
+        self.scheduler_patience = scheduler_patience
+        self.scheduler_factor = scheduler_factor
         self.fusion_method = fusion_method
 
     @classmethod
@@ -88,11 +92,11 @@ class TSMixerConfig:
 
 class InputAlignmentModule(nn.Module):
     """Aligns historical data, future forcing, and static features into a common representation.
-    
+
     This module implements the "align" stage described in Section 4.2 of the TSMixer paper,
     projecting heterogeneous inputs into a unified space for subsequent mixing layers.
     """
-    
+
     def __init__(
         self,
         input_size: int,
@@ -106,7 +110,7 @@ class InputAlignmentModule(nn.Module):
         fusion_method: str = "add",
     ):
         """Initialize the alignment module.
-        
+
         Args:
             input_size: Number of input features
             input_len: Length of input sequence
@@ -119,24 +123,24 @@ class InputAlignmentModule(nn.Module):
             fusion_method: Method to fuse representations ("add" or "concat")
         """
         super().__init__()
-        
+
         self.fusion_method = fusion_method
         self.output_len = output_len
-        
+
         # Historical data projection
         self.historical_projection = nn.Sequential(
             nn.Linear(input_len * input_size, hidden_size * output_len),
             nn.ReLU(),
             nn.Dropout(dropout),  # Using parameterized dropout
         )
-        
+
         # Future forcing projection
         self.future_projection = nn.Sequential(
             nn.Linear(future_input_size, hidden_size),
             nn.ReLU(),
             nn.Dropout(dropout),  # Using parameterized dropout
         )
-        
+
         # Static feature projection (if available)
         if static_size > 0:
             self.static_projection = nn.Sequential(
@@ -144,70 +148,80 @@ class InputAlignmentModule(nn.Module):
                 nn.ReLU(),
                 nn.Dropout(dropout),  # Using parameterized dropout
             )
-            
+
             # Gate for static modulation
             self.static_gate = nn.Linear(static_embedding_size, hidden_size)
         else:
             self.static_projection = None
             self.static_gate = None
-            
+
         # Final output size after fusion
-        if (fusion_method == "add"):
+        if fusion_method == "add":
             self.output_size = hidden_size
-        elif (fusion_method == "concat"):
+        elif fusion_method == "concat":
             self.output_size = hidden_size * 2
         else:
             raise ValueError(f"Unsupported fusion method: {fusion_method}")
-            
+
         # Layer normalization for aligned representations
         self.norm_historical = nn.LayerNorm(hidden_size)
         self.norm_future = nn.LayerNorm(hidden_size)
         self.norm_fused = nn.LayerNorm(self.output_size)
-            
+
     def forward(
-        self, 
-        historical: torch.Tensor, 
-        future: torch.Tensor, 
-        static: Optional[torch.Tensor] = None
+        self,
+        historical: torch.Tensor,
+        future: torch.Tensor,
+        static: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
         Align and fuse historical, future, and static data.
-        
+
         Args:
             historical: Historical data [batch_size, input_len, input_size]
             future: Future forcing data [batch_size, output_len, future_input_size]
             static: Static features [batch_size, static_size]
-            
+
         Returns:
             Fused representation [batch_size, output_len, output_size]
         """
         batch_size = historical.size(0)
-        
+
         # Project historical data to match output sequence length
         hist_flat = historical.reshape(batch_size, -1)  # [B, input_len * input_size]
-        hist_proj = self.historical_projection(hist_flat)  # [B, hidden_size * output_len]
-        hist_aligned = hist_proj.reshape(batch_size, self.output_len, -1)  # [B, output_len, hidden_size]
+        hist_proj = self.historical_projection(
+            hist_flat
+        )  # [B, hidden_size * output_len]
+        hist_aligned = hist_proj.reshape(
+            batch_size, self.output_len, -1
+        )  # [B, output_len, hidden_size]
         hist_aligned = self.norm_historical(hist_aligned)
-        
+
         # Project future forcing data
-        future_aligned = self.norm_future(self.future_projection(future))  # [B, output_len, hidden_size]
-        
+        future_aligned = self.norm_future(
+            self.future_projection(future)
+        )  # [B, output_len, hidden_size]
+
         # Apply static modulation if available
         if static is not None and self.static_projection is not None:
             static_emb = self.static_projection(static)  # [B, static_embedding_size]
-            static_gate = torch.sigmoid(self.static_gate(static_emb))  # [B, hidden_size]
-            static_gate = static_gate.unsqueeze(1).expand(-1, self.output_len, -1)  # [B, output_len, hidden_size]
-            
+            static_gate = torch.sigmoid(
+                self.static_gate(static_emb)
+            )  # [B, hidden_size]
+            static_gate = static_gate.unsqueeze(1).expand(
+                -1, self.output_len, -1
+            )  # [B, output_len, hidden_size]
+
             # Apply modulation
             hist_aligned = hist_aligned * static_gate
             future_aligned = future_aligned * static_gate
-        
+
         # Fuse representations
         if self.fusion_method == "add":
             fused = hist_aligned + future_aligned
         else:  # concat
             fused = torch.cat([hist_aligned, future_aligned], dim=-1)
-            
+
         return self.norm_fused(fused)
 
 
@@ -345,9 +359,11 @@ class TSMixerBackbone(nn.Module):
         )
 
         # Determine the input dimension for mixing layers based on fusion method
-        input_dim = (config.hidden_size * 2 
-                     if config.fusion_method == "concat" 
-                     else config.hidden_size)
+        input_dim = (
+            config.hidden_size * 2
+            if config.fusion_method == "concat"
+            else config.hidden_size
+        )
 
         # Main mixing layers
         self.layers = nn.ModuleList(
@@ -358,10 +374,10 @@ class TSMixerBackbone(nn.Module):
                     dropout=config.dropout,
                     input_len=config.output_len,  # Now using output_len as the sequence length
                 )
-                for _ in range(config.num_layers)
+                for _ in range(config.num_mixing_layers)
             ]
         )
-        
+
         # Optional conditional feature mixing (kept for backward compatibility)
         self.conditional_mixing = ConditionalFeatureMixing(
             input_size=config.input_size,
@@ -371,9 +387,9 @@ class TSMixerBackbone(nn.Module):
         )
 
     def forward(
-        self, 
-        x: torch.Tensor, 
-        static: torch.Tensor, 
+        self,
+        x: torch.Tensor,
+        static: torch.Tensor,
         future: Optional[torch.Tensor] = None,
         zero_static: bool = False,
         use_legacy: bool = False,
@@ -397,21 +413,19 @@ class TSMixerBackbone(nn.Module):
             # Process through mixing layers
             for layer in self.layers:
                 x = layer(x)
-                
+
             return x
-        
+
         # Modern mode with future forcing
         # Align and fuse historical data with future forcing
         fused = self.alignment_module(
-            historical=x,
-            future=future,
-            static=None if zero_static else static
+            historical=x, future=future, static=None if zero_static else static
         )
-        
+
         # Process through mixing layers
         for layer in self.layers:
             fused = layer(fused)
-            
+
         return fused
 
 
@@ -434,10 +448,10 @@ class TSMixerHead(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Project features to predictions.
-        
+
         Args:
             x: Input features [batch_size, seq_len, input_dim]
-            
+
         Returns:
             Predictions [batch_size, output_len, 1]
         """
@@ -452,12 +466,14 @@ class TSMixer(nn.Module):
         super().__init__()
 
         self.backbone = TSMixerBackbone(config)
-        
+
         # Determine input dimension for head based on fusion method
-        head_input_dim = (config.hidden_size * 2 
-                         if config.fusion_method == "concat" 
-                         else config.hidden_size)
-        
+        head_input_dim = (
+            config.hidden_size * 2
+            if config.fusion_method == "concat"
+            else config.hidden_size
+        )
+
         self.head = TSMixerHead(
             input_dim=head_input_dim,
             input_len=config.output_len,  # Now using output_len as sequence length
@@ -467,19 +483,19 @@ class TSMixer(nn.Module):
         self.config = config
 
     def forward(
-        self, 
-        x: torch.Tensor, 
-        static: torch.Tensor, 
-        future: Optional[torch.Tensor] = None
+        self,
+        x: torch.Tensor,
+        static: torch.Tensor,
+        future: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
         Forward pass with support for future forcing data.
-        
+
         Args:
             x: Historical input features of shape [B, input_len, input_size]
             static: Static features of shape [B, static_size]
             future: Optional future forcing data of shape [B, output_len, future_input_size]
-            
+
         Returns:
             Predictions of shape [B, output_len, 1]
         """
@@ -488,7 +504,9 @@ class TSMixer(nn.Module):
         if static is not None:
             assert static.ndim == 2, "Static tensor must be of shape [B, static_size]"
         if future is not None:
-            assert future.ndim == 3, "Future tensor must be of shape [B, output_len, future_input_size]"
+            assert future.ndim == 3, (
+                "Future tensor must be of shape [B, output_len, future_input_size]"
+            )
         features = self.backbone(x, static, future)
         return self.head(features)
 
@@ -502,7 +520,7 @@ class LitTSMixer(pl.LightningModule):
     ) -> None:
         """
         Initialize the Lightning Module with a TSMixerConfig.
-        
+
         Args:
             config: TSMixer configuration as a TSMixerConfig instance or dict.
         """
@@ -549,19 +567,19 @@ class LitTSMixer(pl.LightningModule):
         print("Head parameters unfrozen")
 
     def forward(
-        self, 
-        x: torch.Tensor, 
-        static: torch.Tensor, 
-        future: Optional[torch.Tensor] = None
+        self,
+        x: torch.Tensor,
+        static: torch.Tensor,
+        future: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
         Forward pass that delegates to the TSMixer model.
-        
+
         Args:
             x: Historical input features [B, input_len, input_size]
             static: Static features [B, static_size]
             future: Optional future forcing data [B, output_len, future_input_size]
-        
+
         Returns:
             Predictions [B, output_len, 1]
         """
@@ -572,7 +590,7 @@ class LitTSMixer(pl.LightningModule):
     ) -> torch.Tensor:
         """
         Execute a single training step.
-        
+
         Args:
             batch: Dictionary with keys:
                 "X" -> [B, input_len, input_size],
@@ -580,7 +598,7 @@ class LitTSMixer(pl.LightningModule):
                 "static" -> [B, static_size],
                 "future" (optional) -> [B, output_len, future_input_size]
             batch_idx: Index of the current batch.
-        
+
         Returns:
             Computed training loss (MSE) as a tensor.
         """
@@ -598,11 +616,11 @@ class LitTSMixer(pl.LightningModule):
     ) -> Dict[str, torch.Tensor]:
         """
         Execute a single validation step.
-        
+
         Args:
             batch: Dictionary with keys similar to training_step.
             batch_idx: Index of the current batch.
-        
+
         Returns:
             Dictionary with validation loss, predictions, and targets.
         """
@@ -620,7 +638,7 @@ class LitTSMixer(pl.LightningModule):
     ) -> Dict[str, torch.Tensor]:
         """
         Execute a single test step.
-        
+
         Args:
             batch: Dictionary with keys:
                 "X" -> [B, input_len, input_size],
@@ -629,7 +647,7 @@ class LitTSMixer(pl.LightningModule):
                 "future" (optional) -> [B, output_len, future_input_size],
                 plus optional "input_end_date" and "slice_idx" metadata.
             batch_idx: Index of the current batch.
-        
+
         Returns:
             Dictionary with test predictions, observations, and metadata.
         """
@@ -637,14 +655,30 @@ class LitTSMixer(pl.LightningModule):
         static = batch["static"]
         future = batch.get("future")
         y_hat = self(x, static, future)
+
+        # Calculate loss metrics
+        loss = self.mse_criterion(y_hat, y)
+
+        # Log test metrics
+        self.log("test_loss", loss, batch_size=x.size(0))
+        self.log("test_mse", loss, batch_size=x.size(0))
+
+        # Create output dictionary for evaluation
         output = {
             "predictions": y_hat.squeeze(-1),
             "observations": y.squeeze(-1),
             "basin_ids": batch[self.config.group_identifier],
-            "input_end_date": batch.get("input_end_date", []),
-            "slice_idx": batch.get("slice_idx", []),
         }
+
+        # Add optional metadata if available in the batch
+        if "input_end_date" in batch:
+            output["input_end_date"] = batch["input_end_date"]
+        if "slice_idx" in batch:
+            output["slice_idx"] = batch["slice_idx"]
+
+        # Collect outputs for evaluation
         self.test_outputs.append(output)
+
         return output
 
     def on_test_epoch_start(self) -> None:
@@ -674,8 +708,8 @@ class LitTSMixer(pl.LightningModule):
             "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer,
                 mode="min",
-                patience=self.config.lr_scheduler_patience,
-                factor=self.config.lr_scheduler_factor,
+                patience=self.config.scheduler_patience,
+                factor=self.config.scheduler_factor,
             ),
             "monitor": "val_loss",
         }
