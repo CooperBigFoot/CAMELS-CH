@@ -22,7 +22,7 @@ class ExperimentConfig:
     MAX_WORKERS: int = os.cpu_count()
     
     # Path to pretrained checkpoint for fine-tuning
-    PRETRAINED_CHECKPOINT_PATH: Optional[str] = "/workspace/CAMELS-CH/experiments/GroupBased/saved_models/group_based_transfer_benchmark/tsmixer_benchmark_run0_20250313_180510.ckpt"
+    PRETRAINED_CHECKPOINT_PATH: Optional[str] = "/workspace/CAMELS-CH/experiments/GroupBased/saved_models/group_based_transfer/group1/tsmixer_group1_run0_20250314_084753.ckpt"
     
     # Input/Output lengths used by both benchmark and challenger models
     INPUT_LENGTH: int = 256  # Default to challenger input length
@@ -59,15 +59,25 @@ class ExperimentConfig:
     BENCHMARK_LEARNING_RATE: float = 6.5e-5
     BENCHMARK_FUSION_METHOD: str = "add"  # Options: "add" or "concat"
 
-    # Challenger model configuration
-    CHALLENGER_INPUT_LENGTH: int = 256
+        # Benchmark model configuration
+    CHALLENGER_INPUT_LENGTH: int = 33
     CHALLENGER_OUTPUT_LENGTH: int = 10
-    CHALLENGER_HIDDEN_SIZE: int = 128
-    CHALLENGER_DROPOUT: float = 0.3
-    CHALLENGER_NUM_LAYERS: int = 13
-    CHALLENGER_STATIC_EMBEDDING_SIZE: int = 9
-    CHALLENGER_LEARNING_RATE: float = 2e-5
+    CHALLENGER_HIDDEN_SIZE: int = 127
+    CHALLENGER_DROPOUT: float = 0.2
+    CHALLENGER_NUM_LAYERS: int = 15
+    CHALLENGER_STATIC_EMBEDDING_SIZE: int = 16
+    CHALLENGER_LEARNING_RATE: float = 6.5e-5
     CHALLENGER_FUSION_METHOD: str = "add"  # Options: "add" or "concat"
+
+    # # Challenger model configuration
+    # CHALLENGER_INPUT_LENGTH: int = 256
+    # CHALLENGER_OUTPUT_LENGTH: int = 10
+    # CHALLENGER_HIDDEN_SIZE: int = 128
+    # CHALLENGER_DROPOUT: float = 0.3
+    # CHALLENGER_NUM_LAYERS: int = 13
+    # CHALLENGER_STATIC_EMBEDDING_SIZE: int = 9
+    # CHALLENGER_LEARNING_RATE: float = 2e-5
+    # CHALLENGER_FUSION_METHOD: str = "add"  # Options: "add" or "concat"
 
     # Dataset configuration
     TARGET: str = "streamflow"
