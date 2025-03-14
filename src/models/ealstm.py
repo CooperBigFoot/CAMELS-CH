@@ -1,339 +1,514 @@
-"""Entity-Aware LSTM (EA-LSTM) Implementation.
+"""
+Implementation of Entity-Aware LSTM (EA-LSTM) for hydrological forecasting.
 
-Code adapted from: https://github.com/kratzert/ealstm_regional_modeling/blob/master/papercode/ealstm.py
+Based on the paper: "Kratzert et al. (2019) - Towards learning universal, regional, and
+local hydrological behaviors via machine learning applied to large-sample datasets"
+https://hess.copernicus.org/articles/23/5089/2019/
 
-The EA-LSTM extends the standard LSTM by incorporating static (entity-aware) features
-that modulate the input gate, allowing the model to learn how static attributes
-influence the importance of dynamic inputs.
+This implementation follows the model conventions defined in the project guidelines.
 """
 
-from typing import Tuple, Dict
+from typing import Dict, Optional, Tuple, Any, Union, List, Type
+import numpy as np
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
-from torch.nn import MSELoss
 from torch.optim import Adam
-import pandas as pd
-import numpy as np
-from utils.loss_functions import NSELoss
+from torch.nn import MSELoss
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
 class EALSTMConfig:
+    """Configuration class for EA-LSTM model."""
+
     def __init__(
         self,
-        input_size_dyn: int,
-        input_size_stat: int,
-        hidden_size: int,
-        output_size: int,  # This will be mapped to pred_len
-        batch_first: bool = True,
-        initial_forget_bias: int = 0,
+        input_len: int,
+        output_len: int,
+        input_size: int,
+        static_size: int,
+        hidden_size: int = 64,
         dropout: float = 0.0,
+        future_input_size: Optional[int] = None,
         learning_rate: float = 1e-3,
+        group_identifier: str = "gauge_id",
+        scheduler_patience: int = 5,
+        scheduler_factor: float = 0.5,
+        num_layers: int = 1,
+        bias: bool = True,
     ):
-        self.input_size_dyn = input_size_dyn
-        self.input_size_stat = input_size_stat
+        """
+        Initialize EA-LSTM configuration.
+
+        Args:
+            input_len: Length of the input sequence (lookback window)
+            output_len: Length of the forecast horizon
+            input_size: Dimensionality of input features per time step
+            static_size: Dimensionality of static/time-invariant features
+            hidden_size: Size of the LSTM hidden state
+            dropout: Dropout rate for regularization
+            future_input_size: Dimensionality of future forcing features
+            learning_rate: Learning rate for optimization
+            group_identifier: Column name identifying the grouping variable
+            scheduler_patience: Patience for learning rate scheduler
+            scheduler_factor: Factor for learning rate reduction
+            num_layers: Number of stacked LSTM layers
+            bias: Whether to use bias in LSTM layers
+        """
+        self.input_len = input_len
+        self.output_len = output_len
+        self.input_size = input_size
+        self.static_size = static_size
         self.hidden_size = hidden_size
-        self.pred_len = output_size  # Critical for evaluator compatibility
-        self.batch_first = batch_first
-        self.initial_forget_bias = initial_forget_bias
         self.dropout = dropout
+        self.future_input_size = (
+            future_input_size
+            if future_input_size is not None
+            else max(1, input_size - 1)
+        )
         self.learning_rate = learning_rate
+        self.group_identifier = group_identifier
+        self.scheduler_patience = scheduler_patience
+        self.scheduler_factor = scheduler_factor
+        self.num_layers = num_layers
+        self.bias = bias
+
+    @classmethod
+    def from_dict(cls, config_dict: Dict[str, Any]) -> "EALSTMConfig":
+        """Create a config object from a dictionary."""
+        return cls(**config_dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert config to dictionary."""
+        return self.__dict__.copy()
+
+    def update(self, **kwargs) -> "EALSTMConfig":
+        """Update config parameters."""
+        for key, value in kwargs.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+            else:
+                raise ValueError(f"Unknown configuration parameter: {key}")
+        return self
+
+
+class EALSTMCell(nn.Module):
+    """
+    Entity-Aware LSTM cell that modulates its input gate using static features.
+
+    The EA-LSTM differs from standard LSTM by conditioning the input gate on static
+    features, making the network able to learn entity-specific behaviors. Other gates
+    (forget, output) operate only on dynamic inputs as in standard LSTM.
+    """
+
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        static_size: int,
+        bias: bool = True,
+    ):
+        """
+        Initialize an EA-LSTM cell.
+
+        Args:
+            input_size: Size of dynamic features
+            hidden_size: Size of hidden state
+            static_size: Size of static features
+            bias: Whether to use bias parameters
+        """
+        super().__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.static_size = static_size
+        self.bias = bias
+
+        # Input gate (i_t) uses static features
+        self.static_i2i = nn.Linear(static_size, hidden_size, bias=bias)
+
+        # Dynamic input for cell state update
+        self.i2c = nn.Linear(input_size, hidden_size, bias=bias)
+
+        # Forget gate (f_t)
+        self.i2f = nn.Linear(input_size, hidden_size, bias=bias)
+        self.h2f = nn.Linear(hidden_size, hidden_size, bias=False)
+
+        # Output gate (o_t)
+        self.i2o = nn.Linear(input_size, hidden_size, bias=bias)
+        self.h2o = nn.Linear(hidden_size, hidden_size, bias=False)
+
+        # Cell state update
+        self.h2c = nn.Linear(hidden_size, hidden_size, bias=False)
+
+    def forward(
+        self,
+        dynamic_x: torch.Tensor,
+        static_x: torch.Tensor,
+        hidden_state: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Forward pass for a single EA-LSTM cell.
+
+        Args:
+            dynamic_x: Dynamic input tensor [batch_size, input_size]
+            static_x: Static input tensor [batch_size, static_size]
+            hidden_state: Previous hidden state (h, c) or None for initial state
+
+        Returns:
+            Tuple of new hidden state (h_t, c_t)
+        """
+        if hidden_state is None:
+            batch_size = dynamic_x.size(0)
+            h_t = torch.zeros(batch_size, self.hidden_size, device=dynamic_x.device)
+            c_t = torch.zeros(batch_size, self.hidden_size, device=dynamic_x.device)
+        else:
+            h_t, c_t = hidden_state
+
+        # Input gate: uses static features only
+        i_t = torch.sigmoid(self.static_i2i(static_x))
+
+        # Forget gate: uses dynamic inputs and previous hidden state
+        f_t = torch.sigmoid(self.i2f(dynamic_x) + self.h2f(h_t))
+
+        # Output gate: uses dynamic inputs and previous hidden state
+        o_t = torch.sigmoid(self.i2o(dynamic_x) + self.h2o(h_t))
+
+        # Cell state update: traditional input modulation with input gate
+        c_tilde = torch.tanh(self.i2c(dynamic_x) + self.h2c(h_t))
+        c_t = f_t * c_t + i_t * c_tilde
+
+        # Hidden state update
+        h_t = o_t * torch.tanh(c_t)
+
+        return h_t, c_t
 
 
 class EALSTM(nn.Module):
-    """Entity-Aware LSTM implementation.
+    """
+    Entity-Aware LSTM model for hydrological forecasting.
 
-    The EA-LSTM extends traditional LSTM architecture by using static features to
-    modulate the input gate, enabling the model to learn how static catchment
-    attributes influence the processing of dynamic inputs.
-
-    Args:
-        input_size_dyn: Number of dynamic features passed to the LSTM at each time step.
-        input_size_stat: Number of static features used to modulate the input gate.
-        hidden_size: Number of hidden/memory cells.
-        batch_first: If True, batch dimension is first in input tensor shape. If False,
-            sequence dimension is first. Defaults to True.
-        initial_forget_bias: Initial value for forget gate bias. Defaults to 0.
-
-    Attributes:
-        input_size_dyn: Size of dynamic input features.
-        input_size_stat: Size of static input features.
-        hidden_size: Number of hidden units.
-        batch_first: Whether batch dimension comes first in input tensors.
-        initial_forget_bias: Initial forget gate bias value.
-        weight_ih: Input-to-hidden weights for dynamic features.
-        weight_hh: Hidden-to-hidden weights.
-        weight_sh: Static-to-hidden weights.
-        bias: Bias terms for dynamic features.
-        bias_s: Bias terms for static features.
+    This model uses static catchment attributes to modulate the input gate
+    of the LSTM, enabling better transfer learning between different catchments.
     """
 
-    def __init__(
-        self,
-        input_size_dyn: int,
-        input_size_stat: int,
-        hidden_size: int,
-        batch_first: bool = True,
-        initial_forget_bias: int = 0,
-    ):
-        super(EALSTM, self).__init__()
-
-        self.input_size_dyn = input_size_dyn
-        self.input_size_stat = input_size_stat
-        self.hidden_size = hidden_size
-        self.batch_first = batch_first
-        self.initial_forget_bias = initial_forget_bias
-
-        # Create tensors of learnable parameters
-        self.weight_ih = nn.Parameter(
-            torch.FloatTensor(input_size_dyn, 3 * hidden_size)
-        )
-        self.weight_hh = nn.Parameter(torch.FloatTensor(hidden_size, 3 * hidden_size))
-        self.weight_sh = nn.Parameter(torch.FloatTensor(input_size_stat, hidden_size))
-        self.bias = nn.Parameter(torch.FloatTensor(3 * hidden_size))
-        self.bias_s = nn.Parameter(torch.FloatTensor(hidden_size))
-
-        # Initialize parameters
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        """Initialize all learnable parameters of the LSTM.
-
-        Initializes weights using orthogonal initialization for input-to-hidden
-        and static-to-hidden weights. Hidden-to-hidden weights are initialized as
-        block diagonal matrices. Biases are initialized to zero, with optional
-        initial forget gate bias.
+    def __init__(self, config: EALSTMConfig):
         """
-        nn.init.orthogonal_(self.weight_ih.data)
-        nn.init.orthogonal_(self.weight_sh)
-
-        weight_hh_data = torch.eye(self.hidden_size)
-        weight_hh_data = weight_hh_data.repeat(1, 3)
-        self.weight_hh.data = weight_hh_data
-
-        nn.init.constant_(self.bias.data, val=0)
-        nn.init.constant_(self.bias_s.data, val=0)
-
-        if self.initial_forget_bias != 0:
-            self.bias.data[: self.hidden_size] = self.initial_forget_bias
-
-    def forward(
-        self, x_d: torch.Tensor, x_s: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Forward pass of the EA-LSTM.
+        Initialize the EA-LSTM model.
 
         Args:
-            x_d: Tensor containing batch of sequences of dynamic features.
-                Shape: [batch_size, seq_len, input_size_dyn] if batch_first=True,
-                else [seq_len, batch_size, input_size_dyn].
-            x_s: Tensor containing batch of static features.
-                Shape: [batch_size, input_size_stat].
+            config: Configuration object with model parameters
+        """
+        super().__init__()
+        self.config = config
+
+        # Create stacked EA-LSTM layers
+        self.ealstm_cells = nn.ModuleList(
+            [
+                EALSTMCell(
+                    input_size=config.input_size,
+                    hidden_size=config.hidden_size,
+                    static_size=config.static_size,
+                    bias=config.bias,
+                )
+                for _ in range(config.num_layers)
+            ]
+        )
+
+        # Add dropout between layers
+        self.dropout = nn.Dropout(config.dropout) if config.dropout > 0 else None
+
+        # Projection from hidden state to output (for multi-step forecasting)
+        self.projection = nn.Sequential(
+            nn.Linear(config.hidden_size, config.hidden_size),
+            nn.ReLU(),
+            nn.Linear(config.hidden_size, config.output_len),
+        )
+
+        # Future forcing integration (if provided)
+        if config.future_input_size > 0:
+            self.future_forcing_layer = nn.Sequential(
+                nn.Linear(
+                    config.future_input_size * config.output_len, config.hidden_size
+                ),
+                nn.ReLU(),
+                nn.Linear(config.hidden_size, config.output_len),
+            )
+        else:
+            self.future_forcing_layer = None
+
+    def forward(
+        self,
+        x: torch.Tensor,  # [batch_size, input_len, input_size]
+        static: torch.Tensor,  # [batch_size, static_size]
+        future: Optional[
+            torch.Tensor
+        ] = None,  # [batch_size, output_len, future_input_size]
+    ) -> torch.Tensor:  # [batch_size, output_len, 1]
+        """
+        Forward pass of the EA-LSTM model.
+
+        Args:
+            x: Dynamic input features [batch_size, input_len, input_size]
+            static: Static features [batch_size, static_size]
+            future: Optional future forcing data [batch_size, output_len, future_input_size]
 
         Returns:
-            tuple: Contains:
-                - h_n: Hidden states for each time step.
-                    Shape: [batch_size, seq_len, hidden_size] if batch_first=True,
-                    else [seq_len, batch_size, hidden_size].
-                - c_n: Cell states for each time step.
-                    Shape: Same as h_n.
-
-        Note:
-            The input gate is calculated once using static features and then
-            applied at each time step. This allows the model to learn how static
-            catchment attributes modulate the influence of dynamic inputs.
+            Forecast tensor [batch_size, output_len, 1]
         """
-        if self.batch_first:
-            x_d = x_d.transpose(0, 1)
+        batch_size = x.size(0)
 
-        seq_len, batch_size, _ = x_d.size()
+        # Process each time step through EA-LSTM cells
+        hidden_states = [None] * self.config.num_layers
 
-        h_0 = x_d.data.new(batch_size, self.hidden_size).zero_()
-        c_0 = x_d.data.new(batch_size, self.hidden_size).zero_()
-        h_x = (h_0, c_0)
+        # Process the sequence through EA-LSTM
+        for t in range(self.config.input_len):
+            x_t = x[:, t, :]  # [batch_size, input_size]
 
-        # Empty lists to temporally store all intermediate hidden/cell states
-        h_n, c_n = [], []
+            # Pass through all LSTM layers
+            for layer in range(self.config.num_layers):
+                # Get input for this layer
+                if layer == 0:
+                    layer_input = x_t
+                else:
+                    # Get the h_t from the previous layer's output
+                    h_t, _ = hidden_states[
+                        layer - 1
+                    ]  # This line uses the previous layer's h_t
+                    if self.dropout is not None:
+                        layer_input = self.dropout(h_t)
+                    else:
+                        layer_input = h_t
 
-        # Expand bias vectors to batch size
-        bias_batch = self.bias.unsqueeze(0).expand(batch_size, *self.bias.size())
+                # Process through EA-LSTM cell
+                h_t, c_t = self.ealstm_cells[layer](
+                    dynamic_x=layer_input,
+                    static_x=static,
+                    hidden_state=hidden_states[layer],
+                )
+                hidden_states[layer] = (h_t, c_t)
 
-        # Calculate input gate only once because inputs are static
-        bias_s_batch = self.bias_s.unsqueeze(0).expand(batch_size, *self.bias_s.size())
-        i = torch.sigmoid(torch.addmm(bias_s_batch, x_s, self.weight_sh))
+        # Use final hidden state for projection
+        final_h = hidden_states[-1][0]  # [batch_size, hidden_size]
 
-        # Perform forward steps over input sequence
-        for t in range(seq_len):
-            h_0, c_0 = h_x
+        # Project hidden state to output sequence
+        output = self.projection(final_h)  # [batch_size, output_len]
 
-            # Calculate gates
-            gates = torch.addmm(bias_batch, h_0, self.weight_hh) + torch.mm(
-                x_d[t], self.weight_ih
-            )
-            f, o, g = gates.chunk(3, 1)
+        # Integrate future forcing if available
+        if future is not None and self.future_forcing_layer is not None:
+            # Flatten future features
+            future_flat = future.reshape(
+                batch_size, -1
+            )  # [batch_size, output_len * future_input_size]
 
-            c_1 = torch.sigmoid(f) * c_0 + i * torch.tanh(g)
-            h_1 = torch.sigmoid(o) * torch.tanh(c_1)
+            # Project future features
+            future_effect = self.future_forcing_layer(
+                future_flat
+            )  # [batch_size, output_len]
 
-            # Store intermediate hidden/cell state in list
-            h_n.append(h_1)
-            c_n.append(c_1)
+            # Combine with LSTM output
+            output = output + future_effect
 
-            h_x = (h_1, c_1)
-
-        h_n = torch.stack(h_n, 0)
-        c_n = torch.stack(c_n, 0)
-
-        if self.batch_first:
-            h_n = h_n.transpose(0, 1)
-            c_n = c_n.transpose(0, 1)
-
-        return h_n, c_n
+        # Reshape to [batch_size, output_len, 1]
+        return output.unsqueeze(-1)
 
 
 class LitEALSTM(pl.LightningModule):
-    """PyTorch Lightning wrapper for EA-LSTM model.
-
-    This class wraps the EA-LSTM model with PyTorch Lightning functionality,
-    providing structured training, validation, and testing loops. It includes
-    built-in logging for multiple metrics (MSE, NSE) and handles both dynamic
-    and static input features.
-
-    Args:
-        input_size_dyn: Number of dynamic input features.
-        input_size_stat: Number of static input features.
-        hidden_size: Number of hidden units in the LSTM.
-        output_size: Number of output features (prediction horizons).
-        target: Name of the target variable being predicted.
-
-    Attributes:
-        model: The underlying EA-LSTM model.
-        fc: Fully connected layer for final predictions.
-        mse_criterion: Mean squared error loss function.
-        nse_criterion: Nash-Sutcliffe efficiency loss function.
-        test_outputs: List to store test predictions.
-        test_results: Dictionary containing test results and metrics.
-    """
+    """PyTorch Lightning Module implementation of EA-LSTM."""
 
     def __init__(
         self,
-        input_size_dyn: int,
-        input_size_stat: int,
-        hidden_size: int,
-        output_size: int,
-        batch_first: bool = True,
-        initial_forget_bias: int = 0,
-        dropout: float = 0.0,
-        learning_rate: float = 1e-3,
-    ):
+        config: Union[EALSTMConfig, Dict[str, Any]],
+    ) -> None:
+        """
+        Initialize the Lightning Module with an EALSTMConfig.
+
+        Args:
+            config: EA-LSTM configuration as an EALSTMConfig instance or dict
+        """
         super().__init__()
 
-        # Create config
-        self.config = EALSTMConfig(
-            input_size_dyn=input_size_dyn,
-            input_size_stat=input_size_stat,
-            hidden_size=hidden_size,
-            output_size=output_size,
-            batch_first=batch_first,
-            initial_forget_bias=initial_forget_bias,
-            dropout=dropout,
-            learning_rate=learning_rate,
-        )
+        # Handle different config input types
+        if isinstance(config, dict):
+            self.config = EALSTMConfig.from_dict(config)
+        else:
+            self.config = config
 
-        # Initialize EALSTM model using config parameters
-        self.model = EALSTM(
-            input_size_dyn=self.config.input_size_dyn,
-            input_size_stat=self.config.input_size_stat,
-            hidden_size=self.config.hidden_size,
-            batch_first=self.config.batch_first,
-            initial_forget_bias=self.config.initial_forget_bias,
-        )
+        # Create the EA-LSTM model using the config
+        self.model = EALSTM(self.config)
 
-        # Add dropout and output projection
-        self.dropout = nn.Dropout(self.config.dropout)
-        self.projection = nn.Linear(self.config.hidden_size, self.config.pred_len)
+        # Save all hyperparameters from config for reproducibility
+        self.save_hyperparameters(self.config.to_dict())
 
-        # Save hyperparameters and configure loss
-        self.save_hyperparameters()
-        self.learning_rate = self.config.learning_rate
+        # Set up criteria and tracking variables
         self.mse_criterion = MSELoss()
         self.test_outputs = []
+        self.test_results = None
 
-    def forward(self, x_d: torch.Tensor, x_s: torch.Tensor) -> torch.Tensor:
-        # Forward pass through EALSTM
-        hidden_states, _ = self.model(x_d, x_s)
+    def forward(
+        self,
+        x: torch.Tensor,
+        static: torch.Tensor,
+        future: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """
+        Forward pass that delegates to the EA-LSTM model.
 
-        # Apply dropout to final hidden state
-        hidden_states = self.dropout(hidden_states)
+        Args:
+            x: Historical input features [batch_size, input_len, input_size]
+            static: Static features [batch_size, static_size]
+            future: Optional future forcing data [batch_size, output_len, future_input_size]
 
-        # Project to output size using only the last hidden state
-        if self.model.batch_first:
-            output = self.projection(hidden_states[:, -1, :])
-        else:
-            output = self.projection(hidden_states[-1])
-
-        return output.unsqueeze(-1)  # [B, pred_len, 1]
+        Returns:
+            Predictions [batch_size, output_len, 1]
+        """
+        return self.model(x, static, future)
 
     def training_step(
         self, batch: Dict[str, torch.Tensor], batch_idx: int
     ) -> torch.Tensor:
-        x_d, x_s = batch["X"], batch["static"]
-        y = batch["y"].unsqueeze(-1)
-        y_hat = self(x_d, x_s)
+        """
+        Execute a single training step.
 
+        Args:
+            batch: Dictionary with keys:
+                "X" -> [batch_size, input_len, input_size],
+                "y" -> [batch_size, output_len],
+                "static" -> [batch_size, static_size],
+                "future" (optional) -> [batch_size, output_len, future_input_size]
+            batch_idx: Index of the current batch
+
+        Returns:
+            Computed training loss (MSE) as a tensor
+        """
+        x, y = batch["X"], batch["y"].unsqueeze(-1)
+        static = batch["static"]
+        future = batch.get("future")
+        y_hat = self(x, static, future)
         loss = self.mse_criterion(y_hat, y)
-
-        self.log("train_loss", loss, batch_size=x_d.size(0))
-        self.log("train_mse", loss, batch_size=x_d.size(0))
-
+        self.log("train_loss", loss, batch_size=x.size(0))
+        self.log("train_mse", loss, batch_size=x.size(0))
         return loss
 
     def validation_step(
         self, batch: Dict[str, torch.Tensor], batch_idx: int
     ) -> Dict[str, torch.Tensor]:
-        x_d, x_s = batch["X"], batch["static"]
-        y = batch["y"].unsqueeze(-1)
-        y_hat = self(x_d, x_s)
+        """
+        Execute a single validation step.
 
+        Args:
+            batch: Dictionary with keys similar to training_step
+            batch_idx: Index of the current batch
+
+        Returns:
+            Dictionary with validation loss, predictions, and targets
+        """
+        x, y = batch["X"], batch["y"].unsqueeze(-1)
+        static = batch["static"]
+        future = batch.get("future")
+        y_hat = self(x, static, future)
         loss = self.mse_criterion(y_hat, y)
-
-        self.log("val_loss", loss, batch_size=x_d.size(0))
-        self.log("val_mse", loss, batch_size=x_d.size(0))
-
+        self.log("val_loss", loss, batch_size=x.size(0))
+        self.log("val_mse", loss, batch_size=x.size(0))
         return {"val_loss": loss, "preds": y_hat, "targets": y}
 
     def test_step(
         self, batch: Dict[str, torch.Tensor], batch_idx: int
     ) -> Dict[str, torch.Tensor]:
-        x_d, x_s = batch["X"], batch["static"]
-        y = batch["y"].unsqueeze(-1)
-        y_hat = self(x_d, x_s)
+        """
+        Execute a single test step.
 
+        Args:
+            batch: Dictionary with keys:
+                "X" -> [batch_size, input_len, input_size],
+                "y" -> [batch_size, output_len],
+                "static" -> [batch_size, static_size],
+                "future" (optional) -> [batch_size, output_len, future_input_size],
+                plus optional "input_end_date" and "slice_idx" metadata.
+            batch_idx: Index of the current batch
+
+        Returns:
+            Dictionary with test predictions, observations, and metadata
+        """
+        x, y = batch["X"], batch["y"].unsqueeze(-1)
+        static = batch["static"]
+        future = batch.get("future")
+        y_hat = self(x, static, future)
+
+        # Calculate loss metrics
+        loss = self.mse_criterion(y_hat, y)
+
+        # Log test metrics
+        self.log("test_loss", loss, batch_size=x.size(0))
+        self.log("test_mse", loss, batch_size=x.size(0))
+
+        # Create output dictionary for evaluation
         output = {
             "predictions": y_hat.squeeze(-1),
             "observations": y.squeeze(-1),
-            "basin_ids": batch["gauge_id"],
+            "basin_ids": batch[self.config.group_identifier],
         }
 
+        # Add optional metadata if available in the batch
+        if "input_end_date" in batch:
+            output["input_end_date"] = batch["input_end_date"]
+        if "slice_idx" in batch:
+            output["slice_idx"] = batch["slice_idx"]
+
+        # Collect outputs for evaluation
         self.test_outputs.append(output)
 
         return output
 
     def on_test_epoch_start(self) -> None:
+        """Reset test outputs collector at the beginning of test epoch."""
         self.test_outputs = []
 
     def on_test_epoch_end(self) -> None:
+        """Consolidate all test outputs at the end of test epoch."""
         if not self.test_outputs:
             print("Warning: No test outputs collected")
             return
 
-        # Collect all outputs
+        # Consolidate all test outputs into a single dictionary
         self.test_results = {
             "predictions": torch.cat([x["predictions"] for x in self.test_outputs]),
             "observations": torch.cat([x["observations"] for x in self.test_outputs]),
             "basin_ids": [bid for x in self.test_outputs for bid in x["basin_ids"]],
         }
 
+        # Add optional metadata if available
+        if "input_end_date" in self.test_outputs[0]:
+            self.test_results["input_end_date"] = [
+                date for x in self.test_outputs for date in x["input_end_date"]
+            ]
+
+        if "slice_idx" in self.test_outputs[0]:
+            self.test_results["slice_idx"] = [
+                idx for x in self.test_outputs for idx in x["slice_idx"]
+            ]
+
+        # Clear temporary storage
         self.test_outputs = []
 
-    def configure_optimizers(self) -> torch.optim.Optimizer:
-        return Adam(self.parameters(), lr=self.learning_rate)
+    def configure_optimizers(self) -> Dict:
+        """
+        Configure optimizer and learning rate scheduler.
+
+        Returns:
+            Dictionary with optimizer and scheduler configuration
+        """
+        optimizer = Adam(self.parameters(), lr=self.config.learning_rate)
+        scheduler = {
+            "scheduler": ReduceLROnPlateau(
+                optimizer,
+                mode="min",
+                patience=self.config.scheduler_patience,
+                factor=self.config.scheduler_factor,
+            ),
+            "monitor": "val_loss",
+        }
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": scheduler,
+            "monitor": "val_loss",
+        }
