@@ -152,9 +152,9 @@ class InputAlignmentModule(nn.Module):
             self.static_gate = None
             
         # Final output size after fusion
-        if fusion_method == "add":
+        if (fusion_method == "add"):
             self.output_size = hidden_size
-        elif fusion_method == "concat":
+        elif (fusion_method == "concat"):
             self.output_size = hidden_size * 2
         else:
             raise ValueError(f"Unsupported fusion method: {fusion_method}")
@@ -476,13 +476,19 @@ class TSMixer(nn.Module):
         Forward pass with support for future forcing data.
         
         Args:
-            x: Historical input features [batch_size, input_len, input_size]
-            static: Static features [batch_size, static_size]
-            future: Future forcing data [batch_size, output_len, future_input_size]
+            x: Historical input features of shape [B, input_len, input_size]
+            static: Static features of shape [B, static_size]
+            future: Optional future forcing data of shape [B, output_len, future_input_size]
             
         Returns:
-            Predictions [batch_size, output_len, 1]
+            Predictions of shape [B, output_len, 1]
         """
+        # Validate input dimensions
+        assert x.ndim == 3, "Input tensor x must be of shape [B, input_len, input_size]"
+        if static is not None:
+            assert static.ndim == 2, "Static tensor must be of shape [B, static_size]"
+        if future is not None:
+            assert future.ndim == 3, "Future tensor must be of shape [B, output_len, future_input_size]"
         features = self.backbone(x, static, future)
         return self.head(features)
 
@@ -493,8 +499,13 @@ class LitTSMixer(pl.LightningModule):
     def __init__(
         self,
         config: Union[TSMixerConfig, Dict[str, Any]],
-    ):
-        """Initialize the Lightning Module with a TSMixerConfig."""
+    ) -> None:
+        """
+        Initialize the Lightning Module with a TSMixerConfig.
+        
+        Args:
+            config: TSMixer configuration as a TSMixerConfig instance or dict.
+        """
         super().__init__()
 
         # Handle different config input types
@@ -544,15 +555,15 @@ class LitTSMixer(pl.LightningModule):
         future: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         """
-        Forward pass with optional future forcing.
+        Forward pass that delegates to the TSMixer model.
         
         Args:
-            x: Historical input features
-            static: Static catchment attributes
-            future: Optional future forcing data
-            
+            x: Historical input features [B, input_len, input_size]
+            static: Static features [B, static_size]
+            future: Optional future forcing data [B, output_len, future_input_size]
+        
         Returns:
-            Model predictions
+            Predictions [B, output_len, 1]
         """
         return self.model(x, static, future)
 
@@ -560,86 +571,79 @@ class LitTSMixer(pl.LightningModule):
         self, batch: Dict[str, torch.Tensor], batch_idx: int
     ) -> torch.Tensor:
         """
-        Execute training step with support for future forcing data.
+        Execute a single training step.
         
         Args:
-            batch: Dictionary containing input data
-            batch_idx: Index of current batch
-            
+            batch: Dictionary with keys:
+                "X" -> [B, input_len, input_size],
+                "y" -> [B, output_len],
+                "static" -> [B, static_size],
+                "future" (optional) -> [B, output_len, future_input_size]
+            batch_idx: Index of the current batch.
+        
         Returns:
-            Computed loss value
+            Computed training loss (MSE) as a tensor.
         """
         x, y = batch["X"], batch["y"].unsqueeze(-1)
         static = batch["static"]
-        future = batch.get("future")  # Get future forcing if available
-        
-        # Forward pass with future forcing if available
+        future = batch.get("future")
         y_hat = self(x, static, future)
-
         loss = self.mse_criterion(y_hat, y)
-
-        # Log metrics
         self.log("train_loss", loss, batch_size=x.size(0))
         self.log("train_mse", loss, batch_size=x.size(0))
-
         return loss
 
     def validation_step(
         self, batch: Dict[str, torch.Tensor], batch_idx: int
     ) -> Dict[str, torch.Tensor]:
         """
-        Execute validation step with support for future forcing data.
+        Execute a single validation step.
         
         Args:
-            batch: Dictionary containing input data
-            batch_idx: Index of current batch
-            
+            batch: Dictionary with keys similar to training_step.
+            batch_idx: Index of the current batch.
+        
         Returns:
-            Dictionary with validation metrics
+            Dictionary with validation loss, predictions, and targets.
         """
         x, y = batch["X"], batch["y"].unsqueeze(-1)
         static = batch["static"]
-        future = batch.get("future")  # Get future forcing if available
-        
-        # Forward pass with future forcing if available
+        future = batch.get("future")
         y_hat = self(x, static, future)
-
         loss = self.mse_criterion(y_hat, y)
-
-        # Log metrics
         self.log("val_loss", loss, batch_size=x.size(0))
         self.log("val_mse", loss, batch_size=x.size(0))
-
         return {"val_loss": loss, "preds": y_hat, "targets": y}
 
     def test_step(
         self, batch: Dict[str, torch.Tensor], batch_idx: int
     ) -> Dict[str, torch.Tensor]:
         """
-        Execute test step with support for future forcing data.
+        Execute a single test step.
         
         Args:
-            batch: Dictionary containing input data
-            batch_idx: Index of current batch
-            
+            batch: Dictionary with keys:
+                "X" -> [B, input_len, input_size],
+                "y" -> [B, output_len],
+                "static" -> [B, static_size],
+                "future" (optional) -> [B, output_len, future_input_size],
+                plus optional "input_end_date" and "slice_idx" metadata.
+            batch_idx: Index of the current batch.
+        
         Returns:
-            Dictionary with test outputs
+            Dictionary with test predictions, observations, and metadata.
         """
         x, y = batch["X"], batch["y"].unsqueeze(-1)
         static = batch["static"]
-        future = batch.get("future")  # Get future forcing if available
-        
-        # Forward pass with future forcing if available
+        future = batch.get("future")
         y_hat = self(x, static, future)
-
         output = {
             "predictions": y_hat.squeeze(-1),
             "observations": y.squeeze(-1),
             "basin_ids": batch[self.config.group_identifier],
-            "input_end_date": batch["input_end_date"],
-            "slice_idx": batch["slice_idx"],
+            "input_end_date": batch.get("input_end_date", []),
+            "slice_idx": batch.get("slice_idx", []),
         }
-
         self.test_outputs.append(output)
         return output
 
