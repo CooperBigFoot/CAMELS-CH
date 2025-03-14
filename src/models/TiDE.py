@@ -1,3 +1,13 @@
+"""
+Based on the paper: "Long-term Forecasting with TiDE: Time-series Dense Encoder"
+https://arxiv.org/pdf/2304.08424
+
+Based code implementation from
+https://github.com/thuml/Time-Series-Library/blob/main/models/TiDE.py
+and
+https://unit8co.github.io/darts/generated_api/darts.models.forecasting.tide_model.html?highlight=tide#module-darts.models.forecasting.tide_model
+"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -340,7 +350,7 @@ class LitTiDE(pl.LightningModule):
         self.model = TiDEModel(config)
         self.criterion = nn.MSELoss()
         self.learning_rate = config.learning_rate
-        
+
         # Add tracking variables for test outputs
         self.test_outputs = []
         self.test_results = None
@@ -348,13 +358,15 @@ class LitTiDE(pl.LightningModule):
     def forward(self, x, future=None, static=None):
         return self.model(x, future, static)
 
-    def training_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor:
+    def training_step(
+        self, batch: Dict[str, torch.Tensor], batch_idx: int
+    ) -> torch.Tensor:
         """Execute training step with TiDE model.
-        
+
         Args:
             batch: Dictionary containing input data with keys 'X', 'y', and optionally 'future' and 'static'
             batch_idx: Index of the current batch
-            
+
         Returns:
             Loss value for the batch
         """
@@ -365,20 +377,22 @@ class LitTiDE(pl.LightningModule):
         y = batch["y"]
         y_hat = self(x, future, static)
         loss = self.criterion(y_hat, y.unsqueeze(-1))
-        
+
         # Log metrics with batch size for proper averaging
         self.log("train_loss", loss, batch_size=x.size(0))
         self.log("train_mse", loss, batch_size=x.size(0))  # Same as loss in this case
-        
+
         return loss
 
-    def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
+    def validation_step(
+        self, batch: Dict[str, torch.Tensor], batch_idx: int
+    ) -> Dict[str, torch.Tensor]:
         """Execute validation step with TiDE model.
-        
+
         Args:
             batch: Dictionary containing input data with keys 'X', 'y', and optionally 'future' and 'static'
             batch_idx: Index of the current batch
-            
+
         Returns:
             Dictionary with validation metrics and predictions
         """
@@ -388,20 +402,22 @@ class LitTiDE(pl.LightningModule):
         y = batch["y"]
         y_hat = self(x, future, static)
         loss = self.criterion(y_hat, y.unsqueeze(-1))
-        
+
         # Log metrics with batch size for proper averaging
         self.log("val_loss", loss, prog_bar=True, batch_size=x.size(0))
         self.log("val_mse", loss, batch_size=x.size(0))  # Same as loss in this case
-        
+
         return {"val_loss": loss, "preds": y_hat, "targets": y}
 
-    def test_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
+    def test_step(
+        self, batch: Dict[str, torch.Tensor], batch_idx: int
+    ) -> Dict[str, torch.Tensor]:
         """Execute test step with TiDE model and collect outputs for evaluation.
-        
+
         Args:
             batch: Dictionary containing input data with keys 'X', 'y', and optionally 'future' and 'static'
             batch_idx: Index of the current batch
-            
+
         Returns:
             Dictionary with test outputs for evaluation
         """
@@ -411,29 +427,31 @@ class LitTiDE(pl.LightningModule):
         y = batch["y"]
         y_hat = self(x, future, static)
         loss = self.criterion(y_hat, y.unsqueeze(-1))
-        
+
         # Log test metrics
         self.log("test_loss", loss, batch_size=x.size(0))
         self.log("test_mse", loss, batch_size=x.size(0))
-        
+
         # Create output dictionary for evaluation
         output = {
             "predictions": y_hat.squeeze(-1),  # [batch_size, output_len]
-            "observations": y.squeeze(-1),     # [batch_size, output_len]
-            "basin_ids": batch.get("gauge_id", batch.get("basin_id", None)),  # Support both naming conventions
+            "observations": y.squeeze(-1),  # [batch_size, output_len]
+            "basin_ids": batch.get(
+                "gauge_id", batch.get("basin_id", None)
+            ),  # Support both naming conventions
         }
-        
+
         # Add optional metadata if available in the batch
         if "input_end_date" in batch:
             output["input_end_date"] = batch["input_end_date"]
         if "slice_idx" in batch:
             output["slice_idx"] = batch["slice_idx"]
-            
+
         # Collect outputs for evaluation
         self.test_outputs.append(output)
-        
+
         return output
-        
+
     def on_test_epoch_start(self) -> None:
         """Reset test outputs collector at the beginning of test epoch."""
         self.test_outputs = []
@@ -443,31 +461,31 @@ class LitTiDE(pl.LightningModule):
         if not self.test_outputs:
             print("Warning: No test outputs collected")
             return
-            
+
         # Consolidate all test outputs into a single dictionary
         self.test_results = {
             "predictions": torch.cat([x["predictions"] for x in self.test_outputs]),
             "observations": torch.cat([x["observations"] for x in self.test_outputs]),
             "basin_ids": [bid for x in self.test_outputs for bid in x["basin_ids"]],
         }
-        
+
         # Add optional metadata if available
         if "input_end_date" in self.test_outputs[0]:
             self.test_results["input_end_date"] = [
                 date for x in self.test_outputs for date in x["input_end_date"]
             ]
-            
+
         if "slice_idx" in self.test_outputs[0]:
             self.test_results["slice_idx"] = [
                 idx for x in self.test_outputs for idx in x["slice_idx"]
             ]
-            
+
         # Clear temporary storage
         self.test_outputs = []
 
     def configure_optimizers(self):
         """Configure the optimizer for model training.
-        
+
         Returns:
             PyTorch optimizer instance
         """
