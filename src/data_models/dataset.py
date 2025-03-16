@@ -44,11 +44,11 @@ class HydroDataset(Dataset):
         self.output_length = output_length
         self.total_length = input_length + output_length
         self.features = sorted(features)  # Sort for consistency
+        self.target = target
 
         # Make sure target comes first in the features list
         self.features = [self.target] + [f for f in features if f != self.target]
 
-        self.target = target
         self.group_identifier = group_identifier
         self.domain_id = domain_id
         self.domain_type = domain_type
