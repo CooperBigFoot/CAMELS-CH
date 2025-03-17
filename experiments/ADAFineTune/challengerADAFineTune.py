@@ -18,7 +18,7 @@ from src.data_models.caravanify import Caravanify, CaravanifyConfig
 from src.data_models.datamodule import HydroDataModule, HydroTransferDataModule
 from src.models.TSMixer import LitTSMixer
 from src.models.TSMixerDomainAdaptation import LitTSMixerDomainAdaptation
-from src.models.evaluators import TSForecastEvaluator
+from src.model_evaluation.evaluators import TSForecastEvaluator
 import multiprocessing
 
 

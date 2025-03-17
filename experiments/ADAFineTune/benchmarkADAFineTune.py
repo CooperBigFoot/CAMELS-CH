@@ -17,7 +17,7 @@ from experiments.ADAFineTune.configADAFineTune import ExperimentConfig
 from src.data_models.caravanify import Caravanify, CaravanifyConfig
 from src.data_models.datamodule import HydroDataModule
 from src.models.TSMixer import LitTSMixer
-from src.models.evaluators import TSForecastEvaluator
+from src.model_evaluation.evaluators import TSForecastEvaluator
 import multiprocessing
 
 
