@@ -8,16 +8,18 @@ https://hess.copernicus.org/articles/23/5089/2019/
 This module provides implementations for:
 1. EALSTMConfig - Configuration class for EA-LSTM models
 2. EALSTM - PyTorch implementation of the EA-LSTM architecture
-3. LitEALSTM - PyTorch Lightning wrapper for training and evaluation
+3. BiEALSTM - Bidirectional EA-LSTM that processes past and future data
+4. LitEALSTM - PyTorch Lightning wrapper for training and evaluation
 """
 
 from .config import EALSTMConfig
-from .model import EALSTM, EALSTMCell
+from .model import EALSTM, EALSTMCell, BiEALSTM
 from .lightning import LitEALSTM
 
 __all__ = [
     "EALSTMConfig",
     "EALSTM",
     "EALSTMCell",
+    "BiEALSTM",
     "LitEALSTM",
 ]

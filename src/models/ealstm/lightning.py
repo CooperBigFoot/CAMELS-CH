@@ -4,12 +4,12 @@ from typing import Dict, Any, Optional, Union
 import torch
 from ..base.base_lit_model import BaseLitModel
 from .config import EALSTMConfig
-from .model import EALSTM
+from .model import EALSTM, BiEALSTM
 
 
 class LitEALSTM(BaseLitModel):
     """PyTorch Lightning Module implementation of EA-LSTM.
-    
+
     This class extends BaseLitModel to provide a standardized interface for training,
     validation, and testing of the EA-LSTM model within our hydrological forecasting framework.
     """
@@ -32,9 +32,12 @@ class LitEALSTM(BaseLitModel):
 
         # Initialize base lightning model with the config
         super().__init__(ealstm_config)
-        
-        # Create the EA-LSTM model
-        self.model = EALSTM(ealstm_config)
+
+        # Create the appropriate model based on configuration
+        if ealstm_config.bidirectional:
+            self.model = BiEALSTM(ealstm_config)
+        else:
+            self.model = EALSTM(ealstm_config)
 
     def forward(
         self,
@@ -54,3 +57,57 @@ class LitEALSTM(BaseLitModel):
             Predictions [batch_size, output_len, 1]
         """
         return self.model(x, static, future)
+
+    def configure_optimizers(self) -> Dict[str, Any]:
+        """
+        Configure optimizer with potentially different learning rates for model components.
+
+        For bidirectional models, this allows tuning learning rates for past and future branches separately.
+
+        Returns:
+            Dictionary with optimizer and learning rate scheduler configuration
+        """
+        # Default to standard optimizer configuration from base class
+        if not hasattr(self.config, "bidirectional") or not self.config.bidirectional:
+            return super().configure_optimizers()
+
+        # For bidirectional model, create parameter groups with custom learning rates
+        param_groups = [
+            {
+                "params": self.model.past_ealstm.parameters(),
+                "lr": self.config.learning_rate,
+            },
+            {
+                "params": self.model.projection.parameters(),
+                "lr": self.config.learning_rate,
+            },
+        ]
+
+        # Add future branch parameters, potentially with different learning rate
+        future_lr_factor = getattr(self.config, "future_lr_factor", 1.0)
+        param_groups.append(
+            {
+                "params": self.model.future_ealstm.parameters(),
+                "lr": self.config.learning_rate * future_lr_factor,
+            }
+        )
+
+        optimizer = torch.optim.Adam(param_groups)
+
+        # Create scheduler dictionary
+        scheduler_config = {
+            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                mode="min",
+                patience=self.config.scheduler_patience,
+                factor=self.config.scheduler_factor,
+            ),
+            "monitor": "val_loss",
+            "interval": "epoch",
+            "frequency": 1,
+        }
+
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": scheduler_config,
+        }

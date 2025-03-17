@@ -19,6 +19,11 @@ class EALSTMConfig(BaseConfig):
         "bias",
         "scheduler_patience",
         "scheduler_factor",
+        # Bidirectional EA-LSTM parameters
+        "future_hidden_size",
+        "future_layers",
+        "bidirectional_fusion",
+        "bidirectional",
     ]
 
     def __init__(
@@ -36,6 +41,11 @@ class EALSTMConfig(BaseConfig):
         scheduler_factor: float = 0.5,
         num_layers: int = 1,
         bias: bool = True,
+        # Bidirectional EA-LSTM parameters
+        future_hidden_size: Optional[int] = None,
+        future_layers: Optional[int] = None,
+        bidirectional_fusion: str = "concat",
+        bidirectional: bool = False,
         **kwargs,
     ):
         """Initialize EA-LSTM configuration.
@@ -54,6 +64,10 @@ class EALSTMConfig(BaseConfig):
             scheduler_factor: Factor for learning rate reduction
             num_layers: Number of stacked LSTM layers
             bias: Whether to use bias in LSTM layers
+            future_hidden_size: Size of hidden state for future branch (defaults to hidden_size)
+            future_layers: Number of layers in future branch (defaults to num_layers)
+            bidirectional_fusion: Method for combining past and future states ("concat", "add", "average")
+            bidirectional: Whether to use bidirectional model
             **kwargs: Additional parameters
         """
         # Initialize base config with standard parameters
@@ -79,7 +93,17 @@ class EALSTMConfig(BaseConfig):
         self.bias = bias
         self.scheduler_patience = scheduler_patience
         self.scheduler_factor = scheduler_factor
+        
+        # Bidirectional EA-LSTM parameters
+        self.future_hidden_size = future_hidden_size or hidden_size
+        self.future_layers = future_layers or num_layers
+        self.bidirectional_fusion = bidirectional_fusion
+        self.bidirectional = bidirectional
 
         # Validate parameters
         if self.num_layers < 1:
             raise ValueError("num_layers must be at least 1")
+        if self.future_layers < 1:
+            raise ValueError("future_layers must be at least 1")
+        if self.bidirectional_fusion not in ["concat", "add", "average"]:
+            raise ValueError("bidirectional_fusion must be one of: concat, add, average")

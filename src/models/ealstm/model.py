@@ -6,9 +6,10 @@ local hydrological behaviors via machine learning applied to large-sample datase
 https://hess.copernicus.org/articles/23/5089/2019/
 """
 
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from .config import EALSTMConfig
 
 
@@ -160,10 +161,9 @@ class EALSTM(nn.Module):
         self,
         x: torch.Tensor,  # [batch_size, input_len, input_size]
         static: torch.Tensor,  # [batch_size, static_size]
-        future: Optional[
-            torch.Tensor
-        ] = None,  # [batch_size, output_len, future_input_size]
-    ) -> torch.Tensor:  # [batch_size, output_len, 1]
+        future: Optional[torch.Tensor] = None,  # [batch_size, output_len, future_input_size]
+        return_hidden: bool = False,  # Flag to control output type
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:  # [batch_size, output_len, 1] or [batch_size, hidden_size]
         """
         Forward pass of the EA-LSTM model.
 
@@ -172,9 +172,11 @@ class EALSTM(nn.Module):
                (contains target as the first feature, followed by optional past features)
             static: Static features [batch_size, static_size]
             future: Optional future forcing data [batch_size, output_len, future_input_size]
+            return_hidden: Whether to return the final hidden state instead of predictions
 
         Returns:
-            Forecast tensor [batch_size, output_len, 1]
+            Forecast tensor [batch_size, output_len, 1] if return_hidden is False,
+            otherwise the final hidden state [batch_size, hidden_size]
         """
         batch_size = x.size(0)
 
@@ -209,6 +211,10 @@ class EALSTM(nn.Module):
         # Use final hidden state for projection
         final_h = hidden_states[-1][0]  # [batch_size, hidden_size]
 
+        # Return hidden state if requested
+        if return_hidden:
+            return final_h
+            
         # Project hidden state to output sequence
         output = self.projection(final_h)  # [batch_size, output_len]
 
@@ -225,5 +231,119 @@ class EALSTM(nn.Module):
             # Combine with LSTM output
             output = output + future_effect
 
+        # Reshape to [batch_size, output_len, 1]
+        return output.unsqueeze(-1)
+
+
+class BiEALSTM(nn.Module):
+    """
+    Bidirectional Entity-Aware LSTM model for hydrological forecasting.
+    
+    This model uses two separate EA-LSTM branches:
+    1. One processes historical data (past)
+    2. One processes future forcing data (future)
+    
+    The hidden states from both branches are combined to make the final prediction.
+    """
+    
+    def __init__(self, config: EALSTMConfig):
+        """
+        Initialize the Bidirectional EA-LSTM model.
+        
+        Args:
+            config: Configuration object with model parameters
+        """
+        super().__init__()
+        self.config = config
+        
+        # EA-LSTM for processing past data
+        self.past_ealstm = EALSTM(config)
+        
+        # Determine if we have separate future configuration
+        future_hidden_size = getattr(config, "future_hidden_size", config.hidden_size)
+        future_layers = getattr(config, "future_layers", config.num_layers)
+        
+        # Create configuration for the future-processing branch
+        future_config = EALSTMConfig(
+            input_len=config.output_len,  # Future branch processes the forecast horizon
+            output_len=config.output_len,
+            input_size=config.future_input_size,
+            static_size=config.static_size,
+            hidden_size=future_hidden_size,
+            num_layers=future_layers,
+            bias=config.bias,
+            dropout=config.dropout,
+            learning_rate=config.learning_rate
+        )
+        
+        # EA-LSTM for processing future data
+        self.future_ealstm = EALSTM(future_config)
+        
+        # Fusion method for combining past and future representations
+        self.fusion_method = getattr(config, "bidirectional_fusion", "concat")
+        
+        # Combined projection layer
+        if self.fusion_method == "concat":
+            combined_size = config.hidden_size + future_hidden_size
+        elif self.fusion_method in ["add", "average"]:
+            # For add/average, dimensions must match
+            assert config.hidden_size == future_hidden_size, "Hidden sizes must match for add/average fusion"
+            combined_size = config.hidden_size
+        else:
+            # Default to concatenation
+            combined_size = config.hidden_size + future_hidden_size
+            
+        # Projection from combined hidden states to output
+        self.projection = nn.Sequential(
+            nn.Linear(combined_size, combined_size),
+            nn.ReLU(),
+            nn.Linear(combined_size, config.output_len)
+        )
+        
+    def forward(
+        self,
+        x: torch.Tensor,  # [batch_size, input_len, input_size]
+        static: torch.Tensor,  # [batch_size, static_size]
+        future: Optional[torch.Tensor] = None,  # [batch_size, output_len, future_input_size]
+    ) -> torch.Tensor:  # [batch_size, output_len, 1]
+        """
+        Forward pass of the Bidirectional EA-LSTM model.
+        
+        Args:
+            x: Historical input features [batch_size, input_len, input_size]
+            static: Static features [batch_size, static_size]
+            future: Future forcing data [batch_size, output_len, future_input_size]
+               
+        Returns:
+            Forecast tensor [batch_size, output_len, 1]
+        """
+        # Process past data
+        past_hidden = self.past_ealstm(x, static, return_hidden=True)
+        
+        if future is None:
+            # If no future data provided, fall back to standard EA-LSTM behavior
+            output = self.past_ealstm(x, static, future=None)
+            return output
+        
+        # Process future data
+        future_hidden = self.future_ealstm(future, static, return_hidden=True)
+        
+        # Combine hidden representations based on fusion method
+        if self.fusion_method == "concat":
+            combined = torch.cat([past_hidden, future_hidden], dim=1)
+        elif self.fusion_method == "add":
+            combined = past_hidden + future_hidden
+        elif self.fusion_method == "average":
+            combined = (past_hidden + future_hidden) / 2
+        else:
+            # Default to concatenation
+            combined = torch.cat([past_hidden, future_hidden], dim=1)
+        
+        # Apply nonlinearity for better feature integration
+        combined = F.relu(combined)
+        
+        # Project to output sequence
+        output = self.projection(combined)  # [batch_size, output_len]
+        
         # Reshape to [batch_size, output_len, 1]
         return output.unsqueeze(-1)
