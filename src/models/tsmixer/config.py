@@ -9,13 +9,15 @@ class TSMixerConfig(BaseConfig):
     mixing layers to process temporal and feature dimensions separately.
     """
 
-    # Define model-specific parameters - removed hidden_size and dropout
+    # Define model-specific parameters
     MODEL_PARAMS: ClassVar[List[str]] = [
         "static_embedding_size",
         "num_mixing_layers",
         "scheduler_patience",
         "scheduler_factor",
         "fusion_method",
+        "hidden_size",
+        "dropout",
     ]
 
     def __init__(
@@ -72,8 +74,6 @@ class TSMixerConfig(BaseConfig):
         self.dropout = dropout
         self.static_size = static_size
         self.future_input_size = future_input_size or input_size - 1
-        self.past_feature_projection_size = 0
-        self.future_forcing_projection_size = 0
         self.static_embedding_size = static_embedding_size
         self.num_mixing_layers = num_mixing_layers
         self.scheduler_patience = scheduler_patience
@@ -85,3 +85,9 @@ class TSMixerConfig(BaseConfig):
             raise ValueError(
                 f"Invalid fusion_method: {fusion_method}. Must be 'add' or 'concat'."
             )
+            
+        # Remove redundant attributes - these should be part of the main config
+        if hasattr(self, "past_feature_projection_size"):
+            delattr(self, "past_feature_projection_size")
+        if hasattr(self, "future_forcing_projection_size"):
+            delattr(self, "future_forcing_projection_size")

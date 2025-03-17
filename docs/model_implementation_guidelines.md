@@ -6,11 +6,11 @@ This document defines the conventions for implementing and extending models in o
 
 Every model implementation should consist of three key components:
 
-1. **Configuration Class**: Encapsulates all hyperparameters and model-specific settings as the single source of truth for configuration values, with methods for conversion and safe updates.
+1. **Configuration Class**: Extends `BaseConfig` to encapsulate all hyperparameters and model-specific settings as the single source of truth for configuration values.
 
 2. **Core Model (`nn.Module`)**: Implements the main computational logic using PyTorch's `nn.Module`, potentially including multiple submodules for different architectural components.
 
-3. **PyTorch Lightning Module**: Handles training, validation, testing, and logging, serving as the interface between the model and the training pipeline.
+3. **PyTorch Lightning Module**: Extends `BaseLitModel` to handle training, validation, testing, and logging, serving as the interface between the model and the training pipeline.
 
 > **Note**: All configuration details must be managed exclusively through the configuration class, never hardcoded in the model implementation.
 
@@ -22,18 +22,15 @@ The configuration class centralizes all hyperparameters required by the model, e
 
 ### Implementation Guidelines
 
-- Use a dedicated configuration class for each model (e.g., `TSMixerConfig`, `TiDEConfig`).
-- Provide methods to:
-  - Convert configuration to dictionary (`to_dict`)
-  - Create configuration from dictionary (`from_dict`)
-  - Update parameters safely (`update`)
+- Extend the `BaseConfig` class for each model (e.g., `TSMixerConfig`, `TiDEConfig`).
+- Define a `MODEL_PARAMS` class variable listing model-specific parameters.
+- Override `__init__` to include model-specific parameters while passing standard parameters to the superclass.
 - Use appropriate type hints for all attributes.
 - Implement validation logic for interdependent parameters.
-- Provide clear default values that work reasonably well.
 
 ### Standard Hyperparameters
 
-All model configurations should include these standard parameters (with consistent naming):
+All standard parameters are already defined in `BaseConfig`:
 
 - `input_len`: Length of the historical input sequence (lookback window)
 - `output_len`: Length of the forecast horizon (prediction steps)
@@ -48,51 +45,61 @@ All model configurations should include these standard parameters (with consiste
 ### Example Configuration Class
 
 ```python
-class TSMixerConfig:
+class TSMixerConfig(BaseConfig):
     """Configuration for TSMixer model."""
+
+    # Define model-specific parameters
+    MODEL_PARAMS = [
+        "static_embedding_size",
+        "num_mixing_layers",
+        "scheduler_patience",
+        "scheduler_factor",
+        "fusion_method",
+    ]
 
     def __init__(
         self,
         input_len: int,
-        input_size: int,
         output_len: int,
-        static_size: int,
+        input_size: int,
+        static_size: int = 0,
+        future_input_size: Optional[int] = None,
         hidden_size: int = 64,
         static_embedding_size: int = 10,
-        num_layers: int = 5,
+        num_mixing_layers: int = 5,
         dropout: float = 0.1,
         learning_rate: float = 1e-3,
         group_identifier: str = "gauge_id",
+        scheduler_patience: int = 2,
+        scheduler_factor: float = 0.5,
+        fusion_method: str = "add",
+        **kwargs,
     ):
         """Initialize TSMixer configuration."""
-        self.input_len = input_len
-        self.input_size = input_size
-        self.output_len = output_len
-        self.static_size = static_size
-        self.hidden_size = hidden_size
+        # Initialize base config with standard parameters
+        super().__init__(
+            input_len=input_len,
+            output_len=output_len,
+            input_size=input_size,
+            static_size=static_size,
+            future_input_size=future_input_size,
+            hidden_size=hidden_size,
+            dropout=dropout,
+            learning_rate=learning_rate,
+            group_identifier=group_identifier,
+            **kwargs,
+        )
+
+        # Set model-specific parameters
         self.static_embedding_size = static_embedding_size
-        self.num_layers = num_layers
-        self.dropout = dropout
-        self.learning_rate = learning_rate
-        self.group_identifier = group_identifier
+        self.num_mixing_layers = num_mixing_layers
+        self.scheduler_patience = scheduler_patience
+        self.scheduler_factor = scheduler_factor
+        self.fusion_method = fusion_method
 
-    @classmethod
-    def from_dict(cls, config_dict: Dict[str, Any]) -> "TSMixerConfig":
-        """Create a config object from a dictionary."""
-        return cls(**config_dict)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert config to dictionary."""
-        return self.__dict__.copy()
-
-    def update(self, **kwargs) -> "TSMixerConfig":
-        """Update config parameters."""
-        for key, value in kwargs.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
-            else:
-                raise ValueError(f"Unknown configuration parameter: {key}")
-        return self
+        # Validate parameters
+        if fusion_method not in ["add", "concat"]:
+            raise ValueError(f"Invalid fusion_method: {fusion_method}. Must be 'add' or 'concat'.")
 ```
 
 ## 3. Core Model (`nn.Module`) Implementation
@@ -127,8 +134,6 @@ def forward(
     pass
 ```
 
-Here's the new section focusing on what the model should expect from the data modules:
-
 ## 3a. Data Interface Expectations
 
 Models in our framework interact with standardized data provided by the `HydroDataModule` and `HydroDataset` classes. Understanding this interface is essential for implementing compatible models.
@@ -155,7 +160,7 @@ Note that not all fields will be present in every batch. Models should handle ca
 
 ### Data Characteristics
 
-- **Historical Data (`X`)**: Contains the target variable and potentially other dynamic features for the input window. The last feature is always the target variable.
+- **Historical Data (`X`)**: Contains the target variable and potentially other dynamic features for the input window. The first feature is always the target variable.
 - **Target Values (`y`)**: Contains the target values for the forecast horizon. During training, these are the ground truth values to predict.
 - **Static Features (`static`)**: Contains time-invariant catchment attributes preprocessed as tensors.
 - **Future Forcing (`future`)**: When available, contains known or forecasted external variables for the prediction period. Not all datasets will provide this.
@@ -207,44 +212,33 @@ The Lightning module wraps the core model and handles training logic, loss compu
 
 #### Class Structure
 
+- Extend `BaseLitModel` for all model implementations.
 - Accept either a configuration object or a dictionary in the constructor.
-- Save hyperparameters using `self.save_hyperparameters()`.
-- Store test outputs in a standardized format for evaluation.
+- Create an instance of the corresponding core model in the constructor.
+- Override model-specific methods only when needed (most functionality is provided by the base class).
 
-#### Training, Validation, and Testing
+#### Default Methods Provided by BaseLitModel
 
-- Implement consistent methods for each phase:
-  - `training_step`
-  - `validation_step`
-  - `test_step`
-  - `configure_optimizers`
-- Each method should handle input extraction, forward pass, loss computation, and metric logging.
-- `test_step` should store predictions, observations, and basin IDs for later evaluation.
+The `BaseLitModel` already implements these methods, which typically don't need to be overridden:
 
-#### Logging
+- `training_step`: Handles data extraction, forward pass, loss computation, and logging
+- `validation_step`: Similar to training_step with validation metrics
+- `test_step`: Similar to validation_step with standardized output collection
+- `configure_optimizers`: Sets up optimizer and learning rate scheduler
+- `_compute_loss`: Calculates loss using MSE by default
 
-Every model must log the following metrics consistently:
+#### Custom Methods for Model-Specific Logic
 
-- `train_loss`: Main loss during training
-- `train_mse`: Mean squared error during training (if different from main loss)
-- `val_loss`: Validation loss
-- `val_mse`: Mean squared error during validation
-- Additional metrics can be added with clear, consistent naming.
+Override these methods only when model-specific logic is needed:
 
-#### Standardized Test Output
+- `forward`: Must be implemented to delegate to the core model
+- `_log_additional_train_metrics`: Optional to add model-specific metrics during training
+- `_log_additional_val_metrics`: Optional to add model-specific metrics during validation
 
-Test results should be stored in a dictionary with these keys:
-
-- `predictions`: Model outputs
-- `observations`: Ground truth values
-- `basin_ids`: Identifiers for each sample
-- `input_end_date`: (if available) End dates of input window
-- `slice_idx`: (if available) Original indices in the dataset
-
-### Example Lightning Module
+#### Example Lightning Module
 
 ```python
-class LitTSMixer(pl.LightningModule):
+class LitTSMixer(BaseLitModel):
     """PyTorch Lightning Module implementation of TSMixer."""
 
     def __init__(
@@ -252,97 +246,31 @@ class LitTSMixer(pl.LightningModule):
         config: Union[TSMixerConfig, Dict[str, Any]],
     ):
         """Initialize the Lightning Module with a TSMixerConfig."""
-        super().__init__()
-
-        # Handle different config input types
+        # Convert dict config to TSMixerConfig if needed
         if isinstance(config, dict):
-            self.config = TSMixerConfig.from_dict(config)
-        else:
-            self.config = config
+            config = TSMixerConfig.from_dict(config)
+
+        # Initialize base class with the config
+        super().__init__(config)
 
         # Create the TSMixer model using the config
-        self.model = TSMixer(self.config)
-
-        # Save all hyperparameters from config
-        self.save_hyperparameters(self.config.to_dict())
-
-        # Set up criteria and tracking variables
-        self.mse_criterion = MSELoss()
-        self.test_outputs = []
+        self.model = TSMixer(config)
 
     def forward(
         self, 
         x: torch.Tensor, 
-        static: torch.Tensor, 
+        static: Optional[torch.Tensor] = None, 
         future: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
-        """Forward pass."""
+        """Forward pass that delegates to the TSMixer model."""
         return self.model(x, static, future)
-
-    def training_step(
-        self, batch: Dict[str, torch.Tensor], batch_idx: int
-    ) -> torch.Tensor:
-        """Execute training step."""
-        x, y = batch["X"], batch["y"].unsqueeze(-1)
-        static = batch["static"]
-        future = batch.get("future")  # Get future forcing if available
         
-        # Forward pass
-        y_hat = self(x, static, future)
-
-        # Calculate loss
-        loss = self.mse_criterion(y_hat, y)
-
-        # Log metrics
-        self.log("train_loss", loss, batch_size=x.size(0))
-        self.log("train_mse", loss, batch_size=x.size(0))
-
-        return loss
-
-    def validation_step(
-        self, batch: Dict[str, torch.Tensor], batch_idx: int
-    ) -> Dict[str, torch.Tensor]:
-        """Execute validation step."""
-        x, y = batch["X"], batch["y"].unsqueeze(-1)
-        static = batch["static"]
-        future = batch.get("future")
-        
-        # Forward pass
-        y_hat = self(x, static, future)
-
-        # Calculate loss
-        loss = self.mse_criterion(y_hat, y)
-
-        # Log metrics
-        self.log("val_loss", loss, batch_size=x.size(0))
-        self.log("val_mse", loss, batch_size=x.size(0))
-
-        return {"val_loss": loss, "preds": y_hat, "targets": y}
-
-    def test_step(
-        self, batch: Dict[str, torch.Tensor], batch_idx: int
-    ) -> Dict[str, torch.Tensor]:
-        """Execute test step."""
-        x, y = batch["X"], batch["y"].unsqueeze(-1)
-        static = batch["static"]
-        future = batch.get("future")
-        
-        # Forward pass
-        y_hat = self(x, static, future)
-
-        # Store outputs
-        output = {
-            "predictions": y_hat.squeeze(-1),
-            "observations": y.squeeze(-1),
-            "basin_ids": batch[self.config.group_identifier],
-        }
-
-        self.test_outputs.append(output)
-        return output
-
-    def configure_optimizers(self) -> torch.optim.Optimizer:
-        """Configure optimizer."""
-        return Adam(self.parameters(), lr=self.config.learning_rate)
+    # Optional: Add model-specific customizations
+    def freeze_backbone(self) -> None:
+        """Freeze backbone parameters for fine-tuning."""
+        for param in self.model.backbone.parameters():
+            param.requires_grad = False
+        self.log("info", "Backbone parameters frozen")
 ```
 
 ## 5. Hyperparameter Naming Conventions
@@ -383,8 +311,6 @@ All models must consistently log these metrics:
 
 - `train_loss`: Loss value during training.
 - `val_loss`: Loss value during validation.
-- `train_mse`: Mean squared error during training.
-- `val_mse`: Mean squared error during validation.
 
 ### Additional Metrics
 
@@ -417,9 +343,8 @@ Specific implementation details will be added in a future update.
 
 ### Code Style
 
-- Follow PEP 8 standards for Python code formatting.
+- Follow Ruff standards for Python code formatting.
 - Use consistent indentation (4 spaces).
-- Keep line length under 88 characters (compatible with Black formatter).
 - Use meaningful variable names that reflect hydrological domain concepts.
 
 ### Documentation

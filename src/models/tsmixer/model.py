@@ -489,7 +489,7 @@ class TSMixer(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        static: torch.Tensor,
+        static: Optional[torch.Tensor] = None,
         future: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """

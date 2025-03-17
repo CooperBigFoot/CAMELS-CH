@@ -109,3 +109,29 @@ class LitTSMixer(BaseLitModel):
             "optimizer": optimizer,
             "lr_scheduler": scheduler_config,
         }
+        
+    def _log_additional_train_metrics(
+        self, batch: Dict[str, Any], outputs: torch.Tensor, loss: torch.Tensor
+    ) -> None:
+        """Log additional training metrics specific to this model.
+        
+        Args:
+            batch: The input batch
+            outputs: Model outputs
+            loss: The computed loss
+        """
+        # You can add TSMixer-specific metrics here
+        pass
+        
+    def _log_additional_val_metrics(
+        self, batch: Dict[str, Any], outputs: torch.Tensor, loss: torch.Tensor
+    ) -> None:
+        """Log additional validation metrics specific to this model.
+        
+        Args:
+            batch: The input batch
+            outputs: Model outputs
+            loss: The computed loss
+        """
+        # You can add TSMixer-specific metrics here
+        pass
