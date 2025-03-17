@@ -23,7 +23,6 @@ dependencies = [
   "tensorboard>=2.19.0",
   "optuna>=4.2.1",
   "plotly>=6.0.0",
-  "contextily>=1.6.2",
   "matplotlib-scalebar>=0.9.0",
   "ruff>=0.9.7",
   "ipykernel>=6.29.5",
@@ -38,4 +37,5 @@ dependencies = [
   "h5py>=3.13.0",
   "dotenv>=0.9.9",
   "lightning>=2.5.0.post0",
+  "cartopy>=0.24.1",
 ]

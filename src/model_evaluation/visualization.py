@@ -1,11 +1,15 @@
-"""Visualization functions for hydrological forecasting evaluation results."""
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import seaborn as sns
 from typing import Dict, List, Tuple, Union, Optional
+
+# Replace contextily with cartopy
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+import matplotlib.colors as mcolors
+from matplotlib.cm import ScalarMappable
 
 
 def plot_rolling_forecast(
@@ -85,45 +89,62 @@ def plot_rolling_forecast(
 
 
 def plot_metric_boxplot(
-    basin_metrics: Dict[str, Dict[int, Dict[str, float]]],
+    evaluator_results: Dict[str, Dict],
+    model_names: List[str],
     metric: str = "NSE",
     horizons: Optional[List[int]] = None,
-    fig_size: Tuple[int, int] = (12, 6),
+    fig_size: Tuple[int, int] = (14, 7),
     title: Optional[str] = None,
     violin: bool = False,
     individual_points: bool = True,
-    palette: str = "Blues",
+    palette: Optional[Union[str, List[str]]] = None,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
-    Create a boxplot or violin plot of a specific metric across horizons.
+    Create a boxplot or violin plot comparing multiple models' metrics across horizons.
 
     Args:
-        basin_metrics: Nested dictionary of metrics by basin and horizon
+        evaluator_results: Dictionary with evaluator results for multiple models
+        model_names: List of model names to include in the plot
         metric: Metric to visualize (default: "NSE")
         horizons: List of horizons to include (if None, use all available horizons)
         fig_size: Figure size as (width, height)
         title: Custom title for the plot
         violin: If True, use violin plots instead of boxplots
         individual_points: If True, show individual data points
-        palette: Color palette for the plot
+        palette: Color palette for the plot (string or list of colors)
 
     Returns:
         Tuple containing the figure and axes objects
     """
-    # Flatten the nested dictionary to a DataFrame
-    rows = []
-    for basin, horizon_data in basin_metrics.items():
-        for horizon, metrics_dict in horizon_data.items():
-            if metric in metrics_dict:
-                rows.append(
-                    {
-                        "basin_id": basin,
-                        "horizon": horizon,
-                        "metric_value": metrics_dict[metric],
-                    }
-                )
+    # Validate inputs
+    if not model_names:
+        raise ValueError("At least one model name must be provided")
 
-    df = pd.DataFrame(rows)
+    missing_models = [model for model in model_names if model not in evaluator_results]
+    if missing_models:
+        raise ValueError(f"Models not found in evaluator results: {missing_models}")
+
+    # Create a DataFrame for all models' data
+    all_data = []
+
+    for model_name in model_names:
+        # Extract basin metrics for this model
+        basin_metrics = evaluator_results[model_name]["basin_metrics"]
+
+        # Flatten the nested dictionary to a DataFrame
+        for basin, horizon_data in basin_metrics.items():
+            for horizon, metrics_dict in horizon_data.items():
+                if metric in metrics_dict:
+                    all_data.append(
+                        {
+                            "model": model_name,
+                            "basin_id": basin,
+                            "horizon": horizon,
+                            "metric_value": metrics_dict[metric],
+                        }
+                    )
+
+    df = pd.DataFrame(all_data)
 
     # Filter by horizons if specified
     if horizons:
@@ -131,6 +152,15 @@ def plot_metric_boxplot(
 
     # Determine available horizons after filtering
     available_horizons = sorted(df["horizon"].unique())
+
+    # Set up color palette
+    if palette is None:
+        # Default color palette based on number of models
+        if len(model_names) == 1:
+            palette = "Blues"
+        else:
+            # Use different color palettes for multiple models
+            palette = sns.color_palette("husl", len(model_names))
 
     # Create figure
     fig, ax = plt.subplots(figsize=fig_size)
@@ -140,48 +170,80 @@ def plot_metric_boxplot(
         sns.violinplot(
             x="horizon",
             y="metric_value",
+            hue="model",
             data=df,
             palette=palette,
+            split=len(model_names) == 2,  # Split violins only if comparing 2 models
             inner="quartile",
             ax=ax,
         )
     else:
-        sns.boxplot(x="horizon", y="metric_value", data=df, palette=palette, ax=ax)
+        sns.boxplot(
+            x="horizon", y="metric_value", hue="model", data=df, palette=palette, ax=ax
+        )
 
     # Add individual points if requested
     if individual_points:
         sns.stripplot(
             x="horizon",
             y="metric_value",
+            hue="model",
             data=df,
-            color="black",
             size=3,
             alpha=0.3,
             jitter=True,
+            dodge=True,
+            palette=palette,
+            legend=False,
             ax=ax,
         )
 
-    # Add median value labels
-    for i, horizon in enumerate(available_horizons):
-        median = df[df["horizon"] == horizon]["metric_value"].median()
-        ax.text(
-            i,
-            median + 0.02,
-            f"{median:.2f}",
-            ha="center",
-            va="bottom",
-            color="black",
-            fontweight="bold",
-            fontsize=9,
-        )
+    # Add median value labels for each model and horizon
+    if len(model_names) <= 3:  # Only add labels if not too many models
+        for h_idx, horizon in enumerate(available_horizons):
+            for m_idx, model in enumerate(model_names):
+                # Filter data for this horizon and model
+                filtered = df[(df["horizon"] == horizon) & (df["model"] == model)]
+                if not filtered.empty:
+                    median = filtered["metric_value"].median()
+
+                    # Calculate position for the text
+                    # For boxplots, we need to offset based on model position
+                    model_count = len(model_names)
+                    box_width = 0.8  # Default box width in seaborn
+                    position = h_idx
+
+                    # Calculate offset based on model index
+                    if model_count > 1:
+                        step = box_width / model_count
+                        offset = step * (m_idx - (model_count - 1) / 2)
+                        position += offset
+
+                    ax.text(
+                        position,
+                        median + 0.02,
+                        f"{median:.2f}",
+                        ha="center",
+                        va="bottom",
+                        color="black",
+                        fontweight="bold",
+                        fontsize=8,
+                    )
 
     # Set title and labels
     ax.set_xlabel("Forecast Horizon (days)", fontsize=12)
     ax.set_ylabel(f"{metric} Value", fontsize=12)
 
     if title is None:
-        title = f"Distribution of {metric} Values by Horizon"
+        if len(model_names) == 1:
+            title = f"Distribution of {metric} Values by Horizon for {model_names[0]}"
+        else:
+            title = f"Distribution of {metric} Values by Horizon"
     ax.set_title(title, fontsize=14)
+
+    # Customize legend
+    if len(model_names) > 1:
+        ax.legend(title="Model", loc="best")
 
     # Add grid lines for better readability
     ax.grid(True, axis="y", alpha=0.3, linestyle="--")
@@ -194,73 +256,116 @@ def plot_metric_boxplot(
 
 
 def plot_metric_cdf(
-    basin_metrics: Dict[str, Dict[int, Dict[str, float]]],
+    evaluator_results: Dict[str, Dict],
+    model_names: List[str],
     metric: str = "NSE",
     horizon: int = 1,
     fig_size: Tuple[int, int] = (10, 6),
     title: Optional[str] = None,
-    color: str = "steelblue",
+    colors: Optional[List[str]] = None,
     threshold_lines: Optional[List[float]] = None,
     threshold_labels: Optional[List[str]] = None,
+    include_median_lines: bool = True,
+    legend_loc: str = "best",
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
-    Plot the cumulative distribution function (CDF) of a metric for a specific horizon.
+    Plot the cumulative distribution functions (CDFs) of a metric for multiple models.
 
     Args:
-        basin_metrics: Nested dictionary of metrics by basin and horizon
+        evaluator_results: Dictionary with evaluator results for multiple models
+        model_names: List of model names to include in the plot
         metric: Metric to visualize (default: "NSE")
         horizon: Forecast horizon to visualize
         fig_size: Figure size as (width, height)
         title: Custom title for the plot
-        color: Color for the CDF line
+        colors: Optional list of colors for each model's CDF
         threshold_lines: Optional list of thresholds to mark on the plot
         threshold_labels: Optional labels for threshold lines
+        include_median_lines: Whether to show vertical lines at median values
+        legend_loc: Location for the legend
 
     Returns:
         Tuple containing the figure and axes objects
     """
-    # Extract metric values for the specified horizon
-    metric_values = []
-    for basin, horizon_data in basin_metrics.items():
-        if horizon in horizon_data and metric in horizon_data[horizon]:
-            value = horizon_data[horizon][metric]
-            # Skip NaN values
-            if not np.isnan(value):
-                metric_values.append(value)
+    # Validate inputs
+    if not model_names:
+        raise ValueError("At least one model name must be provided")
 
-    if not metric_values:
-        raise ValueError(
-            f"No data available for metric '{metric}' at horizon {horizon}"
-        )
+    missing_models = [model for model in model_names if model not in evaluator_results]
+    if missing_models:
+        raise ValueError(f"Models not found in evaluator results: {missing_models}")
 
-    # Sort values for CDF
-    sorted_values = np.sort(metric_values)
-
-    # Calculate cumulative probabilities
-    n = len(sorted_values)
-    cumulative_prob = np.arange(1, n + 1) / n
+    # Set up colors if not provided
+    if colors is None:
+        # Use a colorblind-friendly palette
+        colors = sns.color_palette("colorblind", len(model_names))
+    elif len(colors) < len(model_names):
+        # If not enough colors provided, cycle through the provided ones
+        colors = colors * (len(model_names) // len(colors) + 1)
+        colors = colors[: len(model_names)]
 
     # Create figure
     fig, ax = plt.subplots(figsize=fig_size)
 
-    # Plot CDF
-    ax.plot(
-        sorted_values,
-        cumulative_prob,
-        color=color,
-        linewidth=2.5,
-        label=f"{metric} CDF",
-    )
+    # Flag to track if a median line has been added to the legend
+    median_in_legend = False
 
-    # Add median line
-    median_value = np.median(sorted_values)
-    ax.axvline(
-        x=median_value,
-        color="red",
-        linestyle="--",
-        alpha=0.7,
-        label=f"Median: {median_value:.3f}",
-    )
+    # Plot CDF for each model
+    model_medians = {}
+    for i, model_name in enumerate(model_names):
+        # Extract basin metrics for this model
+        basin_metrics = evaluator_results[model_name]["basin_metrics"]
+
+        # Extract metric values for the specified horizon
+        metric_values = []
+        for basin, horizon_data in basin_metrics.items():
+            if horizon in horizon_data and metric in horizon_data[horizon]:
+                value = horizon_data[horizon][metric]
+                # Skip NaN values
+                if not np.isnan(value):
+                    metric_values.append(value)
+
+        if not metric_values:
+            print(
+                f"Warning: No data available for model '{model_name}', metric '{metric}' at horizon {horizon}"
+            )
+            continue
+
+        # Sort values for CDF
+        sorted_values = np.sort(metric_values)
+
+        # Calculate cumulative probabilities
+        n = len(sorted_values)
+        cumulative_prob = np.arange(1, n + 1) / n
+
+        # Store median for later use
+        median_value = np.median(sorted_values)
+        model_medians[model_name] = median_value
+
+        # Plot CDF
+        ax.plot(
+            sorted_values,
+            cumulative_prob,
+            color=colors[i],
+            linewidth=2.5,
+            label=f"{model_name} (n={n})",
+        )
+
+        # Add median line if requested
+        if include_median_lines:
+            if not median_in_legend:
+                # Add the first median line to the legend
+                ax.axvline(
+                    x=median_value,
+                    color="black",
+                    linestyle="--",
+                    alpha=0.7,
+                    label="Median",
+                )
+                median_in_legend = True
+            else:
+                # Don't add subsequent median lines to the legend
+                ax.axvline(x=median_value, color="black", linestyle="--", alpha=0.7)
 
     # Add threshold lines if provided
     if threshold_lines:
@@ -268,42 +373,17 @@ def plot_metric_cdf(
             threshold_labels = [f"Threshold: {t}" for t in threshold_lines]
 
         for threshold, label in zip(threshold_lines, threshold_labels):
-            # Find y-value (probability) at threshold
-            idx = np.searchsorted(sorted_values, threshold)
-            prob_at_threshold = cumulative_prob[min(idx, len(cumulative_prob) - 1)]
-
-            # Horizontal line at threshold
+            # Add vertical line at threshold
             ax.axvline(
-                x=threshold, color="green", linestyle="-.", alpha=0.7, label=label
+                x=threshold, color="gray", linestyle="-.", alpha=0.7, label=label
             )
-
-            # Add text annotation
-            ax.text(
-                threshold + 0.02,
-                0.1,
-                f"{prob_at_threshold * 100:.1f}%",
-                transform=ax.get_xaxis_transform(),
-                fontsize=9,
-                fontweight="bold",
-            )
-
-    # Calculate percentage of values above/below zero (useful for NSE)
-    if metric == "NSE":
-        pct_above_zero = sum(v > 0 for v in metric_values) / len(metric_values) * 100
-        ax.axvline(
-            x=0,
-            color="gray",
-            linestyle=":",
-            alpha=0.7,
-            label=f"NSE > 0: {pct_above_zero:.1f}%",
-        )
 
     # Set labels and title
     ax.set_xlabel(f"{metric} Value", fontsize=12)
     ax.set_ylabel("Cumulative Probability", fontsize=12)
 
     if title is None:
-        title = f"CDF of {metric} for {horizon}-day Forecast Horizon"
+        title = f"CDF of {metric} for {horizon}-day Forecast"
     ax.set_title(title, fontsize=14)
 
     # Format y-axis as percentage
@@ -311,10 +391,163 @@ def plot_metric_cdf(
 
     # Add grid and legend
     ax.grid(True, alpha=0.3, linestyle="--")
-    ax.legend(loc="best")
+
+    # Only add legend if there's something to show
+    if len(model_names) > 0:
+        ax.legend(loc=legend_loc)
 
     # Apply styling
     sns.despine()
     plt.tight_layout()
+
+    return fig, ax
+
+
+def plot_basin_map(
+    evaluator_results: Dict[str, Dict],
+    model_name: str,
+    metric: str = "NSE",
+    horizon: int = 1,
+    gauge_ids: Optional[List[str]] = None,
+    caravanify_instance=None,
+    fig_size: Tuple[int, int] = (12, 10),
+    cmap: str = "RdYlBu",
+    vmin: Optional[float] = None,
+    vmax: Optional[float] = None,
+    title: Optional[str] = None,
+    basemap: bool = True,
+    legend_title: Optional[str] = None,
+    threshold: Optional[float] = None,
+    show_axes: bool = True,
+    grid_alpha: float = 0.5,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot basins on a map colored by their performance metric.
+
+    Args:
+        evaluator_results: Dictionary with evaluator results
+        model_name: Name of the model to visualize
+        metric: Metric to use for coloring (default: "NSE")
+        horizon: Forecast horizon to visualize
+        gauge_ids: Optional list of gauge IDs to plot (if None, plot all)
+        caravanify_instance: Instance of Caravanify to get shapefiles
+        fig_size: Figure size as (width, height)
+        cmap: Colormap for basin coloring
+        vmin: Minimum value for colormap scaling
+        vmax: Maximum value for colormap scaling
+        title: Custom title for the plot
+        basemap: Whether to add a basemap
+        legend_title: Title for the colorbar legend
+        threshold: Optional threshold value to highlight
+        show_axes: Whether to display latitude and longitude axes
+        grid_alpha: Transparency of the coordinate grid
+
+    Returns:
+        Tuple containing the figure and axes objects
+    """
+    if not caravanify_instance:
+        raise ValueError("A Caravanify instance is required to access basin shapefiles")
+
+    # Get basin metrics for the specified model
+    if model_name not in evaluator_results:
+        raise ValueError(f"Model '{model_name}' not found in evaluator results")
+
+    basin_metrics = evaluator_results[model_name]["basin_metrics"]
+
+    # Extract metrics for the specified horizon
+    metric_values = {}
+    for basin, horizon_data in basin_metrics.items():
+        if horizon in horizon_data and metric in horizon_data[horizon]:
+            value = horizon_data[horizon][metric]
+            if not np.isnan(value):
+                metric_values[basin] = value
+
+    if not metric_values:
+        raise ValueError(
+            f"No data available for metric '{metric}' at horizon {horizon}"
+        )
+
+    # Filter to specific gauge IDs if provided
+    if gauge_ids:
+        metric_values = {
+            basin: value for basin, value in metric_values.items() if basin in gauge_ids
+        }
+        if not metric_values:
+            raise ValueError(
+                f"None of the specified gauge IDs have data for metric '{metric}' at horizon {horizon}"
+            )
+
+    # Get basin shapefiles
+    try:
+        all_shapefiles = caravanify_instance.get_shapefiles()
+        basin_gdf = all_shapefiles[
+            all_shapefiles["gauge_id"].isin(metric_values.keys())
+        ].copy()
+        if basin_gdf.empty:
+            raise ValueError("No basin shapefiles found for the specified gauge IDs")
+        if basin_gdf.crs is not None and basin_gdf.crs != "EPSG:4326":
+            basin_gdf = basin_gdf.to_crs("EPSG:4326")
+    except Exception as e:
+        raise ValueError(f"Error getting basin shapefiles: {e}")
+
+    basin_gdf["metric_value"] = basin_gdf["gauge_id"].map(metric_values)
+    x_min, y_min, x_max, y_max = basin_gdf.total_bounds
+    padding = 0.1
+    x_range, y_range = x_max - x_min, y_max - y_min
+    x_min, x_max, y_min, y_max = (
+        x_min - padding * x_range,
+        x_max + padding * x_range,
+        y_min - padding * y_range,
+        y_max + padding * y_range,
+    )
+
+    # Create figure with cartopy projection
+    projection = ccrs.PlateCarree()
+    fig, ax = plt.subplots(figsize=fig_size, subplot_kw={"projection": projection})
+
+    ax.add_feature(cfeature.COASTLINE, linewidth=0.5)
+    ax.add_feature(cfeature.BORDERS, linestyle=":", linewidth=0.5)
+    ax.add_feature(cfeature.LAKES, alpha=0.5)
+    ax.add_feature(cfeature.RIVERS, linewidth=0.5)
+
+    # Plot basins
+    norm = mcolors.Normalize(
+        vmin=vmin or basin_gdf["metric_value"].min(),
+        vmax=vmax or basin_gdf["metric_value"].max(),
+    )
+    basin_gdf.plot(
+        column="metric_value",
+        ax=ax,
+        cmap=cmap,
+        norm=norm,
+        edgecolor="black",
+        linewidth=0.5,
+        alpha=0.7,
+        transform=ccrs.PlateCarree(),
+    )
+
+    # Set map extent
+    ax.set_extent([x_min, x_max, y_min, y_max], crs=ccrs.PlateCarree())
+
+    # Add colorbar
+    sm = ScalarMappable(norm=norm, cmap=plt.cm.get_cmap(cmap))
+    sm.set_array([])
+    cbar = fig.colorbar(sm, ax=ax)
+    cbar.set_label(legend_title or f"{metric} Value", size=12)
+
+    # Set title
+    ax.set_title(
+        title or f"{metric} at {horizon}-day Horizon for {model_name}", fontsize=14
+    )
+
+    # Configure grid and axes
+    if show_axes:
+        gl = ax.gridlines(
+            draw_labels=True, linewidth=0.5, alpha=grid_alpha, linestyle="--"
+        )
+        gl.top_labels, gl.right_labels = False, False
+        gl.xlabel_style, gl.ylabel_style = {"size": 8}, {"size": 8}
+    else:
+        ax.set_axis_off()
 
     return fig, ax
