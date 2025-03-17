@@ -18,7 +18,7 @@ class HydroDataModule(pl.LightningDataModule):
     This module handles data preprocessing, including feature scaling and transformations,
     while maintaining proper separation between training, validation, and test data.
     It supports both grouped and non-grouped preprocessing pipelines.
-    
+
     The module now supports both fixed-year splits and proportional splits (e.g. 50% training,
     20% validation, 30% testing) controlled via a flag.
     """
@@ -54,7 +54,7 @@ class HydroDataModule(pl.LightningDataModule):
         use_proportional_split: bool = False,  # Flag to control which splitting method to use
     ):
         """Initialize the HydroDataModule with data and configuration parameters.
-        
+
         Args:
             time_series_df: DataFrame or list of DataFrames with time series data
             static_df: Optional DataFrame or list of DataFrames with static catchment attributes
@@ -94,28 +94,30 @@ class HydroDataModule(pl.LightningDataModule):
         self.target = target
         self.domain_id = domain_id
         self.domain_type = domain_type
-        
+
         # Store both splitting methods' parameters
         self.use_proportional_split = use_proportional_split
-        
+
         # Store proportion-based parameters
         self.train_prop = train_prop
         self.val_prop = val_prop
         self.test_prop = test_prop
-        
+
         # Store year-based parameters
         self.min_train_years = min_train_years
         self.val_years = val_years
         self.test_years = test_years
-        
+
         # Store quality check parameters
         self.max_missing_pct = max_missing_pct  # Used for reporting only now
-        self.max_gap_length = max_gap_length    # Used for reporting only now
+        self.max_gap_length = max_gap_length  # Used for reporting only now
         self.max_imputation_gap_size = max_imputation_gap_size  # New parameter
 
         # Validate that proportions sum to 1 when using proportional splitting
         if self.use_proportional_split:
-            if not np.isclose(self.train_prop + self.val_prop + self.test_prop, 1.0, atol=1e-5):
+            if not np.isclose(
+                self.train_prop + self.val_prop + self.test_prop, 1.0, atol=1e-5
+            ):
                 raise ValueError(
                     f"Train ({self.train_prop}), validation ({self.val_prop}), and test ({self.test_prop}) "
                     f"proportions must sum to 1.0, but they sum to {self.train_prop + self.val_prop + self.test_prop}"
@@ -445,8 +447,12 @@ class HydroDataModule(pl.LightningDataModule):
             min_train_years=self.min_train_years,
             val_years=self.val_years,
             test_years=self.test_years,
-            max_imputation_gap_size=self.max_imputation_gap_size,  # Pass new parameter
+            max_imputation_gap_size=self.max_imputation_gap_size,
             group_identifier=self.group_identifier,
+            train_prop=self.train_prop,
+            val_prop=self.val_prop,
+            test_prop=self.test_prop,
+            use_proportional_split=self.use_proportional_split,
         )
 
         if filtered_df.empty:
@@ -473,7 +479,7 @@ class HydroDataModule(pl.LightningDataModule):
     def _split_data(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         Split data into training, validation, and test sets.
-        
+
         Uses either fixed time spans or proportional splits based on configuration.
 
         Returns:
@@ -481,58 +487,82 @@ class HydroDataModule(pl.LightningDataModule):
         """
         train_data, val_data, test_data = [], [], []
 
-        for gauge_id, basin_data in self.processed_time_series.groupby(self.group_identifier):
+        for gauge_id, basin_data in self.processed_time_series.groupby(
+            self.group_identifier
+        ):
             # Sort data by date
             basin_data = basin_data.sort_values("date")
-            
+
             if self.use_proportional_split:
                 # Proportional split method
                 # Get valid period from quality report
                 periods = self.quality_report["valid_periods"][gauge_id]
-                
+
                 # Determine overall valid period (overlap of all required columns)
-                valid_starts = [period["start"] for period in periods.values() if period["start"] is not None]
-                valid_ends = [period["end"] for period in periods.values() if period["end"] is not None]
-                
+                valid_starts = [
+                    period["start"]
+                    for period in periods.values()
+                    if period["start"] is not None
+                ]
+                valid_ends = [
+                    period["end"]
+                    for period in periods.values()
+                    if period["end"] is not None
+                ]
+
                 if not valid_starts or not valid_ends:
                     print(f"Warning: Basin {gauge_id} has no valid periods, skipping")
                     continue
-                    
+
                 overall_start = max(valid_starts)
                 overall_end = min(valid_ends)
-                
+
                 # Calculate total valid duration in days
                 total_valid_days = (overall_end - overall_start).days
-                
+
                 # Define a minimum valid period (e.g., 1 year) to ensure meaningful splits
                 MIN_VALID_DAYS = 365
                 if total_valid_days < MIN_VALID_DAYS:
-                    print(f"Warning: Basin {gauge_id} has valid period less than {MIN_VALID_DAYS} days, skipping")
+                    print(
+                        f"Warning: Basin {gauge_id} has valid period less than {MIN_VALID_DAYS} days, skipping"
+                    )
                     continue
-                
+
                 # Calculate split boundary dates using the proportions
                 train_days = int(total_valid_days * self.train_prop)
                 val_days = int(total_valid_days * self.val_prop)
                 test_days = total_valid_days - (train_days + val_days)
-                
+
                 # Calculate boundary dates
                 train_end = overall_start + pd.Timedelta(days=train_days)
                 val_end = train_end + pd.Timedelta(days=val_days)
-                
+
                 # Create masks for each segment
                 train_mask = basin_data["date"] < train_end
-                val_mask = (basin_data["date"] >= train_end) & (basin_data["date"] < val_end)
+                val_mask = (basin_data["date"] >= train_end) & (
+                    basin_data["date"] < val_end
+                )
                 test_mask = basin_data["date"] >= val_end
             else:
                 # Original fixed-years method
                 periods = self.quality_report["valid_periods"][gauge_id]
-                valid_end = min([period["end"] for period in periods.values() if period["end"] is not None])
-                
-                test_start = valid_end - pd.Timedelta(days=int(self.test_years * 365.25))
+                valid_end = min(
+                    [
+                        period["end"]
+                        for period in periods.values()
+                        if period["end"] is not None
+                    ]
+                )
+
+                test_start = valid_end - pd.Timedelta(
+                    days=int(self.test_years * 365.25)
+                )
                 val_start = test_start - pd.Timedelta(days=int(self.val_years * 365.25))
-                
+
                 test_mask = basin_data["date"] >= test_start
-                val_mask = (basin_data["date"] >= val_start) & (basin_data["date"] < test_start)
+                val_mask = (basin_data["date"] >= val_start) & (
+                    basin_data["date"] < test_start
+                )
                 train_mask = basin_data["date"] < val_start
 
             # Append data segments to respective lists
@@ -544,10 +574,12 @@ class HydroDataModule(pl.LightningDataModule):
             train_size = basin_data[train_mask].shape[0]
             val_size = basin_data[val_mask].shape[0]
             test_size = basin_data[test_mask].shape[0]
-            
+
             if train_size == 0 or val_size == 0 or test_size == 0:
-                print(f"Warning: Basin {gauge_id} has empty split segments: "
-                      f"train={train_size}, val={val_size}, test={test_size}")
+                print(
+                    f"Warning: Basin {gauge_id} has empty split segments: "
+                    f"train={train_size}, val={val_size}, test={test_size}"
+                )
 
         return (
             pd.concat(train_data, ignore_index=True) if train_data else pd.DataFrame(),
@@ -664,7 +696,7 @@ class HydroDataModule(pl.LightningDataModule):
 
         This method is called by PyTorch Lightning to set up datasets
         for each stage of training. It ensures datasets include future forcing data.
-        
+
         Args:
             stage: Stage of training ('fit', 'test', or None for both)
         """
@@ -691,20 +723,16 @@ class HydroDataModule(pl.LightningDataModule):
             self._train_dataset = HydroDataset(
                 time_series_df=train_data,
                 static_df=self.processed_static,
-                **common_args
+                **common_args,
             )
 
             self._val_dataset = HydroDataset(
-                time_series_df=val_data,
-                static_df=self.processed_static,
-                **common_args
+                time_series_df=val_data, static_df=self.processed_static, **common_args
             )
 
         if stage == "test" or stage is None:
             self._test_dataset = HydroDataset(
-                time_series_df=test_data,
-                static_df=self.processed_static,
-                **common_args
+                time_series_df=test_data, static_df=self.processed_static, **common_args
             )
 
     def inverse_transform_predictions(
@@ -823,19 +851,19 @@ class HydroTransferDataModule(pl.LightningDataModule):
     ):
         """
         Initialize a transfer learning data module.
-        
+
         Args:
             source_datamodule: HydroDataModule for source domain
-            target_datamodule: HydroDataModule for target domain  
+            target_datamodule: HydroDataModule for target domain
             num_workers: Number of workers for data loading
             mode: Mode for CombinedLoader ('min_size', 'max_size', etc.)
         """
         super().__init__()
-        
+
         # Set appropriate domain types
         source_datamodule.domain_type = "source"
         target_datamodule.domain_type = "target"
-        
+
         self.source_dm = source_datamodule
         self.target_dm = target_datamodule
         self.num_workers = num_workers

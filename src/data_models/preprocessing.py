@@ -831,8 +831,12 @@ def check_data_quality(
     min_train_years: float,
     val_years: float,
     test_years: float,
-    max_imputation_gap_size: int = 5,  # New parameter for imputation threshold
+    max_imputation_gap_size: int = 5,  # Parameter for imputation threshold
     group_identifier: str = "gauge_id",
+    train_prop: float = None,  # Added parameter for train proportion
+    val_prop: float = None,    # Added parameter for validation proportion
+    test_prop: float = None,   # Added parameter for test proportion
+    use_proportional_split: bool = False,  # Added flag for split method
 ) -> Tuple[pd.DataFrame, Dict]:
     """
     Check data quality, trim leading/trailing NaNs, and impute short gaps.
@@ -847,6 +851,10 @@ def check_data_quality(
         test_years: Fixed test period in years
         max_imputation_gap_size: Maximum gap length to impute with linear interpolation
         group_identifier: Column name identifying the grouping variable
+        train_prop: Proportion of data for training when using proportional splitting
+        val_prop: Proportion of data for validation when using proportional splitting
+        test_prop: Proportion of data for testing when using proportional splitting
+        use_proportional_split: Whether to use proportional splitting method
     
     Returns:
         Tuple of (processed_df, quality_report)
@@ -860,6 +868,7 @@ def check_data_quality(
         "valid_periods": {},
         "imputation_report": {},
         "processing_steps": {},
+        "split_method": "proportional" if use_proportional_split else "fixed_years",
     }
     
     # 1. Trim leading and trailing NaNs by finding valid periods for each column in each group
@@ -893,7 +902,15 @@ def check_data_quality(
         
         # Check if period meets minimum length requirements
         meets_requirement, reason = check_data_period(
-            overall_start, overall_end, min_train_years, val_years, test_years
+            overall_start, 
+            overall_end, 
+            min_train_years=min_train_years, 
+            val_years=val_years, 
+            test_years=test_years,
+            train_prop=train_prop,
+            val_prop=val_prop, 
+            test_prop=test_prop,
+            use_proportional_split=use_proportional_split
         )
         if not meets_requirement:
             quality_report["excluded_basins"][group_id] = reason
