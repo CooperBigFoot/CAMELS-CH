@@ -4,17 +4,15 @@ from ..base.base_config import BaseConfig
 
 class TSMixerConfig(BaseConfig):
     """Configuration class for TSMixer model.
-    
+
     TSMixer is a model architecture for time series forecasting that uses MLP-based
     mixing layers to process temporal and feature dimensions separately.
     """
 
-    # Define model-specific parameters
+    # Define model-specific parameters - removed hidden_size and dropout
     MODEL_PARAMS: ClassVar[List[str]] = [
-        "hidden_size",
         "static_embedding_size",
         "num_mixing_layers",
-        "dropout",
         "scheduler_patience",
         "scheduler_factor",
         "fusion_method",
@@ -66,14 +64,18 @@ class TSMixerConfig(BaseConfig):
             future_input_size=future_input_size,
             learning_rate=learning_rate,
             group_identifier=group_identifier,
-            **kwargs
+            **kwargs,
         )
 
         # Set model-specific parameters
         self.hidden_size = hidden_size
+        self.dropout = dropout
+        self.static_size = static_size
+        self.future_input_size = future_input_size or input_size - 1
+        self.past_feature_projection_size = 0
+        self.future_forcing_projection_size = 0
         self.static_embedding_size = static_embedding_size
         self.num_mixing_layers = num_mixing_layers
-        self.dropout = dropout
         self.scheduler_patience = scheduler_patience
         self.scheduler_factor = scheduler_factor
         self.fusion_method = fusion_method

@@ -496,12 +496,13 @@ class TSMixer(nn.Module):
         Forward pass with support for future forcing data.
 
         Args:
-            x: Historical input features of shape [B, input_len, input_size]
-            static: Static features of shape [B, static_size]
-            future: Optional future forcing data of shape [B, output_len, future_input_size]
+            x: Historical input features [B, input_len, input_size] 
+               (contains target as the first feature, followed by optional past features)
+            static: Static features [B, static_size]
+            future: Optional future forcing data [B, output_len, future_input_size]
 
         Returns:
-            Predictions of shape [B, output_len, 1]
+            Predictions [B, output_len, 1]
         """
         # Validate input dimensions
         assert x.ndim == 3, "Input tensor x must be of shape [B, input_len, input_size]"
