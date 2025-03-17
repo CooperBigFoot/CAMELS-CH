@@ -6,9 +6,9 @@ from torch.nn import MSELoss
 from torch.optim import Adam
 import pytorch_lightning as pl
 
-from models.base.base_lit_model import BaseLitModel
-from models.tsmixer.config import TSMixerConfig
-from models.tsmixer.model import TSMixer
+from ..base.base_lit_model import BaseLitModel
+from .config import TSMixerConfig
+from .model import TSMixer
 
 
 class LitTSMixer(BaseLitModel):

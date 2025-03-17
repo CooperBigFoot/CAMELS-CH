@@ -10,8 +10,8 @@ This module provides implementations for:
 3. LitTSMixer - PyTorch Lightning wrapper for training and evaluation
 """
 
-from models.tsmixer.config import TSMixerConfig
-from models.tsmixer.model import (
+from .config import TSMixerConfig
+from .model import (
     TSMixer,
     TSMixerBackbone,
     TSMixerHead,
@@ -20,7 +20,7 @@ from models.tsmixer.model import (
     TimeMixingBlock,
     ResBlock,
 )
-from models.tsmixer.lightning import LitTSMixer
+from .lightning import LitTSMixer
 
 __all__ = [
     "TSMixerConfig",

@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional, ClassVar, List
-from models.base.base_config import BaseConfig
+from ..base.base_config import BaseConfig
 
 
 class TSMixerConfig(BaseConfig):

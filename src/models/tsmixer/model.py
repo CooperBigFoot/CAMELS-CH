@@ -7,7 +7,7 @@ https://arxiv.org/abs/2303.06053
 from typing import Optional
 import torch
 import torch.nn as nn
-from models.tsmixer.config import TSMixerConfig
+from .config import TSMixerConfig
 
 
 class InputAlignmentModule(nn.Module):

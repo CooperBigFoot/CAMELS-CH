@@ -4,7 +4,7 @@ from typing import Dict, Optional, Any
 from torch.nn import MSELoss
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from base_config import BaseConfig
+from .base_config import BaseConfig
 
 
 class BaseLitModel(pl.LightningModule):
