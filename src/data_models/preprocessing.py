@@ -388,9 +388,9 @@ def find_valid_data_period(
     first_valid_idx = valid_indices[0]
     last_valid_idx = valid_indices[-1]
 
-    # Get corresponding dates
-    start_date = dates[first_valid_idx]
-    end_date = dates[last_valid_idx]
+    # Get corresponding dates - use iloc for integer-based indexing
+    start_date = dates.iloc[first_valid_idx]
+    end_date = dates.iloc[last_valid_idx]
 
     return start_date, end_date
 
@@ -831,58 +831,57 @@ def check_data_quality(
     min_train_years: float,
     val_years: float,
     test_years: float,
+    max_imputation_gap_size: int = 5,  # New parameter for imputation threshold
     group_identifier: str = "gauge_id",
 ) -> Tuple[pd.DataFrame, Dict]:
     """
-    Check data quality and ensure sufficient data for fixed validation/test periods.
-
+    Check data quality, trim leading/trailing NaNs, and impute short gaps.
+    
     Args:
         df: DataFrame with data
         required_columns: List of columns to check
         max_missing_pct: Maximum allowed percentage of missing values
-        max_gap_length: Maximum allowed gap length in days
+        max_gap_length: Maximum allowed gap length in days (for quality reporting only)
         min_train_years: Minimum required years for training
         val_years: Fixed validation period in years
         test_years: Fixed test period in years
+        max_imputation_gap_size: Maximum gap length to impute with linear interpolation
         group_identifier: Column name identifying the grouping variable
-
+    
     Returns:
-        Tuple of (filtered_df, quality_report)
+        Tuple of (processed_df, quality_report)
     """
     validate_input(df, required_columns, group_identifier)
-
+    
     quality_report = {
         "original_basins": len(df[group_identifier].unique()),
         "retained_basins": 0,
         "excluded_basins": {},
         "valid_periods": {},
+        "imputation_report": {},
         "processing_steps": {},
     }
-
-    filtered_basins = []
-
+    
+    # 1. Trim leading and trailing NaNs by finding valid periods for each column in each group
+    valid_periods = trim_leading_trailing_nans(df, required_columns, group_identifier)
+    quality_report["valid_periods"] = valid_periods
+    
+    processed_basins = []
+    
     for group_id, basin_data in df.groupby(group_identifier):
         basin_data = basin_data.sort_values("date").reset_index(drop=True)
         quality_report["processing_steps"][group_id] = []
-
-        valid_periods = {}
-        for column in required_columns:
-            start_date, end_date = find_valid_data_period(
-                basin_data[column], basin_data["date"]
-            )
-            valid_periods[column] = {"start": start_date, "end": end_date}
-
-        quality_report["valid_periods"][group_id] = valid_periods
-
+        
+        # Find overall valid period (overlap of all required columns)
         try:
             overall_start = max(
                 period["start"]
-                for period in valid_periods.values()
+                for period in valid_periods[group_id].values()
                 if period["start"] is not None
             )
             overall_end = min(
                 period["end"]
-                for period in valid_periods.values()
+                for period in valid_periods[group_id].values()
                 if period["end"] is not None
             )
         except ValueError:
@@ -891,7 +890,8 @@ def check_data_quality(
                 "Failed: No valid data period found"
             )
             continue
-
+        
+        # Check if period meets minimum length requirements
         meets_requirement, reason = check_data_period(
             overall_start, overall_end, min_train_years, val_years, test_years
         )
@@ -899,9 +899,17 @@ def check_data_quality(
             quality_report["excluded_basins"][group_id] = reason
             quality_report["processing_steps"][group_id].append(f"Failed: {reason}")
             continue
-
-        basin_data_filled = ensure_complete_date_range(
-            basin_data,
+        
+        # 2. Trim basin data to valid period
+        trimmed_data = basin_data[(basin_data["date"] >= overall_start) & 
+                                 (basin_data["date"] <= overall_end)]
+        quality_report["processing_steps"][group_id].append(
+            f"Trimmed data from {len(basin_data)} to {len(trimmed_data)} rows"
+        )
+        
+        # 3. Ensure complete date range (fill missing dates)
+        complete_data = ensure_complete_date_range(
+            trimmed_data,
             group_id,
             overall_start,
             overall_end,
@@ -911,46 +919,191 @@ def check_data_quality(
         quality_report["processing_steps"][group_id].append(
             "Completed date range filling"
         )
-
-        if not check_missing_percentage(
-            basin_data_filled,
+        
+        # 4. Check missing percentage (for reporting only, not for filtering)
+        check_missing_percentage(
+            complete_data,
             group_id,
             required_columns,
             max_missing_pct,
             quality_report,
             group_identifier,
-        ):
-            reason = quality_report["missing_data"][group_id]["failure_reason"]
-            quality_report["excluded_basins"][group_id] = reason
-            quality_report["processing_steps"][group_id].append(f"Failed: {reason}")
-            continue
-
-        quality_report["processing_steps"][group_id].append(
-            "Passed missing percentage check"
         )
-
-        if not check_missing_gaps(
-            basin_data_filled,
+        quality_report["processing_steps"][group_id].append(
+            "Calculated missing percentage"
+        )
+        
+        # 5. Record gap information (for reporting purposes only)
+        check_missing_gaps(
+            complete_data,
             group_id,
             required_columns,
             max_gap_length,
             quality_report,
             group_identifier,
-        ):
-            reason = quality_report["gaps"][group_id]["failure_reason"]
-            quality_report["excluded_basins"][group_id] = reason
-            quality_report["processing_steps"][group_id].append(f"Failed: {reason}")
-            continue
-
-        quality_report["processing_steps"][group_id].append("Passed gap check")
-        filtered_basins.append(basin_data_filled)
-        quality_report["processing_steps"][group_id].append("Passed all quality checks")
-
-    if filtered_basins:
-        filtered_df = pd.concat(filtered_basins, ignore_index=True)
-        quality_report["retained_basins"] = len(filtered_df[group_identifier].unique())
+        )
+        quality_report["processing_steps"][group_id].append(
+            "Recorded gap information"
+        )
+        
+        # Add to processed basins - we keep all basins now
+        processed_basins.append(complete_data)
+        quality_report["processing_steps"][group_id].append("Basin processed successfully")
+    
+    if processed_basins:
+        # Combine all processed basin data
+        processed_df = pd.concat(processed_basins, ignore_index=True)
+        
+        # 6. Perform imputation of short gaps
+        processed_df, imputation_report = impute_short_gaps(
+            processed_df, 
+            required_columns,
+            max_imputation_gap_size,
+            group_identifier
+        )
+        quality_report["imputation_report"] = imputation_report
+        quality_report["retained_basins"] = len(processed_df[group_identifier].unique())
     else:
-        filtered_df = pd.DataFrame()
+        processed_df = pd.DataFrame()
         quality_report["retained_basins"] = 0
+    
+    return processed_df, quality_report
 
-    return filtered_df, quality_report
+
+def trim_leading_trailing_nans(
+    df: pd.DataFrame, 
+    columns: List[str], 
+    group_identifier: str = "gauge_id"
+) -> Dict[str, Dict[str, Dict[str, Optional[pd.Timestamp]]]]:
+    """
+    Trim leading and trailing NaNs from each time series by identifying valid data periods.
+    
+    Args:
+        df: DataFrame with time series data
+        columns: Columns to check for NaNs
+        group_identifier: Column name identifying the grouping variable
+    
+    Returns:
+        Dictionary with valid periods for each group and column
+        {group_id: {column: {"start": start_date, "end": end_date}}}
+    """
+    # Verify input
+    if "date" not in df.columns:
+        raise ValueError("DataFrame must contain a 'date' column")
+    
+    valid_periods = {}
+    
+    # Process each group separately
+    for group_id, group_data in df.groupby(group_identifier):
+        valid_periods[group_id] = {}
+        
+        # Sort by date to ensure correct order
+        group_data = group_data.sort_values("date")
+        dates = group_data["date"]
+        
+        for column in columns:
+            # Find first and last non-NaN values
+            start_date, end_date = find_valid_data_period(group_data[column], dates)
+            valid_periods[group_id][column] = {"start": start_date, "end": end_date}
+    
+    return valid_periods
+
+
+def impute_short_gaps(
+    df: pd.DataFrame, 
+    columns: List[str], 
+    max_imputation_gap_size: int,
+    group_identifier: str = "gauge_id"
+) -> Tuple[pd.DataFrame, Dict]:
+    """
+    Linearly impute short gaps (<=max_imputation_gap_size) in time series data.
+    Longer gaps remain as NaNs.
+    
+    Args:
+        df: DataFrame with time series data
+        columns: Columns to impute
+        max_imputation_gap_size: Maximum gap length (in days) to impute
+        group_identifier: Column name identifying the grouping variable
+    
+    Returns:
+        Tuple of (DataFrame with imputed values for short gaps, imputation report)
+    """
+    if "date" not in df.columns:
+        raise ValueError("DataFrame must contain a 'date' column")
+    
+    # Create a copy to avoid modifying the input
+    imputed_df = df.copy()
+    imputation_report = {}
+    
+    # Process each group separately
+    for group_id, group_data in imputed_df.groupby(group_identifier):
+        imputation_report[group_id] = {}
+        
+        # Sort by date to ensure correct time-based imputation
+        group_idx = group_data.index
+        
+        for column in columns:
+            # Current column data
+            series = imputed_df.loc[group_idx, column]
+            
+            # Find gaps (runs of NaNs)
+            is_nan = series.isna()
+            if not is_nan.any():  # Ensure parentheses are used for method call
+                # No NaNs to impute
+                imputation_report[group_id][column] = {
+                    "short_gaps_count": 0,
+                    "long_gaps_count": 0,
+                    "imputed_values_count": 0
+                }
+                continue
+                
+            # Track consecutive NaN runs
+            run_starts = []
+            run_lengths = []
+            
+            in_run = False
+            run_start = None
+            run_length = 0
+            
+            # Find all runs of NaNs
+            for i, (idx, is_missing) in enumerate(is_nan.items()):
+                if is_missing and not in_run:
+                    # Start of a new run
+                    in_run = True
+                    run_start = idx
+                    run_length = 1
+                elif is_missing and in_run:
+                    # Continue current run
+                    run_length += 1
+                elif not is_missing and in_run:
+                    # End of a run
+                    run_starts.append(run_start)
+                    run_lengths.append(run_length)
+                    in_run = False
+                    run_start = None
+                    run_length = 0
+            
+            # Handle case where series ends with NaNs
+            if in_run:
+                run_starts.append(run_start)
+                run_lengths.append(run_length)
+            
+            # Separate short and long gaps
+            short_gaps = [(start, length) for start, length in zip(run_starts, run_lengths) 
+                          if length <= max_imputation_gap_size]
+            long_gaps = [(start, length) for start, length in zip(run_starts, run_lengths) 
+                         if length > max_imputation_gap_size]
+            
+            # Apply linear interpolation to the entire column for the group
+            # This will only fill the NaN values where interpolation is possible
+            series_imputed = imputed_df.loc[group_idx, column].interpolate(method='linear')
+            imputed_df.loc[group_idx, column] = series_imputed
+            
+            # Record imputation statistics
+            imputation_report[group_id][column] = {
+                "short_gaps_count": len(short_gaps),
+                "long_gaps_count": len(long_gaps),
+                "imputed_values_count": sum(length for _, length in short_gaps)
+            }
+    
+    return imputed_df, imputation_report

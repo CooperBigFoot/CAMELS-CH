@@ -49,6 +49,7 @@ class HydroDataModule(pl.LightningDataModule):
         test_years: int = 2,
         max_missing_pct: float = 10,
         max_gap_length: int = 30,
+        max_imputation_gap_size: int = 5,  # New parameter for imputation threshold
         domain_type: str = "source",
         use_proportional_split: bool = False,  # Flag to control which splitting method to use
     ):
@@ -73,8 +74,9 @@ class HydroDataModule(pl.LightningDataModule):
             min_train_years: Minimum years required for training (when use_proportional_split=False)
             val_years: Number of years to use for validation (when use_proportional_split=False)
             test_years: Number of years to use for testing (when use_proportional_split=False)
-            max_missing_pct: Maximum percentage of missing values allowed
-            max_gap_length: Maximum allowed gap length in time series
+            max_missing_pct: Maximum percentage of missing values allowed (for reporting only now)
+            max_gap_length: Maximum allowed gap length in time series (for reporting only now)
+            max_imputation_gap_size: Maximum gap length to impute with linear interpolation
             domain_type: Type of domain - "source" or "target" (for transfer learning)
             use_proportional_split: If True, use proportional splitting; otherwise use fixed-year splits
         """
@@ -106,8 +108,10 @@ class HydroDataModule(pl.LightningDataModule):
         self.val_years = val_years
         self.test_years = test_years
         
-        self.max_missing_pct = max_missing_pct
-        self.max_gap_length = max_gap_length
+        # Store quality check parameters
+        self.max_missing_pct = max_missing_pct  # Used for reporting only now
+        self.max_gap_length = max_gap_length    # Used for reporting only now
+        self.max_imputation_gap_size = max_imputation_gap_size  # New parameter
 
         # Validate that proportions sum to 1 when using proportional splitting
         if self.use_proportional_split:
@@ -431,7 +435,7 @@ class HydroDataModule(pl.LightningDataModule):
         This method handles data quality validation, splitting, and transformation
         using the configured preprocessing pipelines.
         """
-        # Check data quality
+        # Check data quality with new approach
         required_columns = list(set(self.features + [self.target]))
         filtered_df, quality_report = check_data_quality(
             self.time_series_df,
@@ -441,6 +445,7 @@ class HydroDataModule(pl.LightningDataModule):
             min_train_years=self.min_train_years,
             val_years=self.val_years,
             test_years=self.test_years,
+            max_imputation_gap_size=self.max_imputation_gap_size,  # Pass new parameter
             group_identifier=self.group_identifier,
         )
 

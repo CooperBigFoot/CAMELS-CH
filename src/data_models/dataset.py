@@ -121,9 +121,12 @@ class HydroDataset(Dataset):
     def _build_sequence_index(self) -> None:
         """Build index of valid sequences, excluding those with NaN values.
 
-        Also stores date information for each valid sequence to enable proper time alignment.
+        This method now enforces the exclusion of sequences with NaNs during batch creation,
+        rather than filtering out entire basins during preprocessing.
         """
         index_list = []
+        nan_seq_count = 0
+        valid_seq_count = 0
 
         for gauge_id in self.gauge_ids:
             feat_tensor = self.features_data[gauge_id]
@@ -149,10 +152,18 @@ class HydroDataset(Dataset):
 
                     # Store gauge_id, start_idx, and input_end_date
                     index_list.append((gauge_id, start, input_end_date))
+                    valid_seq_count += 1
+                else:
+                    nan_seq_count += 1
 
         self.index = pd.DataFrame(
             index_list, columns=[self.group_identifier, "start_idx", "input_end_date"]
         )
+        
+        # Log statistics about excluded sequences
+        if nan_seq_count > 0:
+            print(f"Domain {self.domain_id}: Excluded {nan_seq_count} sequences with NaNs "
+                  f"({(nan_seq_count / (nan_seq_count + valid_seq_count) * 100):.1f}%)")
 
     def __len__(self) -> int:
         """Return number of valid sequences in the dataset."""
