@@ -23,16 +23,16 @@ class TSMixerConfig:
         input_size: int,
         output_len: int,
         static_size: int,
-        future_input_size: Optional[int] = None,  # Number of future forcing features
+        future_input_size: Optional[int] = None,  
         hidden_size: int = 64,
         static_embedding_size: int = 10,
-        num_mixing_layers: int = 5,  # renamed from num_layers
+        num_mixing_layers: int = 5,  
         dropout: float = 0.1,
         learning_rate: float = 1e-3,
         group_identifier: str = "gauge_id",
-        scheduler_patience: int = 2,  # renamed from lr_scheduler_patience
-        scheduler_factor: float = 0.5,  # renamed from lr_scheduler_factor
-        fusion_method: str = "add",  # Options: "add" or "concat"
+        scheduler_patience: int = 2,  
+        scheduler_factor: float = 0.5,  
+        fusion_method: str = "add",  
     ):
         """Initialize TSMixer configuration.
 

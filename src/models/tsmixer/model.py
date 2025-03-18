@@ -10,11 +10,57 @@ import torch.nn as nn
 from .config import TSMixerConfig
 
 
-class InputAlignmentModule(nn.Module):
-    """Aligns historical data, future forcing, and static features into a common representation.
+class TemporalProjection(nn.Module):
+    """Projects input sequence from one length to another using linear transformation.
 
-    This module implements the "align" stage described in Section 4.2 of the TSMixer paper,
-    projecting heterogeneous inputs into a unified space for subsequent mixing layers.
+    This implements the temporal projection operation described in the TSMixer paper,
+    which maps sequences from length L to length T.
+    """
+
+    def __init__(
+        self, input_len: int, output_len: int, hidden_size: Optional[int] = None
+    ):
+        """Initialize temporal projection layer.
+
+        Args:
+            input_len: Length of input sequence
+            output_len: Length of output sequence
+            hidden_size: Optional hidden dimension for MLP-based projection
+        """
+        super().__init__()
+
+        if hidden_size is None:
+            # Direct linear projection
+            self.projection = nn.Linear(input_len, output_len)
+        else:
+            # MLP-based projection with hidden layer
+            self.projection = nn.Sequential(
+                nn.Linear(input_len, hidden_size),
+                nn.ReLU(),
+                nn.Linear(hidden_size, output_len),
+            )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Project tensor along temporal dimension.
+
+        Args:
+            x: Input tensor [batch_size, input_len, feature_dim]
+
+        Returns:
+            Projected tensor [batch_size, output_len, feature_dim]
+        """
+        # Transpose to apply projection on temporal dimension
+        x_t = x.transpose(1, 2)  # [B, F, L]
+        projected = self.projection(x_t)  # [B, F, T]
+        return projected.transpose(1, 2)  # [B, T, F]
+
+
+class AlignmentStage(nn.Module):
+    """Aligns historical, future, and static features into a unified representation.
+
+    This implements the alignment stage from the TSMixer paper, which transforms
+    heterogeneous inputs into a common representation space through separate
+    projection branches followed by concatenation.
     """
 
     def __init__(
@@ -25,441 +71,466 @@ class InputAlignmentModule(nn.Module):
         future_input_size: int,
         hidden_size: int,
         static_size: int,
-        static_embedding_size: int,
         dropout: float = 0.1,
-        fusion_method: str = "add",
     ):
-        """Initialize the alignment module.
+        """Initialize the alignment stage.
 
         Args:
             input_size: Number of input features
             input_len: Length of input sequence
-            output_len: Length of output sequence (forecast horizon)
+            output_len: Length of output sequence
             future_input_size: Number of future forcing features
             hidden_size: Size of hidden representation
             static_size: Number of static features
-            static_embedding_size: Size of static feature embedding
-            dropout: Dropout rate for regularization
-            fusion_method: Method to fuse representations ("add" or "concat")
+            dropout: Dropout rate
         """
         super().__init__()
 
-        self.fusion_method = fusion_method
-        self.output_len = output_len
-
-        # Historical data projection
-        self.historical_projection = nn.Sequential(
-            nn.Linear(input_len * input_size, hidden_size * output_len),
+        # Historical feature branch: temporal projection + feature mixing
+        self.historical_temporal_proj = TemporalProjection(
+            input_len=input_len, output_len=output_len
+        )
+        self.historical_feature_mixing = nn.Sequential(
+            nn.Linear(input_size, hidden_size),
             nn.ReLU(),
             nn.Dropout(dropout),
+            nn.LayerNorm(hidden_size),
         )
 
-        # Future forcing projection
-        self.future_projection = nn.Sequential(
+        # Future feature branch: temporal projection + feature mixing
+        self.future_temporal_proj = TemporalProjection(
+            input_len=output_len,
+            output_len=output_len,  # Identity projection for consistency
+        )
+        self.future_feature_mixing = nn.Sequential(
             nn.Linear(future_input_size, hidden_size),
             nn.ReLU(),
             nn.Dropout(dropout),
+            nn.LayerNorm(hidden_size),
         )
 
-        # Static feature projection (if available)
+        # Static feature branch: expansion + feature mixing
         if static_size > 0:
-            self.static_projection = nn.Sequential(
-                nn.Linear(static_size, static_embedding_size),
+            self.static_feature_mixing = nn.Sequential(
+                nn.Linear(static_size, hidden_size),
                 nn.ReLU(),
                 nn.Dropout(dropout),
+                nn.LayerNorm(hidden_size),
             )
-
-            # Gate for static modulation
-            self.static_gate = nn.Linear(static_embedding_size, hidden_size)
+            self.output_size = hidden_size * 3  # Concatenation of all three branches
         else:
-            self.static_projection = None
-            self.static_gate = None
-
-        # Final output size after fusion
-        if fusion_method == "add":
-            self.output_size = hidden_size
-        elif fusion_method == "concat":
-            self.output_size = hidden_size * 2
-        else:
-            raise ValueError(f"Unsupported fusion method: {fusion_method}")
-
-        # Layer normalization for aligned representations
-        self.norm_historical = nn.LayerNorm(hidden_size)
-        self.norm_future = nn.LayerNorm(hidden_size)
-        self.norm_fused = nn.LayerNorm(self.output_size)
+            self.static_feature_mixing = None
+            self.output_size = hidden_size * 2  # Only historical and future
 
     def forward(
         self,
-        historical: torch.Tensor,
-        future: torch.Tensor,
-        static: Optional[torch.Tensor] = None,
+        historical: torch.Tensor,  # [batch_size, input_len, input_size]
+        future: torch.Tensor,  # [batch_size, output_len, future_input_size]
+        static: Optional[torch.Tensor] = None,  # [batch_size, static_size]
     ) -> torch.Tensor:
-        """
-        Align and fuse historical, future, and static data.
+        """Process and align heterogeneous inputs.
 
         Args:
-            historical: Historical data [batch_size, input_len, input_size]
-            future: Future forcing data [batch_size, output_len, future_input_size]
-            static: Static features [batch_size, static_size]
+            historical: Historical features
+            future: Future forcing features
+            static: Static features
 
         Returns:
-            Fused representation [batch_size, output_len, output_size]
+            Aligned representation [batch_size, output_len, output_size]
         """
         batch_size = historical.size(0)
+        output_len = future.size(1)
 
-        # Project historical data to match output sequence length
-        hist_flat = historical.reshape(batch_size, -1)  # [B, input_len * input_size]
-        hist_proj = self.historical_projection(
-            hist_flat
-        )  # [B, hidden_size * output_len]
-        hist_aligned = hist_proj.reshape(
-            batch_size, self.output_len, -1
-        )  # [B, output_len, hidden_size]
-        hist_aligned = self.norm_historical(hist_aligned)
+        # Process historical features
+        hist_projected = self.historical_temporal_proj(historical)
+        hist_aligned = self.historical_feature_mixing(hist_projected)
 
-        # Project future forcing data
-        future_aligned = self.norm_future(
-            self.future_projection(future)
-        )  # [B, output_len, hidden_size]
+        # Process future features
+        future_projected = self.future_temporal_proj(future)
+        future_aligned = self.future_feature_mixing(future_projected)
 
-        # Apply static modulation if available
-        if static is not None and self.static_projection is not None:
-            static_emb = self.static_projection(static)  # [B, static_embedding_size]
-            static_gate = torch.sigmoid(
-                self.static_gate(static_emb)
-            )  # [B, hidden_size]
-            static_gate = static_gate.unsqueeze(1).expand(
-                -1, self.output_len, -1
-            )  # [B, output_len, hidden_size]
+        # Process static features if available
+        if static is not None and self.static_feature_mixing is not None:
+            # Project static features
+            static_emb = self.static_feature_mixing(static)  # [B, hidden_size]
 
-            # Apply modulation
-            hist_aligned = hist_aligned * static_gate
-            future_aligned = future_aligned * static_gate
+            # Expand static features to match temporal dimension
+            static_aligned = static_emb.unsqueeze(1).expand(-1, output_len, -1)
 
-        # Fuse representations
-        if self.fusion_method == "add":
-            fused = hist_aligned + future_aligned
-        else:  # concat
-            fused = torch.cat([hist_aligned, future_aligned], dim=-1)
-
-        return self.norm_fused(fused)
+            # Concatenate all three aligned representations
+            return torch.cat([hist_aligned, future_aligned, static_aligned], dim=-1)
+        else:
+            # Concatenate only historical and future
+            return torch.cat([hist_aligned, future_aligned], dim=-1)
 
 
-class FeatureMixingBlock(nn.Module):
-    """Feature mixing block that processes each time step across features."""
+class TimeMixing(nn.Module):
+    """Time-mixing MLP that processes features across time.
 
-    def __init__(self, input_dim: int, hidden_size: int, dropout: float):
-        """Initialize feature mixing block.
+    Applies mixing operations along the temporal dimension to capture
+    temporal patterns in the data.
+    """
+
+    def __init__(self, seq_len: int, hidden_size: int, dropout: float = 0.1):
+        """Initialize time mixing module.
 
         Args:
-            input_dim: Dimension of input features
+            seq_len: Length of sequence to process
             hidden_size: Size of hidden representation
             dropout: Dropout rate
         """
         super().__init__()
 
-        self.mixing = nn.Sequential(
-            nn.Linear(input_dim, hidden_size),
+        self.time_mlp = nn.Sequential(
+            nn.Linear(seq_len, hidden_size),
             nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_size, input_dim),
+            nn.Linear(hidden_size, seq_len),
             nn.Dropout(dropout),
         )
 
-        self.norm = nn.LayerNorm(input_dim)
+        self.norm = nn.LayerNorm(seq_len)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass through feature mixing block.
-
-        Args:
-            x: Input tensor [batch_size, seq_len, input_dim]
-
-        Returns:
-            Mixed tensor [batch_size, seq_len, input_dim]
-        """
-        return self.norm(x + self.mixing(x))
-
-
-class TimeMixingBlock(nn.Module):
-    """Time mixing block that processes each feature across time."""
-
-    def __init__(self, input_len: int, hidden_size: int, dropout: float):
-        """Initialize time mixing block.
-
-        Args:
-            input_len: Length of input sequence
-            hidden_size: Size of hidden representation
-            dropout: Dropout rate
-        """
-        super().__init__()
-
-        self.mixing = nn.Sequential(
-            nn.Linear(input_len, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, input_len),
-            nn.Dropout(dropout),
-        )
-
-        self.norm = nn.LayerNorm(input_len)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass through time mixing block.
+        """Apply time mixing.
 
         Args:
             x: Input tensor [batch_size, seq_len, feature_dim]
 
         Returns:
-            Mixed tensor [batch_size, seq_len, feature_dim]
+            Time-mixed tensor [batch_size, seq_len, feature_dim]
         """
-        # Transpose to apply mixing along time dimension
-        x_t = x.transpose(1, 2)
-        mixed = x_t + self.mixing(x_t)
-        # Transpose back to original shape
-        return self.norm(mixed).transpose(1, 2)
+        # Transpose for time dimension mixing
+        x_t = x.transpose(1, 2)  # [B, F, T]
+
+        # Apply MLP along time dimension with residual connection
+        mixed = x_t + self.time_mlp(x_t)
+
+        # Apply normalization and transpose back
+        return self.norm(mixed).transpose(1, 2)  # [B, T, F]
 
 
-class ResBlock(nn.Module):
-    """Residual block combining temporal and feature mixing."""
+class FeatureMixing(nn.Module):
+    """Feature-mixing MLP that processes time steps across features.
 
-    def __init__(
-        self, input_dim: int, hidden_size: int, dropout: float, input_len: int
-    ):
-        """Initialize residual block.
+    Applies mixing operations along the feature dimension to capture
+    cross-feature interactions.
+    """
+
+    def __init__(self, feature_dim: int, hidden_size: int, dropout: float = 0.1):
+        """Initialize feature mixing module.
 
         Args:
-            input_dim: Dimension of input features
-            hidden_size: Size of hidden layers
+            feature_dim: Dimension of input features
+            hidden_size: Size of hidden representation
             dropout: Dropout rate
-            input_len: Length of input sequence
         """
         super().__init__()
 
-        # Temporal mixing: mixing along the time dimension
-        self.temporal = TimeMixingBlock(input_len, hidden_size, dropout)
+        self.feature_mlp = nn.Sequential(
+            nn.Linear(feature_dim, hidden_size),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_size, feature_dim),
+            nn.Dropout(dropout),
+        )
 
-        # Channel (feature) mixing: mixing along the feature dimension
-        self.channel = FeatureMixingBlock(input_dim, hidden_size, dropout)
+        self.norm = nn.LayerNorm(feature_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass through residual block.
+        """Apply feature mixing.
 
         Args:
-            x: Input tensor [batch_size, seq_len, input_dim]
+            x: Input tensor [batch_size, seq_len, feature_dim]
 
         Returns:
-            Output tensor [batch_size, seq_len, input_dim]
+            Feature-mixed tensor [batch_size, seq_len, feature_dim]
         """
-        # Temporal mixing
-        x = self.temporal(x)
+        # Apply MLP along feature dimension with residual connection
+        mixed = x + self.feature_mlp(x)
 
-        # Channel mixing
-        x = self.channel(x)
-
-        return x
+        # Apply normalization
+        return self.norm(mixed)
 
 
 class ConditionalFeatureMixing(nn.Module):
-    """Applies conditional feature mixing using static features to modulate dynamic features."""
+    """Conditional feature mixing that uses static features to modulate feature interactions.
+
+    Implements the conditional feature-mixing MLP from the TSMixer paper,
+    which incorporates static features to guide the mixing process.
+    """
 
     def __init__(
         self,
-        input_size: int,
+        feature_dim: int,
         static_size: int,
         static_embedding_size: int,
         hidden_size: int,
+        dropout: float = 0.1,
     ):
         """Initialize conditional feature mixing module.
 
         Args:
-            input_size: Dimension of input features
+            feature_dim: Dimension of input features
             static_size: Dimension of static features
-            static_embedding_size: Size of static feature embedding
+            static_embedding_size: Embedding size for static features
             hidden_size: Size of hidden layers
+            dropout: Dropout rate
         """
         super().__init__()
 
-        # Projections for static features
-        self.static_proj = nn.Linear(static_size, static_embedding_size)
-
-        # Gate projection for modulation
-        self.gate_proj = nn.Linear(static_embedding_size, input_size)
-
-        # Feature mixing after modulation
-        self.feature_mixing = nn.Sequential(
-            nn.Linear(input_size, hidden_size),
+        # Static feature processing
+        self.static_proj = nn.Sequential(
+            nn.Linear(static_size, static_embedding_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, input_size),
+            nn.Dropout(dropout),
         )
 
-        self.norm = nn.LayerNorm(input_size)
+        # Conditioning mechanism (gate)
+        self.gate_proj = nn.Linear(static_embedding_size, feature_dim)
 
-    def forward(self, x_dynamic: torch.Tensor, static: torch.Tensor) -> torch.Tensor:
-        """Forward pass for conditional feature mixing.
+        # Feature mixing after modulation
+        self.feature_mlp = nn.Sequential(
+            nn.Linear(feature_dim, hidden_size),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_size, feature_dim),
+        )
+
+        self.norm = nn.LayerNorm(feature_dim)
+
+    def forward(
+        self,
+        x: torch.Tensor,  # [batch_size, seq_len, feature_dim]
+        static: torch.Tensor,  # [batch_size, static_size]
+    ) -> torch.Tensor:
+        """Apply conditional feature mixing.
 
         Args:
-            x_dynamic: Dynamic input features [batch_size, seq_len, input_size]
-            static: Static features [batch_size, static_size]
+            x: Dynamic features to be mixed
+            static: Static features for conditioning
 
         Returns:
-            Modulated features [batch_size, seq_len, input_size]
+            Conditionally mixed features
         """
         # Project static features
-        static_emb = self.static_proj(static)
+        static_emb = self.static_proj(static)  # [B, static_embedding_size]
 
-        # Expand static features across time dimension
-        static_expanded = static_emb.unsqueeze(1).expand(-1, x_dynamic.size(1), -1)
+        # Expand static features to match sequence length
+        static_expanded = static_emb.unsqueeze(1).expand(-1, x.size(1), -1)
 
-        # Create modulation gate
+        # Generate modulation gate
         gate = torch.sigmoid(self.gate_proj(static_expanded))
 
-        # Apply modulation to dynamic features
-        x_conditioned = x_dynamic * gate
+        # Apply modulation
+        x_conditioned = x * gate
 
-        # Apply feature mixing
-        mixed = self.feature_mixing(x_conditioned)
+        # Apply feature mixing with residual connection
+        mixed = self.feature_mlp(x_conditioned)
 
-        # Apply residual connection and normalization
+        # Apply normalization
         return self.norm(x_conditioned + mixed)
 
 
-class TSMixerBackbone(nn.Module):
-    """Enhanced TSMixerBackbone with input alignment and future forcing integration."""
+class MixerLayer(nn.Module):
+    """Mixer layer that combines time mixing and conditional feature mixing.
+
+    Implements the mixer layer from the TSMixer paper, which sequentially
+    applies time mixing and feature mixing operations.
+    """
+
+    def __init__(
+        self,
+        feature_dim: int,
+        seq_len: int,
+        hidden_size: int,
+        static_size: int,
+        static_embedding_size: int,
+        dropout: float = 0.1,
+    ):
+        """Initialize mixer layer.
+
+        Args:
+            feature_dim: Dimension of input features
+            seq_len: Length of sequence
+            hidden_size: Size of hidden layers
+            static_size: Dimension of static features
+            static_embedding_size: Embedding size for static features
+            dropout: Dropout rate
+        """
+        super().__init__()
+
+        # Time mixing component
+        self.time_mixing = TimeMixing(
+            seq_len=seq_len, hidden_size=hidden_size, dropout=dropout
+        )
+
+        # Conditional feature mixing component
+        self.feature_mixing = ConditionalFeatureMixing(
+            feature_dim=feature_dim,
+            static_size=static_size,
+            static_embedding_size=static_embedding_size,
+            hidden_size=hidden_size,
+            dropout=dropout,
+        )
+
+    def forward(
+        self,
+        x: torch.Tensor,  # [batch_size, seq_len, feature_dim]
+        static: Optional[torch.Tensor] = None,  # [batch_size, static_size]
+    ) -> torch.Tensor:
+        """Apply mixer layer operations.
+
+        Args:
+            x: Input tensor
+            static: Static features for conditioning
+
+        Returns:
+            Processed tensor
+        """
+        # First apply time mixing
+        x_time_mixed = self.time_mixing(x)
+
+        # Then apply conditional feature mixing if static features are provided
+        if static is not None:
+            return self.feature_mixing(x_time_mixed, static)
+        else:
+            # Fall back to regular feature mixing without conditioning
+            return x_time_mixed
+
+
+class MixingStage(nn.Module):
+    """Mixing stage that processes aligned features through multiple mixer layers.
+
+    Implements the mixing stage from the TSMixer paper, which applies a sequence
+    of mixer layers to the aligned features from the alignment stage.
+    """
 
     def __init__(self, config: TSMixerConfig):
-        """Initialize TSMixer backbone.
+        """Initialize mixing stage.
 
         Args:
             config: TSMixer configuration
         """
         super().__init__()
 
-        # Input alignment module to integrate historical, future, and static features
-        self.alignment_module = InputAlignmentModule(
+        # Alignment stage to prepare inputs
+        self.alignment_stage = AlignmentStage(
             input_size=config.input_size,
             input_len=config.input_len,
             output_len=config.output_len,
             future_input_size=config.future_input_size,
             hidden_size=config.hidden_size,
             static_size=config.static_size,
-            static_embedding_size=config.static_embedding_size,
             dropout=config.dropout,
-            fusion_method=config.fusion_method,
         )
 
-        # Determine the input dimension for mixing layers based on fusion method
-        input_dim = (
-            config.hidden_size * 2
-            if config.fusion_method == "concat"
-            else config.hidden_size
-        )
+        # Determine feature dimension for mixer layers based on alignment output
+        if config.static_size > 0:
+            feature_dim = config.hidden_size * 3  # hist + future + static
+        else:
+            feature_dim = config.hidden_size * 2  # hist + future
 
-        # Main mixing layers
-        self.layers = nn.ModuleList(
+        # Store the feature dimension for use by other components
+        self.feature_dim = feature_dim
+
+        # Stack of mixer layers
+        self.mixer_layers = nn.ModuleList(
             [
-                ResBlock(
-                    input_dim=input_dim,
+                MixerLayer(
+                    feature_dim=feature_dim,
+                    seq_len=config.output_len,
                     hidden_size=config.hidden_size,
+                    static_size=config.static_size,
+                    static_embedding_size=config.static_embedding_size,
                     dropout=config.dropout,
-                    input_len=config.output_len,
                 )
                 for _ in range(config.num_mixing_layers)
             ]
         )
 
-        # Optional conditional feature mixing (kept for backward compatibility)
-        self.conditional_mixing = ConditionalFeatureMixing(
-            input_size=config.input_size,
-            static_size=config.static_size,
-            static_embedding_size=config.static_embedding_size,
-            hidden_size=config.hidden_size,
-        )
-
     def forward(
         self,
-        x: torch.Tensor,
-        static: torch.Tensor,
-        future: Optional[torch.Tensor] = None,
-        zero_static: bool = False,
-        use_legacy: bool = False,
+        x: torch.Tensor,  # [batch_size, input_len, input_size]
+        static: Optional[torch.Tensor] = None,  # [batch_size, static_size]
+        future: Optional[
+            torch.Tensor
+        ] = None,  # [batch_size, output_len, future_input_size]
     ) -> torch.Tensor:
-        """
-        Forward pass with input alignment and future forcing integration.
+        """Process inputs through alignment and mixing stages.
 
         Args:
-            x: Dynamic input features [batch_size, input_len, input_size]
-            static: Static features [batch_size, static_size]
-            future: Future forcing data [batch_size, output_len, future_input_size]
-            zero_static: If True, bypass static feature conditioning
-            use_legacy: If True, use the legacy implementation without future data
+            x: Historical data
+            static: Static features
+            future: Future forcing data
 
         Returns:
-            Processed tensor [batch_size, output_len, feature_dim]
+            Processed features [batch_size, output_len, feature_dim]
         """
-        if use_legacy or future is None:
-            # Legacy mode (backward compatibility)
-            if not zero_static:
-                # Apply conditional feature mixing
-                x = self.conditional_mixing(x, static)
+        # Handle case where future forcing is not available
+        if future is None:
+            # If no future forcing is provided, use zeros
+            batch_size = x.size(0)
+            output_len = getattr(self.alignment_stage, "output_len", x.size(1))
+            future_input_size = getattr(
+                self.alignment_stage.future_feature_mixing[0], "in_features", 1
+            )
+            future = torch.zeros(
+                batch_size, output_len, future_input_size, device=x.device
+            )
 
-            # Process through mixing layers
-            for layer in self.layers:
-                x = layer(x)
+        # Align features
+        aligned = self.alignment_stage(historical=x, future=future, static=static)
 
-            return x
+        # Process through mixer layers
+        features = aligned
+        for layer in self.mixer_layers:
+            features = layer(features, static)
 
-        # Modern mode with future forcing
-        # Align and fuse historical data with future forcing
-        fused = self.alignment_module(
-            historical=x, future=future, static=None if zero_static else static
-        )
-
-        # Process through mixing layers
-        for layer in self.layers:
-            fused = layer(fused)
-
-        return fused
+        return features
 
 
 class TSMixerHead(nn.Module):
-    """Prediction head for TSMixer."""
+    """Output head for TSMixer that projects mixed features to predictions.
 
-    def __init__(
-        self, input_dim: int, input_len: int, hidden_size: int, output_len: int
-    ):
+    Implements the final prediction component that projects the mixed features
+    to the target output.
+    """
+
+    def __init__(self, feature_dim: int, hidden_size: int, output_dim: int = 1):
         """Initialize TSMixer head.
 
         Args:
-            input_dim: Dimension of input features
-            input_len: Length of input sequence
+            feature_dim: Dimension of input features
             hidden_size: Size of hidden layers
-            output_len: Length of output sequence
+            output_dim: Dimension of output predictions
         """
         super().__init__()
 
-        # Adjust the head to work with aligned data
-        self.output_len = output_len
-        self.projection = nn.Sequential(
-            nn.Linear(input_dim, hidden_size),
+        self.prediction = nn.Sequential(
+            nn.Linear(feature_dim, hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, 1),
+            nn.Linear(hidden_size, output_dim),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Project features to predictions.
+        """Generate predictions from features.
 
         Args:
-            x: Input features [batch_size, seq_len, input_dim]
+            x: Input features [batch_size, seq_len, feature_dim]
 
         Returns:
-            Predictions [batch_size, output_len, 1]
+            Predictions [batch_size, seq_len, output_dim]
         """
-        # Apply projection to each time step independently
-        return self.projection(x)  # [B, output_len, 1]
+        return self.prediction(x)
 
 
 class TSMixer(nn.Module):
-    """Complete TSMixer model with future forcing integration."""
+    """TSMixer model for time series forecasting with auxiliary information.
+
+    Implements the complete TSMixer architecture from the paper, incorporating
+    alignment of heterogeneous inputs, mixing through multiple MLP layers, and
+    final projection to forecast outputs.
+    """
 
     def __init__(self, config: TSMixerConfig):
         """Initialize TSMixer model.
@@ -469,22 +540,15 @@ class TSMixer(nn.Module):
         """
         super().__init__()
 
-        self.backbone = TSMixerBackbone(config)
-
-        # Determine input dimension for head based on fusion method
-        head_input_dim = (
-            config.hidden_size * 2
-            if config.fusion_method == "concat"
-            else config.hidden_size
-        )
-
-        self.head = TSMixerHead(
-            input_dim=head_input_dim,
-            input_len=config.output_len,
-            hidden_size=config.hidden_size,
-            output_len=config.output_len,
-        )
         self.config = config
+
+        # Mixing stage implementation
+        self.mixing_stage = MixingStage(config)
+
+        # Head using the feature dimension from the mixing stage
+        self.head = TSMixerHead(
+            feature_dim=self.mixing_stage.feature_dim, hidden_size=config.hidden_size
+        )
 
     def forward(
         self,
@@ -492,14 +556,12 @@ class TSMixer(nn.Module):
         static: Optional[torch.Tensor] = None,
         future: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        """
-        Forward pass with support for future forcing data.
+        """Generate forecasts from input data.
 
         Args:
-            x: Historical input features [B, input_len, input_size] 
-               (contains target as the first feature, followed by optional past features)
+            x: Historical input features [B, input_len, input_size]
             static: Static features [B, static_size]
-            future: Optional future forcing data [B, output_len, future_input_size]
+            future: Future forcing data [B, output_len, future_input_size]
 
         Returns:
             Predictions [B, output_len, 1]
@@ -512,5 +574,9 @@ class TSMixer(nn.Module):
             assert future.ndim == 3, (
                 "Future tensor must be of shape [B, output_len, future_input_size]"
             )
-        features = self.backbone(x, static, future)
+
+        # Process through mixing stage
+        features = self.mixing_stage(x, static, future)
+
+        # Generate predictions
         return self.head(features)

@@ -10,12 +10,12 @@ from ..base.base_lit_model import BaseLitModel
 from .config import TSMixerConfig
 from .model import TSMixer
 
-
 class LitTSMixer(BaseLitModel):
     """PyTorch Lightning Module implementation of TSMixer.
 
     This class extends BaseLitModel to provide a standardized interface for training,
-    validation, and testing of the TSMixer model within our hydrological forecasting framework.
+    validation, and testing of the TSMixer model within our hydrological forecasting 
+    framework.
     """
 
     def __init__(
@@ -26,7 +26,7 @@ class LitTSMixer(BaseLitModel):
         Initialize the LitTSMixer module.
 
         Args:
-            config: TSMixer configuration as a TSMixerConfig instance or dict.
+            config: TSMixer configuration as a TSMixerConfig instance or dict
         """
         # Convert dict config to TSMixerConfig if needed
         if isinstance(config, dict):
@@ -61,13 +61,13 @@ class LitTSMixer(BaseLitModel):
 
     def freeze_backbone(self) -> None:
         """Freeze backbone parameters for fine-tuning."""
-        for param in self.model.backbone.parameters():
+        for param in self.model.mixing_stage.parameters():
             param.requires_grad = False
         self.log("info", "Backbone parameters frozen")
 
     def unfreeze_backbone(self) -> None:
         """Unfreeze backbone parameters."""
-        for param in self.model.backbone.parameters():
+        for param in self.model.mixing_stage.parameters():
             param.requires_grad = True
         self.log("info", "Backbone parameters unfrozen")
 
@@ -109,29 +109,3 @@ class LitTSMixer(BaseLitModel):
             "optimizer": optimizer,
             "lr_scheduler": scheduler_config,
         }
-        
-    def _log_additional_train_metrics(
-        self, batch: Dict[str, Any], outputs: torch.Tensor, loss: torch.Tensor
-    ) -> None:
-        """Log additional training metrics specific to this model.
-        
-        Args:
-            batch: The input batch
-            outputs: Model outputs
-            loss: The computed loss
-        """
-        # You can add TSMixer-specific metrics here
-        pass
-        
-    def _log_additional_val_metrics(
-        self, batch: Dict[str, Any], outputs: torch.Tensor, loss: torch.Tensor
-    ) -> None:
-        """Log additional validation metrics specific to this model.
-        
-        Args:
-            batch: The input batch
-            outputs: Model outputs
-            loss: The computed loss
-        """
-        # You can add TSMixer-specific metrics here
-        pass

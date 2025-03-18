@@ -80,13 +80,18 @@ class TSMixerConfig(BaseConfig):
         self.scheduler_factor = scheduler_factor
         self.fusion_method = fusion_method
 
-        # Validate fusion method
+        # Validate parameters
         if fusion_method not in ["add", "concat"]:
             raise ValueError(
                 f"Invalid fusion_method: {fusion_method}. Must be 'add' or 'concat'."
             )
-            
-        # Remove redundant attributes - these should be part of the main config
+
+        if self.num_mixing_layers < 1:
+            raise ValueError(
+                f"num_mixing_layers must be at least 1, got {self.num_mixing_layers}"
+            )
+
+        # Remove redundant attributes as you already have
         if hasattr(self, "past_feature_projection_size"):
             delattr(self, "past_feature_projection_size")
         if hasattr(self, "future_forcing_projection_size"):

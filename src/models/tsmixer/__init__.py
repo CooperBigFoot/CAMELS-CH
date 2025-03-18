@@ -13,12 +13,14 @@ This module provides implementations for:
 from .config import TSMixerConfig
 from .model import (
     TSMixer,
-    TSMixerBackbone,
     TSMixerHead,
-    InputAlignmentModule,
-    FeatureMixingBlock,
-    TimeMixingBlock,
-    ResBlock,
+    MixingStage,
+    AlignmentStage,
+    TimeMixing,
+    FeatureMixing,
+    ConditionalFeatureMixing,
+    MixerLayer,
+    TemporalProjection,
 )
 from .lightning import LitTSMixer
 
@@ -26,10 +28,12 @@ __all__ = [
     "TSMixerConfig",
     "TSMixer",
     "LitTSMixer",
-    "TSMixerBackbone",
+    "MixingStage",
     "TSMixerHead",
-    "InputAlignmentModule",
-    "FeatureMixingBlock",
-    "TimeMixingBlock",
-    "ResBlock",
+    "AlignmentStage",
+    "TimeMixing",
+    "FeatureMixing",
+    "ConditionalFeatureMixing",
+    "MixerLayer",
+    "TemporalProjection",
 ]
