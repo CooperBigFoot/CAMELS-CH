@@ -41,7 +41,7 @@ class TiDEConfig(BaseConfig):
         temporal_decoder_hidden_size: int = 32,
         past_feature_projection_size: int = 0,
         future_forcing_projection_size: int = 0,
-        use_layer_norm: bool = False,
+        use_layer_norm: bool = True,
         learning_rate: float = 1e-3,
         group_identifier: str = "gauge_id",
         scheduler_patience: int = 5,
