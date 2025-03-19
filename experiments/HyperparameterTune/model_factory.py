@@ -32,6 +32,8 @@ class ModelFactory:
             ValueError: If the model type is not supported
         """
         model_type = config.MODEL_TYPE.lower()
+
+        print(f"Creating model of type: {model_type}")
         
         # Generate model configuration
         model_config = config.get_model_config()
