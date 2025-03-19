@@ -1,9 +1,13 @@
 """Factory for creating hydrological forecasting models."""
+import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from typing import Union, Dict, Any
 import torch.nn as nn
 import pytorch_lightning as pl
-from experiments.HyperparameterTune.configs.base_config import BaseHyperparamConfig
+from .configs.base_config import BaseHyperparamConfig
 
 
 class ModelFactory:

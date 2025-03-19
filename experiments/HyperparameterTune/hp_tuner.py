@@ -21,7 +21,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 import multiprocessing
 
 # Add project root to path
-sys.path.append(str(Path(__file__).resolve().parents[2]))
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from src.data_models.datamodule import HydroDataModule
 from src.data_models.caravanify import Caravanify, CaravanifyConfig

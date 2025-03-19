@@ -1,5 +1,8 @@
 """TFT model configuration for hyperparameter tuning."""
+import sys
+from pathlib import Path
 
+sys.path.append(str(Path(__file__).resolve().parents[2]))
 from typing import Dict, Any, ClassVar, List
 from .base_config import BaseHyperparamConfig
 from src.models.tft import TFTConfig
