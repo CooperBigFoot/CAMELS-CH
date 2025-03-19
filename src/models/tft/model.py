@@ -698,9 +698,15 @@ class TemporalFusionTransformer(nn.Module):
 
         # Static enrichment
         c_e = static_context["c_e"] if static_context is not None else None
-        enriched = temporal_features
-        for i in range(enriched.shape[1]):
-            enriched[:, i, :] = self.static_enrichment(enriched[:, i, :], c_e)
+        enriched_timesteps = []
+        for i in range(temporal_features.shape[1]):
+            # Process each timestep individually
+            timestep = temporal_features[:, i, :]
+            enriched_timestep = self.static_enrichment(timestep, c_e)
+            enriched_timesteps.append(enriched_timestep)
+
+        # Stack the processed timesteps to create the enriched tensor
+        enriched = torch.stack(enriched_timesteps, dim=1)
 
         # Temporal self-attention (decoder masking)
         # Create causal mask to prevent attending to future timesteps
