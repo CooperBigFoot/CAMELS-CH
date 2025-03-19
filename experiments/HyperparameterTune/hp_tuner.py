@@ -391,7 +391,7 @@ if __name__ == "__main__":
         from experiments.HyperparameterTune.configs.tsmixer_config import (
             TSMixerTuneConfig,
         )
-        
+
         config = TSMixerTuneConfig()
     elif args.model == "ealstm":
         from experiments.HyperparameterTune.configs.ealstm_config import (
@@ -431,7 +431,7 @@ if __name__ == "__main__":
 
         # Generate report
         if study and study.trials:
-            from .utils import (
+            from experiments.HyperparameterTune.utils import (
                 generate_optimization_report,
             )
 
