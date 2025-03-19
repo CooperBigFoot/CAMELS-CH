@@ -43,7 +43,6 @@ class TFTConfig(BaseConfig):
         num_attention_heads: int = 4,
         dropout: float = 0.1,
         hidden_continuous_size: Optional[int] = None,
-        categorical_embedding_dim: int = 16,
         attn_dropout: float = 0.0,
         add_relative_index: bool = True,
         learning_rate: float = 1e-3,
@@ -70,7 +69,7 @@ class TFTConfig(BaseConfig):
             num_attention_heads: Number of heads in multi-head attention
             dropout: Dropout rate
             hidden_continuous_size: Size of hidden layers for processing continuous variables
-            categorical_embedding_dim: Dimension of categorical variable embeddings
+
             attn_dropout: Dropout rate for attention
             add_relative_index: Whether to add relative index as a feature
             learning_rate: Initial learning rate
@@ -102,7 +101,6 @@ class TFTConfig(BaseConfig):
         self.num_attention_heads = num_attention_heads
         self.dropout = dropout
         self.hidden_continuous_size = hidden_continuous_size or hidden_size
-        self.categorical_embedding_dim = categorical_embedding_dim
         self.attn_dropout = attn_dropout
         self.add_relative_index = add_relative_index
 
