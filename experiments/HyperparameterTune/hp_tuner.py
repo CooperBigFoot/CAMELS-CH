@@ -381,9 +381,11 @@ if __name__ == "__main__":
         from experiments.HyperparameterTune.configs.tsmixer_config import TSMixerTuneConfig
         config = TSMixerTuneConfig()
     elif args.model == "ealstm":
-        raise NotImplementedError("EALSTM config not implemented yet")
+        from experiments.HyperparameterTune.configs.ealstm_config import EALSTMTuneConfig
+        config = EALSTMTuneConfig()
     elif args.model == "tft":
-        raise NotImplementedError("TFT config not implemented yet")
+        from experiments.HyperparameterTune.configs.tft_config import TFTTuneConfig
+        config = TFTTuneConfig()
     else:
         raise ValueError(f"Unsupported model type: {args.model}")
     
