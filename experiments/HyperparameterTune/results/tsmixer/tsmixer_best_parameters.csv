@@ -1,0 +1,2 @@
+best_value,input_length,hidden_size,dropout,learning_rate,num_mixing_layers,static_embedding_size,fusion_method
+0.05393530800938606,124,84,0.07046211248738132,0.0004021554526690286,3,20,add

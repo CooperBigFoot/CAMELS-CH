@@ -1,0 +1,14 @@
+dropout: 0.08549092353144969
+fusion_method: add
+future_input_size: 9
+group_identifier: gauge_id
+hidden_size: 72
+input_len: 176
+input_size: 10
+learning_rate: 1.8089224154177894e-05
+num_mixing_layers: 8
+output_len: 10
+scheduler_factor: 0.5
+scheduler_patience: 5
+static_embedding_size: 16
+static_size: 10

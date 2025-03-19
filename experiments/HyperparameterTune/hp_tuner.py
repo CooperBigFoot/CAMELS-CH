@@ -431,7 +431,7 @@ if __name__ == "__main__":
 
         # Generate report
         if study and study.trials:
-            from .utils import (
+            from experiments.HyperparameterTune.utils import (
                 generate_optimization_report,
             )
 
