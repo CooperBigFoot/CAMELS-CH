@@ -16,7 +16,7 @@ class TFTTuneConfig(BaseHyperparamConfig):
     time series forecasting with interpretability features.
     """
 
-    MODEL_TYPE: str = "tft"
+    MODEL_TYPE: ClassVar["str"] = "tft"
     
     # TFT specific parameters
     HIDDEN_SIZE: int = 64

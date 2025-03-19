@@ -16,7 +16,7 @@ class EALSTMTuneConfig(BaseHyperparamConfig):
     static catchment attributes alongside dynamic inputs.
     """
 
-    MODEL_TYPE: str = "ealstm"
+    MODEL_TYPE: ClassVar["str"] = "ealstm"
     
     # EALSTM specific parameters
     HIDDEN_SIZE: int = 64

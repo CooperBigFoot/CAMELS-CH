@@ -13,7 +13,7 @@ from src.models.TSMixer import TSMixerConfig
 class TSMixerTuneConfig(BaseHyperparamConfig):
     """Configuration for hyperparameter tuning of TSMixer models."""
 
-    MODEL_TYPE: str = "tsmixer"
+    MODEL_TYPE: ClassVar[str] = "tsmixer"
     
     # TSMixer specific parameters
     STATIC_EMBEDDING_SIZE: int = 10
@@ -37,6 +37,7 @@ class TSMixerTuneConfig(BaseHyperparamConfig):
     
     def get_model_config(self) -> TSMixerConfig:
         """Create a TSMixerConfig from the current configuration."""
+
         # Calculate future_input_size as the number of forcing features
         future_input_size = len(self.FORCING_FEATURES)
         

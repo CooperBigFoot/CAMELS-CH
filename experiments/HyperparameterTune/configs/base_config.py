@@ -17,7 +17,7 @@ class BaseHyperparamConfig:
     """
 
     # Model type identifier
-    MODEL_TYPE: str = "base"  # Will be overridden by subclasses
+    MODEL_TYPE: ClassVar["str"] = "base"  # Will be overridden by subclasses
     
     # Data parameters
     GROUP_IDENTIFIER: str = "gauge_id"

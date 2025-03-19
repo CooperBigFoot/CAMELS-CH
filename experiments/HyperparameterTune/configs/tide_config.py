@@ -11,7 +11,7 @@ from src.models.tide import TiDEConfig
 class TiDETuneConfig(BaseHyperparamConfig):
     """Configuration for hyperparameter tuning of TiDE models."""
 
-    MODEL_TYPE: str = "tide"
+    MODEL_TYPE: ClassVar["str"] = "tide"
     
     # TiDE specific parameters
     NUM_ENCODER_LAYERS: int = 1

@@ -26,8 +26,8 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.data_models.datamodule import HydroDataModule
 from src.data_models.caravanify import Caravanify, CaravanifyConfig
-from .model_factory import ModelFactory
-from .utils import save_visualizations, setup_dirs
+from experiments.HyperparameterTune.model_factory import ModelFactory
+from experiments.HyperparameterTune.utils import save_visualizations, setup_dirs
 
 
 class HyperparameterTuner:
@@ -384,23 +384,23 @@ if __name__ == "__main__":
 
     # Load appropriate config based on model type
     if args.model == "tide":
-        from .configs.tide_config import TiDETuneConfig
+        from experiments.HyperparameterTune.configs.tide_config import TiDETuneConfig
 
         config = TiDETuneConfig()
     elif args.model == "tsmixer":
-        from .configs.tsmixer_config import (
+        from experiments.HyperparameterTune.configs.tsmixer_config import (
             TSMixerTuneConfig,
         )
-
+        
         config = TSMixerTuneConfig()
     elif args.model == "ealstm":
-        from .configs.ealstm_config import (
+        from experiments.HyperparameterTune.configs.ealstm_config import (
             EALSTMTuneConfig,
         )
 
         config = EALSTMTuneConfig()
     elif args.model == "tft":
-        from .configs.tft_config import TFTTuneConfig
+        from experiments.HyperparameterTune.configs.tft_config import TFTTuneConfig
 
         config = TFTTuneConfig()
     else:
