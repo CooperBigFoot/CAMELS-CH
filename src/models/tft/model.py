@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import Optional
+from typing import Optional, Tuple, Dict
 from .config import TFTConfig
 
 
@@ -565,6 +565,150 @@ class TemporalFusionTransformer(nn.Module):
         # Output layer
         self.output_layer = nn.Linear(self.hidden_size, 1)  # Single quantile for now
 
+    def _process_static(self, static: torch.Tensor) -> Dict[str, torch.Tensor]:
+        """Process static covariates through the static encoder.
+        
+        Args:
+            static: Static features [batch_size, static_size]
+            
+        Returns:
+            Dictionary of context vectors for different parts of the network
+        """
+        if self.static_size > 0 and static is not None:
+            static_emb = self.static_feat_proj(static)  # [batch_size, hidden_size]
+            return self.static_encoder(static_emb)
+        return None
+    
+    def _process_inputs(self, x: torch.Tensor, future: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Process historical and future inputs.
+        
+        Args:
+            x: Historical input features [batch_size, input_len, input_size]
+            future: Future forcing data [batch_size, output_len, future_input_size]
+            
+        Returns:
+            Tuple of processed historical and future embeddings
+        """
+        batch_size = x.size(0)
+        
+        # Process historical data
+        target = x[:, :, 0:1]  # [batch_size, input_len, 1]
+        target_emb = self.target_input_proj(target)  # [batch_size, input_len, hidden_size]
+
+        if self.input_size > 1:
+            past_feats = x[:, :, 1:]  # [batch_size, input_len, input_size-1]
+            past_feats_emb = self.past_feat_proj(past_feats)  # [batch_size, input_len, hidden_size]
+        else:
+            # Create a dummy past features embedding if we only have the target
+            past_feats_emb = torch.zeros_like(target_emb)
+            
+        # Process future data if available
+        if self.future_input_size > 0:
+            if future is None:
+                future = torch.zeros(batch_size, self.output_len, self.future_input_size, device=x.device)
+            future_feats_emb = self.future_feat_proj(future)  # [batch_size, output_len, hidden_size]
+        else:
+            future_feats_emb = torch.zeros(batch_size, self.output_len, self.hidden_size, device=x.device)
+            
+        return (target_emb, past_feats_emb), future_feats_emb
+    
+    def _apply_variable_selection(
+        self,
+        embeddings: Tuple[torch.Tensor, torch.Tensor],
+        static_context: Optional[Dict[str, torch.Tensor]] = None,
+        is_past: bool = True
+    ) -> torch.Tensor:
+        """Apply variable selection to input embeddings.
+        
+        Args:
+            embeddings: Tuple of input embeddings
+            static_context: Static context vectors
+            is_past: Whether processing past (True) or future (False) inputs
+            
+        Returns:
+            Selected variable embeddings
+        """
+        batch_size = embeddings[0].size(0)
+        seq_len = embeddings[0].size(1)
+        
+        if is_past:
+            # Stack target and past features
+            inputs = torch.cat([
+                emb.reshape(batch_size, seq_len, 1, self.hidden_size)
+                for emb in embeddings
+            ], dim=2)  # [batch_size, seq_len, num_inputs, hidden_size]
+            
+            # Apply variable selection network efficiently
+            flattened = inputs.reshape(batch_size * seq_len, -1)  # [batch_size * seq_len, num_inputs * hidden_size]
+            
+            # Get static context for variable selection
+            c_s = None
+            if static_context is not None:
+                c_s = static_context["c_s"].repeat(seq_len, 1)  # [batch_size * seq_len, hidden_size]
+                
+            # Apply variable selection
+            selected, _ = self.past_vsn(flattened, c_s)
+            return selected.reshape(batch_size, seq_len, self.hidden_size)
+        else:
+            # Future has only one input type
+            inputs = embeddings[0].reshape(batch_size, seq_len, 1, self.hidden_size)
+            
+            # Apply variable selection network efficiently
+            flattened = inputs.reshape(batch_size * seq_len, -1)  # [batch_size * seq_len, hidden_size]
+            
+            # Get static context for variable selection
+            c_s = None
+            if static_context is not None:
+                c_s = static_context["c_s"].repeat(seq_len, 1)  # [batch_size * seq_len, hidden_size]
+                
+            # Apply variable selection
+            selected, _ = self.future_vsn(flattened, c_s)
+            return selected.reshape(batch_size, seq_len, self.hidden_size)
+
+    def _apply_static_enrichment(
+        self, 
+        temporal_features: torch.Tensor,
+        static_context: Optional[Dict[str, torch.Tensor]] = None
+    ) -> torch.Tensor:
+        """Apply static enrichment to temporal features.
+        
+        Args:
+            temporal_features: Temporal features [batch_size, seq_len, hidden_size]
+            static_context: Static context vectors
+            
+        Returns:
+            Enriched features [batch_size, seq_len, hidden_size]
+        """
+        batch_size, seq_len, _ = temporal_features.size()
+        
+        # Reshape for efficient processing
+        reshaped = temporal_features.reshape(batch_size * seq_len, self.hidden_size)
+        
+        # Get static enrichment context
+        c_e = None
+        if static_context is not None:
+            c_e = static_context["c_e"].repeat(seq_len, 1)  # [batch_size * seq_len, hidden_size]
+            
+        # Apply enrichment
+        enriched = self.static_enrichment(reshaped, c_e)
+        return enriched.reshape(batch_size, seq_len, self.hidden_size)
+
+    def _create_causal_mask(self, seq_len: int, device: torch.device) -> torch.Tensor:
+        """Create a causal attention mask.
+        
+        Args:
+            seq_len: Length of the sequence
+            device: Device to create the mask on
+            
+        Returns:
+            Binary mask where 1s allow attention and 0s prevent it
+        """
+        # Create mask to prevent attending to future timesteps
+        mask = torch.ones(seq_len, seq_len, device=device)
+        mask = torch.triu(mask, diagonal=1).bool()
+        mask = ~mask  # Invert to have 1s where attention is allowed
+        return mask
+
     def forward(
         self,
         x: torch.Tensor,
@@ -583,156 +727,71 @@ class TemporalFusionTransformer(nn.Module):
         """
         batch_size = x.size(0)
 
-        # Handle future inputs if not provided
-        if future is None and self.future_input_size > 0:
-            future = torch.zeros(
-                batch_size, self.output_len, self.future_input_size, device=x.device
-            )
+        # 1. Process static inputs to get context vectors
+        static_context = self._process_static(static)
 
-        # Split x into target and features if needed
-        # Assuming the first feature is the target
-        target = x[:, :, 0:1]  # [batch_size, input_len, 1]
+        # 2. Process historical and future inputs
+        historical_embeddings, future_embeddings = self._process_inputs(x, future)
 
-        # Process inputs
-        target_emb = self.target_input_proj(
-            target
-        )  # [batch_size, input_len, hidden_size]
-
-        if self.input_size > 1:
-            past_feats = x[:, :, 1:]  # [batch_size, input_len, input_size-1]
-            past_feats_emb = self.past_feat_proj(
-                past_feats
-            )  # [batch_size, input_len, hidden_size]
-        else:
-            # Create a dummy past features embedding if we only have the target
-            past_feats_emb = torch.zeros_like(target_emb)
-
-        if self.future_input_size > 0 and future is not None:
-            future_feats_emb = self.future_feat_proj(
-                future
-            )  # [batch_size, output_len, hidden_size]
-
-        # Process static inputs if provided
-        static_context = None
-        if self.static_size > 0 and static is not None:
-            static_emb = self.static_feat_proj(static)  # [batch_size, hidden_size]
-            static_context = self.static_encoder(static_emb)
-
-        # Variable selection for past inputs
-        # Combine target embedding and past features embedding
-        past_inputs = torch.cat(
-            [
-                target_emb.reshape(batch_size, self.input_len, 1, self.hidden_size),
-                past_feats_emb.reshape(batch_size, self.input_len, 1, self.hidden_size),
-            ],
-            dim=2,
-        )  # [batch_size, input_len, 2, hidden_size]
-
-        # Flatten the variable dimension for the variable selection network
-        past_flattened = past_inputs.reshape(
-            batch_size, self.input_len, -1
-        )  # [batch_size, input_len, 2*hidden_size]
-
-        # Apply variable selection network
-        past_transformed = []
-        for t in range(self.input_len):
-            # For each timestep, apply the VSN
-            c_s = static_context["c_s"] if static_context is not None else None
-            timestep_embedding, _ = self.past_vsn(past_flattened[:, t, :], c_s)
-            past_transformed.append(timestep_embedding)
-
-        past_transformed = torch.stack(
-            past_transformed, dim=1
-        )  # [batch_size, input_len, hidden_size]
-
-        # Variable selection for future inputs (if available)
-        if self.future_input_size > 0 and future is not None:
-            future_inputs = future_feats_emb.unsqueeze(
-                2
-            )  # [batch_size, output_len, 1, hidden_size]
-            future_flattened = future_inputs.reshape(
-                batch_size, self.output_len, -1
-            )  # [batch_size, output_len, hidden_size]
-
-            future_transformed = []
-            for t in range(self.output_len):
-                # For each timestep, apply the VSN
-                c_s = static_context["c_s"] if static_context is not None else None
-                timestep_embedding, _ = self.future_vsn(future_flattened[:, t, :], c_s)
-                future_transformed.append(timestep_embedding)
-
-            future_transformed = torch.stack(
-                future_transformed, dim=1
-            )  # [batch_size, output_len, hidden_size]
-        else:
-            future_transformed = torch.zeros(
-                batch_size, self.output_len, self.hidden_size, device=x.device
-            )
-
-        # LSTM encoding (historical)
-        init_hidden = None
-        if static_context is not None:
-            # Initialize LSTM states with static context if available
-            h0 = (
-                static_context["c_h"].unsqueeze(0).repeat(self.config.lstm_layers, 1, 1)
-            )
-            c0 = (
-                static_context["c_c"].unsqueeze(0).repeat(self.config.lstm_layers, 1, 1)
-            )
-            init_hidden = (h0, c0)
-
-        historical_features, lstm_state = self.lstm_encoder(
-            past_transformed, init_hidden
+        # 3. Apply variable selection
+        historical_features = self._apply_variable_selection(
+            historical_embeddings, static_context, is_past=True
+        )
+        future_features = self._apply_variable_selection(
+            (future_embeddings,), static_context, is_past=False
         )
 
-        # LSTM decoding (future)
-        future_features, _ = self.lstm_decoder(future_transformed, lstm_state)
+        # 4. Initialize LSTM hidden states with static context if available
+        init_hidden = None
+        if static_context is not None:
+            h0 = static_context["c_h"].unsqueeze(0).repeat(self.config.lstm_layers, 1, 1)
+            c0 = static_context["c_c"].unsqueeze(0).repeat(self.config.lstm_layers, 1, 1)
+            init_hidden = (h0, c0)
 
-        # Temporal features from LSTM
-        temporal_features = torch.cat([historical_features, future_features], dim=1)
+        # 5. LSTM encoding for historical data
+        historical_lstm, lstm_state = self.lstm_encoder(historical_features, init_hidden)
 
-        # Skip connection over the LSTM
-        temporal_inputs = torch.cat([past_transformed, future_transformed], dim=1)
-        temporal_features = self.post_lstm_gate(temporal_features)
-        temporal_features = self.post_lstm_norm(temporal_features + temporal_inputs)
+        # 6. LSTM decoding for future data
+        future_lstm, _ = self.lstm_decoder(future_features, lstm_state)
 
-        # Static enrichment
-        c_e = static_context["c_e"] if static_context is not None else None
-        enriched_timesteps = []
-        for i in range(temporal_features.shape[1]):
-            # Process each timestep individually
-            timestep = temporal_features[:, i, :]
-            enriched_timestep = self.static_enrichment(timestep, c_e)
-            enriched_timesteps.append(enriched_timestep)
+        # 7. Concatenate historical and future representations
+        temporal_features = torch.cat([historical_lstm, future_lstm], dim=1)
+        temporal_inputs = torch.cat([historical_features, future_features], dim=1)
 
-        # Stack the processed timesteps to create the enriched tensor
-        enriched = torch.stack(enriched_timesteps, dim=1)
+        # 8. Skip connection and normalization after LSTM
+        post_lstm = self.post_lstm_gate(temporal_features)
+        post_lstm = self.post_lstm_norm(post_lstm + temporal_inputs)
 
-        # Temporal self-attention (decoder masking)
-        # Create causal mask to prevent attending to future timesteps
+        # 9. Apply static enrichment
+        enriched = self._apply_static_enrichment(post_lstm, static_context)
+
+        # 10. Create attention mask - a causal mask to prevent attending to future timesteps
         seq_len = self.input_len + self.output_len
-        mask = torch.ones(seq_len, seq_len, device=x.device).triu_(diagonal=1).bool()
-        mask = mask.unsqueeze(0).expand(batch_size, -1, -1)
+        attn_mask = self._create_causal_mask(seq_len, x.device)
+        attn_mask = attn_mask.unsqueeze(0).expand(batch_size, -1, -1)
 
-        attn_output, _ = self.attention(enriched, enriched, enriched, mask=mask)
+        # 11. Apply interpretable multi-head attention
+        attn_output, attn_weights = self.attention(
+            enriched, enriched, enriched, mask=attn_mask
+        )
 
-        # Extract the future part for prediction (we only care about the output horizon)
-        attn_output = attn_output[:, self.input_len :, :]
-        enriched_future = enriched[:, self.input_len :, :]
+        # 12. Extract the future part for prediction (we only care about the output horizon)
+        attn_output = attn_output[:, self.input_len:, :]
+        enriched_future = enriched[:, self.input_len:, :]
 
-        # Skip connection over attention
-        attn_output = self.post_attn_gate(attn_output)
-        attn_output = self.post_attn_norm(attn_output + enriched_future)
+        # 13. Skip connection and normalization after attention
+        post_attn = self.post_attn_gate(attn_output)
+        post_attn = self.post_attn_norm(post_attn + enriched_future)
 
-        # Position-wise feed-forward
-        output = self.pos_wise_ff(attn_output)
+        # 14. Position-wise feed-forward network
+        ff_output = self.pos_wise_ff(post_attn)
 
-        # Final skip connection
-        decoder_output = temporal_features[:, self.input_len :, :]
-        output = self.pre_output_gate(output)
+        # 15. Final skip connection with LSTM decoder output
+        decoder_output = temporal_features[:, self.input_len:, :]
+        output = self.pre_output_gate(ff_output)
         output = self.pre_output_norm(output + decoder_output)
 
-        # Final linear projection to output
-        output = self.output_layer(output)  # [batch_size, output_len, 1]
+        # 16. Final linear projection to predictions
+        predictions = self.output_layer(output)  # [batch_size, output_len, 1]
 
-        return output
+        return predictions

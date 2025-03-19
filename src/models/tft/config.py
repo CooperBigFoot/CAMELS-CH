@@ -24,6 +24,11 @@ class TFTConfig(BaseConfig):
         "add_relative_index",
         "scheduler_patience",
         "scheduler_factor",
+        "quantiles",
+        "use_revin",
+        "context_length_ratio",
+        "use_embedding_for_context",
+        "encoder_layers",
     ]
 
     def __init__(
@@ -45,6 +50,11 @@ class TFTConfig(BaseConfig):
         group_identifier: str = "gauge_id",
         scheduler_patience: int = 5,
         scheduler_factor: float = 0.5,
+        quantiles: List[float] = [0.1, 0.5, 0.9],
+        use_revin: bool = False,
+        context_length_ratio: float = 1.0,
+        use_embedding_for_context: bool = False,
+        encoder_layers: int = 1,
         **kwargs,
     ):
         """Initialize TFT configuration.
@@ -67,6 +77,11 @@ class TFTConfig(BaseConfig):
             group_identifier: Column name identifying the grouping variable (e.g., "gauge_id")
             scheduler_patience: Patience for learning rate scheduler
             scheduler_factor: Factor for learning rate reduction
+            quantiles: Quantiles to predict for probabilistic forecasting
+            use_revin: Whether to use reversible instance normalization
+            context_length_ratio: Ratio of context length to input length
+            use_embedding_for_context: Whether to use embedding for context generation
+            encoder_layers: Number of encoder layers
             **kwargs: Additional parameters
         """
         # Initialize base config with standard parameters
@@ -90,6 +105,13 @@ class TFTConfig(BaseConfig):
         self.categorical_embedding_dim = categorical_embedding_dim
         self.attn_dropout = attn_dropout
         self.add_relative_index = add_relative_index
+
+        # New parameters for Phase 2
+        self.quantiles = quantiles
+        self.use_revin = use_revin
+        self.context_length_ratio = context_length_ratio
+        self.use_embedding_for_context = use_embedding_for_context
+        self.encoder_layers = encoder_layers
 
         # Scheduler parameters
         self.scheduler_patience = scheduler_patience
