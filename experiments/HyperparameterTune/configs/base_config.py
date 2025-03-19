@@ -101,10 +101,10 @@ class BaseHyperparamConfig:
                 "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/CA/post_processed/attributes",
                 "TIMESERIES_DIR": "/workspace/CARAVANIFY/CA/post_processed/timeseries/csv",
                 "GAUGE_ID_PREFIX": "CA",
-                "MIN_TRAIN_YEARS": 8,
-                "VAL_YEARS": 2,
-                "TEST_YEARS": 3,
-                "MAX_MISSING_PCT": 10,
+                "MIN_TRAIN_YEARS": 5,
+                "TRAIN_PROP": 0.5,
+                "VAL_PROP": 0.25,
+                "TEST_PROP": 0.25,
                 "HUMAN_INFLUENCE_PATH": "/workspace/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
             }
             
