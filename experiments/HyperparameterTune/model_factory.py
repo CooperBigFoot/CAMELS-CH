@@ -40,18 +40,18 @@ class ModelFactory:
         
         # Create appropriate model based on type
         if model_type == "tide":
-            from ..src.models.tide import LitTiDE
+            from src.models.tide import LitTiDE
             return LitTiDE(model_config)
         elif model_type == "tsmixer":
-            from ..src.models.tsmixer import LitTSMixer
+            from src.models.tsmixer import LitTSMixer
             return LitTSMixer(model_config)
         elif model_type == "ealstm":
             # Will need implementation of EALSTM model
-            from ..src.models.ealstm import LitEALSTM
+            from src.models.ealstm import LitEALSTM
             return LitEALSTM(model_config)
         elif model_type == "tft":
             # Will need implementation of TFT model
-            from ..src.models.tft import LitTFT
+            from src.models.tft import LitTFT
             return LitTFT(model_config)
         else:
             raise ValueError(f"Unsupported model type: {model_type}")
