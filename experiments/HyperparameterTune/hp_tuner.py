@@ -170,9 +170,7 @@ class HyperparameterTuner:
         # Update config with trial parameters
         for key, value in hyperparameters.items():
             setattr(self.config, key.upper(), value)
-
-        print(f"MODEL_TYPE after parameter update: {self.config.MODEL_TYPE}")
-
+        
         # Get preprocessing configs
         preprocessing_configs = self.config.get_preprocessing_config()
 
@@ -194,11 +192,7 @@ class HyperparameterTuner:
             train_prop=self.config.TRAIN_PROP,
             val_prop=self.config.VAL_PROP,
             test_prop=self.config.TEST_PROP,
-            # Legacy parameters (used only if use_proportional_split=False)
             min_train_years=self.config.CA_CONFIG["MIN_TRAIN_YEARS"],
-            val_years=self.config.CA_CONFIG["VAL_YEARS"],
-            test_years=self.config.CA_CONFIG["TEST_YEARS"],
-            max_missing_pct=self.config.CA_CONFIG["MAX_MISSING_PCT"],
         )
 
         # Prepare data
