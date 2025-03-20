@@ -1,0 +1,17 @@
+bias: true
+bidirectional: true
+bidirectional_fusion: concat
+dropout: 0.2571172192068058
+future_hidden_size: 76
+future_input_size: 9
+future_layers: 1
+group_identifier: gauge_id
+hidden_size: 76
+input_len: 293
+input_size: 10
+learning_rate: 0.00015304852121831474
+num_layers: 1
+output_len: 10
+scheduler_factor: 0.5
+scheduler_patience: 5
+static_size: 10

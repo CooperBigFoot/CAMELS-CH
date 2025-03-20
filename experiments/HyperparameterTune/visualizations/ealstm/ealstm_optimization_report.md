@@ -1,6 +1,6 @@
 # Hyperparameter Optimization Report for EALSTM
 
-Date: 2025-03-20 15:32:07
+Date: 2025-03-20 21:36:22
 Number of trials: 10
 Best trial: #1
 
@@ -8,38 +8,32 @@ Best trial: #1
 
 | Parameter | Value |
 | --------- | ----- |
-| input_length | 36 |
-| hidden_size | 250 |
-| dropout | 0.41622132040021087 |
-| learning_rate | 2.6587543983272695e-05 |
-| num_layers | 1 |
-| future_hidden_size | 73 |
-| future_layers | 1 |
-| bidirectional_fusion | concat |
+| input_length | 82 |
+| hidden_size | 45 |
+| dropout | 0.4330880728874676 |
+| learning_rate | 0.00015930522616241006 |
+| num_layers | 3 |
 
-**Best validation loss**: 0.057259
+**Best validation loss**: 0.053142
 
 ## Best Trial Details
 
 | Attribute | Value |
 | --------- | ----- |
-| train_size | 307018 |
-| val_size | 151769 |
-| test_size | 151951 |
-| best_epoch | 44 |
+| train_size | 303522 |
+| val_size | 148273 |
+| test_size | 148455 |
+| best_epoch | 50 |
 
 ## Parameter Importance
 
 | Parameter | Importance |
 | --------- | ---------- |
-| input_length | 0.2424 |
-| dropout | 0.2424 |
-| future_hidden_size | 0.2121 |
-| learning_rate | 0.1818 |
-| hidden_size | 0.1212 |
-| num_layers | 0.0000 |
-| future_layers | 0.0000 |
-| bidirectional_fusion | 0.0000 |
+| hidden_size | 0.3360 |
+| dropout | 0.2280 |
+| input_length | 0.1763 |
+| num_layers | 0.1489 |
+| learning_rate | 0.1108 |
 
 ## Visualizations
 
