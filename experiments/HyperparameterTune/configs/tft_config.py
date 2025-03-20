@@ -49,6 +49,13 @@ class TFTTuneConfig(BaseHyperparamConfig):
                 "choices": ["gating", "dot_product"],
             },
             "attn_dropout": {"type": "float", "low": 0.0, "high": 0.3},
+            "add_relative_index": {"type": "categorical", "choices": [True, False]},
+            "use_revin": {"type": "categorical", "choices": [True, False]},
+            "context_length_ratio": {"type": "float", "low": 0.5, "high": 1.0},
+            "use_embedding_for_context": {
+                "type": "categorical",
+                "choices": [True, False],
+            },
             "encoder_layers": {"type": "int", "low": 1, "high": 3},
         },
     }
