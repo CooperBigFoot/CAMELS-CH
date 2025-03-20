@@ -1,0 +1,24 @@
+add_relative_index: false
+attn_dropout: 0.08545214831324029
+context_length_ratio: 0.6393232321183058
+dropout: 0.181814801189647
+encoder_layers: 1
+future_input_size: 9
+group_identifier: gauge_id
+hidden_continuous_size: 104
+hidden_size: 104
+input_len: 204
+input_size: 10
+learning_rate: 0.0008781408196485975
+lstm_layers: 1
+num_attention_heads: 8
+output_len: 10
+quantiles:
+- 0.1
+- 0.5
+- 0.9
+scheduler_factor: 0.5
+scheduler_patience: 5
+static_size: 10
+use_embedding_for_context: true
+use_revin: true

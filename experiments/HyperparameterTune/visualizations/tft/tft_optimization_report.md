@@ -1,55 +1,55 @@
 # Hyperparameter Optimization Report for TFT
 
-Date: 2025-03-20 15:02:33
+Date: 2025-03-20 18:58:44
 Number of trials: 10
-Best trial: #0
+Best trial: #1
 
 ## Best Parameters
 
 | Parameter | Value |
 | --------- | ----- |
-| input_length | 155 |
-| hidden_size | 124 |
-| dropout | 0.36599697090570255 |
-| learning_rate | 0.00015751320499779721 |
+| input_length | 206 |
+| hidden_size | 72 |
+| dropout | 0.14561457009902096 |
+| learning_rate | 0.00016738085788752134 |
 | num_attention_heads | 2 |
 | lstm_layers | 1 |
 | variable_selection_method | dot_product |
-| attn_dropout | 0.18033450352296262 |
-| add_relative_index | True |
+| attn_dropout | 0.23555278841790406 |
+| add_relative_index | False |
 | use_revin | True |
-| context_length_ratio | 0.6061695553391381 |
-| use_embedding_for_context | False |
-| encoder_layers | 1 |
+| context_length_ratio | 0.8037724259507192 |
+| use_embedding_for_context | True |
+| encoder_layers | 3 |
 
-**Best validation loss**: 0.026287
+**Best validation loss**: 0.025899
 
 ## Best Trial Details
 
 | Attribute | Value |
 | --------- | ----- |
-| train_size | 297974 |
-| val_size | 142725 |
-| test_size | 142907 |
-| best_epoch | 47 |
+| train_size | 294098 |
+| val_size | 138849 |
+| test_size | 139031 |
+| best_epoch | 50 |
 
 ## Parameter Importance
 
 | Parameter | Importance |
 | --------- | ---------- |
-| add_relative_index | 0.1634 |
-| hidden_size | 0.1499 |
-| attn_dropout | 0.1280 |
-| use_embedding_for_context | 0.1123 |
-| context_length_ratio | 0.0943 |
-| use_revin | 0.0942 |
-| learning_rate | 0.0918 |
-| input_length | 0.0570 |
-| num_attention_heads | 0.0531 |
-| dropout | 0.0374 |
-| lstm_layers | 0.0187 |
-| variable_selection_method | 0.0000 |
-| encoder_layers | 0.0000 |
+| add_relative_index | 0.2648 |
+| context_length_ratio | 0.1764 |
+| learning_rate | 0.1590 |
+| num_attention_heads | 0.0924 |
+| attn_dropout | 0.0850 |
+| hidden_size | 0.0575 |
+| encoder_layers | 0.0521 |
+| use_embedding_for_context | 0.0379 |
+| dropout | 0.0341 |
+| input_length | 0.0325 |
+| variable_selection_method | 0.0052 |
+| lstm_layers | 0.0018 |
+| use_revin | 0.0014 |
 
 ## Visualizations
 
