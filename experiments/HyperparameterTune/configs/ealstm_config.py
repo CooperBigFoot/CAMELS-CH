@@ -1,4 +1,5 @@
 """EALSTM model configuration for hyperparameter tuning."""
+
 import sys
 from pathlib import Path
 
@@ -10,20 +11,23 @@ from src.models.ealstm import EALSTMConfig
 
 class EALSTMTuneConfig(BaseHyperparamConfig):
     """Configuration for hyperparameter tuning of Entity-Aware LSTM models.
-    
+
     This configuration class defines the search space and parameters specific
     to the EALSTM architecture, which is designed to effectively incorporate
     static catchment attributes alongside dynamic inputs.
     """
 
     MODEL_TYPE: ClassVar["str"] = "ealstm"
-    
+
     # EALSTM specific parameters
     HIDDEN_SIZE: int = 64
     NUM_LAYERS: int = 2
     STATIC_EMBEDDING_SIZE: int = 10
-    BIDIRECTIONAL: bool = False
-    
+    BIDIRECTIONAL: bool = True
+    FUTURE_HIDDEN_SIZE: int = 64
+    FUTURE_LAYERS: int = 2
+    BIDIRECTIONAL_FUSION: str = "concat"
+
     # Define hyperparameter search space
     HYPERPARAMETER_SPACE: ClassVar[Dict[str, Dict[str, Any]]] = {
         "common": {
@@ -34,20 +38,24 @@ class EALSTMTuneConfig(BaseHyperparamConfig):
         },
         "model_specific": {
             "num_layers": {"type": "int", "low": 1, "high": 3},
-            "static_embedding_size": {"type": "int", "low": 5, "high": 32},
-            "bidirectional": {"type": "categorical", "choices": [True, False]},
-        }
+            "future_hidden_size": {"type": "int", "low": 32, "high": 256},
+            "future_layers": {"type": "int", "low": 1, "high": 3},
+            "bidirectional_fusion": {
+                "type": "categorical",
+                "choices": ["concat", "add", "average"],
+            },
+        },
     }
-    
+
     def get_model_config(self) -> EALSTMConfig:
         """Create an EALSTMConfig from the current configuration.
-        
+
         Returns:
             Configuration object for EALSTM model
         """
         # Calculate future_input_size as the number of forcing features
         future_input_size = len(self.FORCING_FEATURES)
-        
+
         return EALSTMConfig(
             input_len=self.INPUT_LENGTH,
             output_len=self.OUTPUT_LENGTH,
@@ -63,4 +71,7 @@ class EALSTMTuneConfig(BaseHyperparamConfig):
             group_identifier=self.GROUP_IDENTIFIER,
             scheduler_patience=self.LR_SCHEDULER_PATIENCE,
             scheduler_factor=self.LR_SCHEDULER_FACTOR,
+            future_hidden_size=self.FUTURE_HIDDEN_SIZE,
+            future_layers=self.FUTURE_LAYERS,
+            bidirectional_fusion=self.BIDIRECTIONAL_FUSION,
         )
