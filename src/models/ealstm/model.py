@@ -265,9 +265,8 @@ class BiEALSTM(nn.Module):
         # EA-LSTM for processing past data
         self.past_ealstm = EALSTM(config)
 
-        # Determine if we have separate future configuration
-        future_hidden_size = getattr(config, "future_hidden_size", config.hidden_size)
-        future_layers = getattr(config, "future_layers", config.num_layers)
+        future_hidden_size = config.hidden_size  # Always use same hidden size
+        future_layers = config.num_layers  # Always use same number of layers
 
         # Create configuration for the future-processing branch
         future_config = EALSTMConfig(
