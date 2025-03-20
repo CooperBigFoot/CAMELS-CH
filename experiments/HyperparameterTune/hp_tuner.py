@@ -16,7 +16,7 @@ from optuna.visualization import (
     plot_contour,
 )
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor
+from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 import multiprocessing
 
@@ -240,6 +240,14 @@ class HyperparameterTuner:
         callbacks = [
             EarlyStopping(monitor="val_loss", patience=5, mode="min"),
             LearningRateMonitor(logging_interval="epoch"),
+            ModelCheckpoint(
+                dirpath=str(self.dirs["checkpoints"] / f"trial_{trial.number}"),
+                filename="model-{epoch:02d}-{val_loss:.4f}",
+                monitor="val_loss",
+                mode="min",
+                save_top_k=1,
+                save_last=True,
+            )
         ]
 
         # Configure trainer

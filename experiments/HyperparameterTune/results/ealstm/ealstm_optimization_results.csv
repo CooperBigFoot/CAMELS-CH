@@ -1,0 +1,3 @@
+number,value,best_epoch,train_size,val_size,test_size,input_length,hidden_size,dropout,learning_rate,num_layers,future_hidden_size,future_layers,bidirectional_fusion
+0,0.05867019295692444,16,297974,142725,142907,155,245,0.36599697090570255,0.00015751320499779721,1,67,1,concat
+1,0.057258956134319305,44,307018,151769,151951,36,250,0.41622132040021087,2.6587543983272695e-05,1,73,1,concat

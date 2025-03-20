@@ -37,7 +37,8 @@ class TFTTuneConfig(BaseHyperparamConfig):
     HYPERPARAMETER_SPACE: ClassVar[Dict[str, Dict[str, Any]]] = {
         "common": {
             "input_length": {"type": "int", "low": 30, "high": 365},
-            "hidden_size": {"type": "int", "low": 32, "high": 128},
+            # Make hidden_size always divisible by 8 (max num_attention_heads)
+            "hidden_size": {"type": "int", "low": 32, "high": 128, "step": 8},
             "dropout": {"type": "float", "low": 0.0, "high": 0.5},
             "learning_rate": {"type": "float", "low": 1e-5, "high": 1e-3, "log": True},
         },
