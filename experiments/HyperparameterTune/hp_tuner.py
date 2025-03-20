@@ -171,7 +171,7 @@ class HyperparameterTuner:
         # Update config with trial parameters
         for key, value in hyperparameters.items():
             setattr(self.config, key.upper(), value)
-        
+
         # Get preprocessing configs
         preprocessing_configs = self.config.get_preprocessing_config()
 
