@@ -1,30 +1,38 @@
 """TFT model configuration for hyperparameter tuning."""
+
 import sys
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[3]))
-from typing import Dict, Any, ClassVar, List
+from typing import Dict, Any, ClassVar, List, Optional
 from .base_config import BaseHyperparamConfig
 from src.models.tft import TFTConfig
 
 
 class TFTTuneConfig(BaseHyperparamConfig):
     """Configuration for hyperparameter tuning of Temporal Fusion Transformer models.
-    
+
     This configuration class defines the search space and parameters specific
     to the TFT architecture, which combines RNNs and attention mechanisms for
     time series forecasting with interpretability features.
     """
 
-    MODEL_TYPE: ClassVar["str"] = "tft"
-    
+    MODEL_TYPE: ClassVar[str] = "tft"
+
     # TFT specific parameters
     HIDDEN_SIZE: int = 64
     NUM_ATTENTION_HEADS: int = 4
     DROPOUT: float = 0.1
     LSTM_LAYERS: int = 2
     VARIABLE_SELECTION_METHOD: str = "gating"  # Options: "gating" or "dot_product"
-    
+    HIDDEN_CONTINUOUS_SIZE: Optional[int] = None  # If None, uses HIDDEN_SIZE
+    ATTN_DROPOUT: float = 0.0
+    ADD_RELATIVE_INDEX: bool = True
+    USE_REVIN: bool = False
+    CONTEXT_LENGTH_RATIO: float = 1.0
+    USE_EMBEDDING_FOR_CONTEXT: bool = False
+    ENCODER_LAYERS: int = 1
+
     # Define hyperparameter search space
     HYPERPARAMETER_SPACE: ClassVar[Dict[str, Dict[str, Any]]] = {
         "common": {
@@ -36,29 +44,41 @@ class TFTTuneConfig(BaseHyperparamConfig):
         "model_specific": {
             "num_attention_heads": {"type": "int", "low": 1, "high": 8},
             "lstm_layers": {"type": "int", "low": 1, "high": 3},
-            "variable_selection_method": {"type": "categorical", "choices": ["gating", "dot_product"]},
-        }
+            "variable_selection_method": {
+                "type": "categorical",
+                "choices": ["gating", "dot_product"],
+            },
+            "attn_dropout": {"type": "float", "low": 0.0, "high": 0.3},
+            "add_relative_index": {"type": "categorical", "choices": [True, False]},
+            "use_revin": {"type": "categorical", "choices": [True, False]},
+            "context_length_ratio": {"type": "float", "low": 0.5, "high": 1.0},
+            "use_embedding_for_context": {
+                "type": "categorical",
+                "choices": [True, False],
+            },
+            "encoder_layers": {"type": "int", "low": 1, "high": 3},
+        },
     }
-    
+
     # Computed properties that are needed for TFT configuration
     @property
     def static_covariates(self) -> List[str]:
         """Get list of static covariates (all static features except gauge_id)."""
         return [f for f in self.STATIC_FEATURES if f != self.GROUP_IDENTIFIER]
-    
+
     @property
     def time_varying_known_covariates(self) -> List[str]:
         """Get list of time-varying known covariates (forcing features)."""
         return self.FORCING_FEATURES
-    
+
     @property
     def time_varying_unknown_covariates(self) -> List[str]:
         """Get list of time-varying unknown covariates (target variable)."""
         return [self.TARGET]
-    
+
     def get_model_config(self) -> TFTConfig:
         """Create a TFTConfig from the current configuration.
-        
+
         Returns:
             Configuration object for TFT model
         """
@@ -72,9 +92,15 @@ class TFTTuneConfig(BaseHyperparamConfig):
             lstm_layers=self.LSTM_LAYERS,
             num_attention_heads=self.NUM_ATTENTION_HEADS,
             dropout=self.DROPOUT,
+            hidden_continuous_size=self.HIDDEN_CONTINUOUS_SIZE,
+            attn_dropout=self.ATTN_DROPOUT,
+            add_relative_index=self.ADD_RELATIVE_INDEX,
             learning_rate=self.LEARNING_RATE,
             group_identifier=self.GROUP_IDENTIFIER,
-            variable_selection_method=self.VARIABLE_SELECTION_METHOD,
             scheduler_patience=self.LR_SCHEDULER_PATIENCE,
             scheduler_factor=self.LR_SCHEDULER_FACTOR,
+            use_revin=self.USE_REVIN,
+            context_length_ratio=self.CONTEXT_LENGTH_RATIO,
+            use_embedding_for_context=self.USE_EMBEDDING_FOR_CONTEXT,
+            encoder_layers=self.ENCODER_LAYERS,
         )
