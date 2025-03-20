@@ -82,21 +82,24 @@ class TFTTuneConfig(BaseHyperparamConfig):
         Returns:
             Configuration object for TFT model
         """
+
+        future_input_size = len(self.FORCING_FEATURES)
+
         return TFTConfig(
             input_len=self.INPUT_LENGTH,
             output_len=self.OUTPUT_LENGTH,
-            static_covariates=self.static_covariates,
-            time_varying_known_covariates=self.time_varying_known_covariates,
-            time_varying_unknown_covariates=self.time_varying_unknown_covariates,
+            input_size=len(self.FORCING_FEATURES) + 1,  # +1 for target
+            static_size=len(self.STATIC_FEATURES) - 1,  # -1 for gauge_id
+            future_input_size=future_input_size,
             hidden_size=self.HIDDEN_SIZE,
+            dropout=self.DROPOUT,
+            learning_rate=self.LEARNING_RATE,
+            group_identifier=self.GROUP_IDENTIFIER,
             lstm_layers=self.LSTM_LAYERS,
             num_attention_heads=self.NUM_ATTENTION_HEADS,
-            dropout=self.DROPOUT,
             hidden_continuous_size=self.HIDDEN_CONTINUOUS_SIZE,
             attn_dropout=self.ATTN_DROPOUT,
             add_relative_index=self.ADD_RELATIVE_INDEX,
-            learning_rate=self.LEARNING_RATE,
-            group_identifier=self.GROUP_IDENTIFIER,
             scheduler_patience=self.LR_SCHEDULER_PATIENCE,
             scheduler_factor=self.LR_SCHEDULER_FACTOR,
             use_revin=self.USE_REVIN,

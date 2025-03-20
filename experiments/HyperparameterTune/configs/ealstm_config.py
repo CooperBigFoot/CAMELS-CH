@@ -64,7 +64,6 @@ class EALSTMTuneConfig(BaseHyperparamConfig):
             future_input_size=future_input_size,
             hidden_size=self.HIDDEN_SIZE,
             num_layers=self.NUM_LAYERS,
-            static_embedding_size=self.STATIC_EMBEDDING_SIZE,
             dropout=self.DROPOUT,
             bidirectional=self.BIDIRECTIONAL,
             learning_rate=self.LEARNING_RATE,
