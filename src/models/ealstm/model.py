@@ -340,7 +340,13 @@ class BiEALSTM(nn.Module):
 
         # Combine hidden representations based on fusion method
         if self.fusion_method == "concat":
+            # Verify dimensions match
+            print(
+                f"Past hidden shape: {past_hidden.shape}, Future hidden shape: {future_hidden.shape}"
+            )
+            # Then adjust as needed
             combined = torch.cat([past_hidden, future_hidden], dim=1)
+
         elif self.fusion_method == "add":
             combined = past_hidden + future_hidden
         elif self.fusion_method == "average":
