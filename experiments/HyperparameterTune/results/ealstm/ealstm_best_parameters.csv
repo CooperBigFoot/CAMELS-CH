@@ -1,0 +1,2 @@
+best_value,input_length,hidden_size,dropout,learning_rate,num_layers,future_hidden_size,future_layers,bidirectional_fusion
+0.057258956134319305,36,250,0.41622132040021087,2.6587543983272695e-05,1,73,1,concat
