@@ -24,3 +24,6 @@ clustering_results/basins
 src/models/TSMixer.pdf
 
 .vscode/settings.json
+
+# Ignore all checkpoints folders in the experiments_deprecated directory
+experiments_deprecated/*/checkpoints
