@@ -118,8 +118,9 @@ class HyperparameterTuner:
             param_type = param_config["type"]
 
             if param_type == "int":
+                step = param_config.get("step", 1)
                 hyperparameters[param_name] = trial.suggest_int(
-                    param_name, param_config["low"], param_config["high"]
+                    param_name, param_config["low"], param_config["high"], step=step
                 )
             elif param_type == "float":
                 log = param_config.get("log", False)
