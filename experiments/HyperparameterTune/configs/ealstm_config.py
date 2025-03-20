@@ -38,8 +38,6 @@ class EALSTMTuneConfig(BaseHyperparamConfig):
         },
         "model_specific": {
             "num_layers": {"type": "int", "low": 1, "high": 3},
-            "future_hidden_size": {"type": "int", "low": 32, "high": 256},
-            "future_layers": {"type": "int", "low": 1, "high": 3},
         },
     }
     def get_model_config(self) -> EALSTMConfig:
@@ -65,7 +63,5 @@ class EALSTMTuneConfig(BaseHyperparamConfig):
             group_identifier=self.GROUP_IDENTIFIER,
             scheduler_patience=self.LR_SCHEDULER_PATIENCE,
             scheduler_factor=self.LR_SCHEDULER_FACTOR,
-            future_hidden_size=self.FUTURE_HIDDEN_SIZE,
-            future_layers=self.FUTURE_LAYERS,
             bidirectional_fusion=self.BIDIRECTIONAL_FUSION,
         )
