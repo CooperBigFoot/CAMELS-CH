@@ -17,7 +17,7 @@ notebooks/checkpoints
 notebooks/lightning_logs
 images
 .ruff_cache
-checkpoints
+
 lightning_logs
 clustering_results/basins
 .env
