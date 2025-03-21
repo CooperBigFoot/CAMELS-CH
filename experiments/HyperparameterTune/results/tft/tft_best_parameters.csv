@@ -1,2 +1,2 @@
 best_value,input_length,hidden_size,dropout,learning_rate,num_attention_heads,lstm_layers,variable_selection_method,attn_dropout,add_relative_index,use_revin,context_length_ratio,use_embedding_for_context,encoder_layers
-0.025899125263094902,206,72,0.14561457009902096,0.00016738085788752134,2,1,dot_product,0.23555278841790406,False,True,0.8037724259507192,True,3
+0.05263712629675865,55,128,0.3861223846483287,2.497073714505272e-05,1,3,dot_product,0.2313811040057837,False,False,0.811649063413779,True,1
