@@ -49,7 +49,7 @@ class TFTConfig(BaseConfig):
         group_identifier: str = "gauge_id",
         scheduler_patience: int = 5,
         scheduler_factor: float = 0.5,
-        quantiles: List[float] = [0.1, 0.5, 0.9],
+        quantiles: List[float] = [0.5],
         use_revin: bool = False,
         context_length_ratio: float = 1.0,
         use_embedding_for_context: bool = False,
@@ -104,7 +104,6 @@ class TFTConfig(BaseConfig):
         self.attn_dropout = attn_dropout
         self.add_relative_index = add_relative_index
 
-        # New parameters for Phase 2
         self.quantiles = quantiles
         self.use_revin = use_revin
         self.context_length_ratio = context_length_ratio
