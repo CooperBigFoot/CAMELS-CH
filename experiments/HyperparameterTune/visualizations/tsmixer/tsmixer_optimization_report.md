@@ -1,43 +1,43 @@
 # Hyperparameter Optimization Report for TSMIXER
 
-Date: 2025-03-20 13:58:03
+Date: 2025-03-21 11:18:25
 Number of trials: 10
-Best trial: #9
+Best trial: #7
 
 ## Best Parameters
 
 | Parameter | Value |
 | --------- | ----- |
-| input_length | 31 |
-| hidden_size | 111 |
-| dropout | 0.35342867192380856 |
-| learning_rate | 0.0002870875348195468 |
-| num_mixing_layers | 12 |
-| static_embedding_size | 6 |
+| input_length | 59 |
+| hidden_size | 51 |
+| dropout | 0.022613644455269033 |
+| learning_rate | 4.473636174621264e-05 |
+| num_mixing_layers | 7 |
+| static_embedding_size | 9 |
 | fusion_method | add |
 
-**Best validation loss**: 0.060576
+**Best validation loss**: 0.060139
 
 ## Best Trial Details
 
 | Attribute | Value |
 | --------- | ----- |
-| train_size | 307398 |
-| val_size | 152149 |
-| test_size | 152331 |
-| best_epoch | 46 |
+| train_size | 305270 |
+| val_size | 150021 |
+| test_size | 150203 |
+| best_epoch | 50 |
 
 ## Parameter Importance
 
 | Parameter | Importance |
 | --------- | ---------- |
-| num_mixing_layers | 0.3952 |
-| input_length | 0.3228 |
-| dropout | 0.0868 |
-| hidden_size | 0.0767 |
-| learning_rate | 0.0607 |
-| fusion_method | 0.0469 |
-| static_embedding_size | 0.0109 |
+| input_length | 0.3407 |
+| dropout | 0.2400 |
+| num_mixing_layers | 0.1513 |
+| learning_rate | 0.1202 |
+| hidden_size | 0.0655 |
+| fusion_method | 0.0424 |
+| static_embedding_size | 0.0399 |
 
 ## Visualizations
 
