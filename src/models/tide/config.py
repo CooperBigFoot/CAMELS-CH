@@ -24,6 +24,9 @@ class TiDEConfig(BaseConfig):
         "use_layer_norm",
         "scheduler_patience",
         "scheduler_factor",
+        "hidden_size",
+        "dropout",
+
     ]
 
     def __init__(

@@ -250,8 +250,6 @@ class HyperparameterTuner:
             logger=tb_logger,
             callbacks=callbacks,
             enable_progress_bar=True,
-            # Add checkpointing
-            default_root_dir=str(self.dirs["checkpoints"]),
         )
 
         # Train and get best validation loss

@@ -24,7 +24,6 @@ class TFTTuneConfig(BaseHyperparamConfig):
     NUM_ATTENTION_HEADS: int = 4
     DROPOUT: float = 0.1
     LSTM_LAYERS: int = 2
-    VARIABLE_SELECTION_METHOD: str = "gating"  # Options: "gating" or "dot_product"
     HIDDEN_CONTINUOUS_SIZE: Optional[int] = None  # If None, uses HIDDEN_SIZE
     ATTN_DROPOUT: float = 0.0
     ADD_RELATIVE_INDEX: bool = True
@@ -45,10 +44,6 @@ class TFTTuneConfig(BaseHyperparamConfig):
         "model_specific": {
             "num_attention_heads": {"type": "int", "low": 1, "high": 8},
             "lstm_layers": {"type": "int", "low": 1, "high": 3},
-            "variable_selection_method": {
-                "type": "categorical",
-                "choices": ["gating", "dot_product"],
-            },
             "attn_dropout": {"type": "float", "low": 0.0, "high": 0.3},
             "add_relative_index": {"type": "categorical", "choices": [True, False]},
             "use_revin": {"type": "categorical", "choices": [True, False]},

@@ -19,7 +19,10 @@ class EALSTMConfig(BaseConfig):
         "bias",
         "scheduler_patience",
         "scheduler_factor",
+        "dropout",
+        "hidden_size",
         # Bidirectional EA-LSTM parameters
+        "future_input_size",
         "future_hidden_size",
         "future_layers",
         "bidirectional_fusion",
@@ -93,7 +96,7 @@ class EALSTMConfig(BaseConfig):
         self.bias = bias
         self.scheduler_patience = scheduler_patience
         self.scheduler_factor = scheduler_factor
-        
+
         # Bidirectional EA-LSTM parameters
         self.future_hidden_size = future_hidden_size or hidden_size
         self.future_layers = future_layers or num_layers
@@ -106,4 +109,6 @@ class EALSTMConfig(BaseConfig):
         if self.future_layers < 1:
             raise ValueError("future_layers must be at least 1")
         if self.bidirectional_fusion not in ["concat", "add", "average"]:
-            raise ValueError("bidirectional_fusion must be one of: concat, add, average")
+            raise ValueError(
+                "bidirectional_fusion must be one of: concat, add, average"
+            )
