@@ -24,9 +24,9 @@ class BaseDataSharingConfig:
 
     # Common training parameters
     BATCH_SIZE: int = 2048
-    MAX_EPOCHS: int = 50
+    MAX_EPOCHS: int = 100
     ACCELERATOR: str = "cuda" if torch.cuda.is_available() else "cpu"
-    NUM_RUNS: int = 3  # Multiple runs for statistical significance
+    NUM_RUNS: int = 1  
     MAX_WORKERS: int = min(6, os.cpu_count())
 
     # Early stopping configuration
@@ -90,11 +90,11 @@ class BaseDataSharingConfig:
         # Initialize CA configuration if not provided
         if not self.CA_CONFIG:
             self.CA_CONFIG = {
-                "ATTRIBUTE_DIR": "workspace/CARAVANIFY/CA/post_processed/attributes",
-                "TIMESERIES_DIR": "workspace/CARAVANIFY/CA/post_processed/timeseries/csv",
+                "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/CA/post_processed/attributes",
+                "TIMESERIES_DIR": "/workspace/CARAVANIFY/CA/post_processed/timeseries/csv",
                 "GAUGE_ID_PREFIX": "CA",
                 "MIN_TRAIN_YEARS": 5,
-                "HUMAN_INFLUENCE_PATH": "workspace/src/human_influence_index/results/human_influence_classification.csv",
+                "HUMAN_INFLUENCE_PATH": "/workspace/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
             }
 
         # Validate configuration

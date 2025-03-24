@@ -1,0 +1,2 @@
+run,seed,best_val_loss,best_epoch,checkpoint_path
+0,42,0.05638226866722107,50,experiments/DataSharing/checkpoints/tajikistan/tide/run_0/Tajikistan_tide_epoch=50_val_loss=0.0564.ckpt

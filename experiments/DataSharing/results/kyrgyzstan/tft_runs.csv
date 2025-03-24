@@ -1,0 +1,2 @@
+run,seed,best_val_loss,best_epoch,checkpoint_path
+0,42,0.053303685039281845,50,experiments/DataSharing/checkpoints/kyrgyzstan/tft/run_0/Kyrgyzstan_tft_epoch=50_val_loss=0.0533.ckpt

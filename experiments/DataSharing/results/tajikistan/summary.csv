@@ -1,0 +1,5 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path
+tide,Tajikistan,0.05638226866722107,50,experiments/DataSharing/checkpoints/tajikistan/tide/run_0/Tajikistan_tide_epoch=50_val_loss=0.0564.ckpt
+tsmixer,Tajikistan,0.11113861948251724,50,experiments/DataSharing/checkpoints/tajikistan/tsmixer/run_0/Tajikistan_tsmixer_epoch=50_val_loss=0.1111.ckpt
+ealstm,Tajikistan,0.09745418280363083,50,experiments/DataSharing/checkpoints/tajikistan/ealstm/run_0/Tajikistan_ealstm_epoch=50_val_loss=0.0975.ckpt
+tft,Tajikistan,0.06547260284423828,50,experiments/DataSharing/checkpoints/tajikistan/tft/run_0/Tajikistan_tft_epoch=50_val_loss=0.0655.ckpt

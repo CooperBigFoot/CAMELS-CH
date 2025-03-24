@@ -1,0 +1,2 @@
+run,seed,best_val_loss,best_epoch,checkpoint_path
+0,42,0.0522543266415596,44,experiments/DataSharing/checkpoints/combined/tide/run_0/Combined_tide_epoch=44_val_loss=0.0523.ckpt

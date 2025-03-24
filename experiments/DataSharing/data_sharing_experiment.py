@@ -43,28 +43,28 @@ def parse_args():
     parser.add_argument(
         "--tide-yaml",
         type=str,
-        default="/Users/cooper/Desktop/CAMELS-CH/experiments/DataSharing/yaml_files/tide.yaml",
+        default="/workspace/CAMELS-CH/experiments/DataSharing/yaml_files/tide.yaml",
         help="Path to TiDE hyperparameter YAML",
     )
 
     parser.add_argument(
         "--tsmixer-yaml",
         type=str,
-        default="/Users/cooper/Desktop/CAMELS-CH/experiments/DataSharing/yaml_files/tsmixer.yaml",
+        default="/workspace/CAMELS-CH/experiments/DataSharing/yaml_files/tsmixer.yaml",
         help="Path to TSMixer hyperparameter YAML",
     )
 
     parser.add_argument(
         "--ealstm-yaml",
         type=str,
-        default="/Users/cooper/Desktop/CAMELS-CH/experiments/DataSharing/yaml_files/ealstm.yaml",
+        default="/workspace/CAMELS-CH/experiments/DataSharing/yaml_files/ealstm.yaml",
         help="Path to EALSTM hyperparameter YAML",
     )
 
     parser.add_argument(
         "--tft-yaml",
         type=str,
-        default="/Users/cooper/Desktop/CAMELS-CH/experiments/DataSharing/yaml_files/tft.yaml",
+        default="/workspace/CAMELS-CH/experiments/DataSharing/yaml_files/tft.yaml",
         help="Path to TFT hyperparameter YAML",
     )
 

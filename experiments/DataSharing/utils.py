@@ -344,7 +344,7 @@ def train_and_save_model(
 
         # Configure trainer
         trainer = pl.Trainer(
-            max_epochs=50,  # Use a reasonable default, should be in config
+            max_epochs=config
             accelerator="auto",
             devices=1,
             logger=logger,

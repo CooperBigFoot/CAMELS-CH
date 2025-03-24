@@ -1,0 +1,2 @@
+run,seed,best_val_loss,best_epoch,checkpoint_path
+0,42,0.05263448879122734,40,experiments/DataSharing/checkpoints/combined/tft/run_0/Combined_tft_epoch=40_val_loss=0.0526.ckpt
