@@ -13,7 +13,6 @@ import pytorch_lightning as pl
 import torch
 import pandas as pd
 import optuna
-import os
 
 
 class BenchmarkTuner:
@@ -112,7 +111,7 @@ class BenchmarkTuner:
 
         # Log data split information
         if self.config.USE_PROPORTIONAL_SPLIT:
-            print(f"\nUsing proportional splitting with:")
+            print("\nUsing proportional splitting with:")
             print(f"  - Training: {self.config.TRAIN_PROP*100:.1f}% of data")
             print(f"  - Validation: {self.config.VAL_PROP*100:.1f}% of data")
             print(f"  - Testing: {self.config.TEST_PROP*100:.1f}% of data")
@@ -222,7 +221,6 @@ class BenchmarkTuner:
         # Save optimization visualization if plotly is available
         try:
             import optuna.visualization as vis
-            import matplotlib.pyplot as plt
 
             # Plot optimization history
             fig1 = vis.plot_optimization_history(study)

@@ -1,10 +1,8 @@
 """PyTorch Lightning module for TSMixer model."""
 
-from typing import Dict, Any, Optional, Union, List
+from typing import Dict, Any, Optional, Union
 import torch
-from torch.nn import MSELoss
 from torch.optim import Adam
-import pytorch_lightning as pl
 
 from ..base.base_lit_model import BaseLitModel
 from .config import TSMixerConfig

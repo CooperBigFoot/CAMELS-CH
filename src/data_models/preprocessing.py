@@ -1,4 +1,4 @@
-from typing import Union, List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional
 import pandas as pd
 import numpy as np
 from dataclasses import dataclass

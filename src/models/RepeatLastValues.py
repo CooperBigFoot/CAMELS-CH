@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
-from typing import Dict, Optional, Any, Union, List
+from typing import Dict, Optional, Any, Union
 
 
 class RepeatLastValuesConfig:

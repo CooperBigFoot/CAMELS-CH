@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Union, List, Dict, Optional, Any, Tuple
+from typing import Union, List, Dict, Optional, Tuple
 import pandas as pd
 import geopandas as gpd
 from concurrent.futures import ThreadPoolExecutor

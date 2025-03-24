@@ -4,7 +4,7 @@ TiDE (Time-series Dense Encoder) model implementation based on the paper:
 https://arxiv.org/pdf/2304.08424
 """
 
-from typing import Optional, List
+from typing import Optional
 import torch
 import torch.nn as nn
 from .config import TiDEConfig

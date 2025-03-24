@@ -11,8 +11,6 @@ from pytorch_lightning.callbacks import (
     LearningRateMonitor,
 )
 from pytorch_lightning.loggers import TensorBoardLogger
-import pandas as pd
-import matplotlib.pyplot as plt
 from experiments.GroupBased.configGroupBased import ExperimentConfig
 from src.data_models.caravanify import Caravanify, CaravanifyConfig
 from src.data_models.datamodule import HydroDataModule
@@ -147,7 +145,7 @@ class BenchmarkRunner:
         
         # Log data splitting method
         if self.config.USE_PROPORTIONAL_SPLIT:
-            print(f"\nUsing proportional splitting with:")
+            print("\nUsing proportional splitting with:")
             print(f"  - Training: {self.config.TRAIN_PROP*100:.2f}% of data")
             print(f"  - Validation: {self.config.VAL_PROP*100:.2f}% of data")
             print(f"  - Testing: {self.config.TEST_PROP*100:.2f}% of data")

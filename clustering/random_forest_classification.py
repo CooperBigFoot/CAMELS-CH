@@ -8,12 +8,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import (
-    cross_val_score,
     cross_val_predict,
     StratifiedKFold,
     RandomizedSearchCV,
 )
-from sklearn.metrics import accuracy_score, log_loss
+from sklearn.metrics import log_loss
 from sklearn.feature_selection import mutual_info_regression
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
@@ -93,7 +92,7 @@ def get_cluster_assignments(config: ClassificationConfig) -> pd.DataFrame:
 
     # Ensure we have 'gauge_id' column
     if "gauge_id" not in cluster_assignments.columns:
-        raise ValueError(f"Missing 'gauge_id' column in cluster assignments file")
+        raise ValueError("Missing 'gauge_id' column in cluster assignments file")
 
     # Extract country from gauge_id if not already present
     if "country" not in cluster_assignments.columns:
@@ -567,9 +566,9 @@ def main(config: ClassificationConfig) -> None:
     mi_heatmap_path = output_dir / "mutual_info_heatmap.png"
     feature_importance_path = output_dir / "feature_importance.png"
     predictions_path = (
-        output_dir / f"cluster_probabilities_shifted_15_clusters.csv"
+        output_dir / "cluster_probabilities_shifted_15_clusters.csv"
     )
-    metrics_path = output_dir / f"performance_metrics_shifted_15_clusters.txt"
+    metrics_path = output_dir / "performance_metrics_shifted_15_clusters.txt"
 
     # Load and combine data from source countries
     all_data = []
@@ -616,9 +615,9 @@ def main(config: ClassificationConfig) -> None:
 
     # Save performance metrics
     with open(metrics_path, "w") as f:
-        f.write(f"Random Forest Classification Performance\n")
-        f.write(f"----------------------------------------\n")
-        f.write(f"Best Parameters:\n")
+        f.write("Random Forest Classification Performance\n")
+        f.write("----------------------------------------\n")
+        f.write("Best Parameters:\n")
         for param, value in metrics["best_params"].items():
             f.write(f"  {param}: {value}\n")
         f.write(f"\nCross-validation accuracy: {metrics['accuracy']:.4f}\n")
@@ -648,7 +647,7 @@ def main(config: ClassificationConfig) -> None:
     # Predict cluster probabilities for target country
     predict_target_clusters(rf_model, X_target, target_ids, predictions_path)
 
-    print(f"Classification workflow completed successfully!")
+    print("Classification workflow completed successfully!")
 
 
 if __name__ == "__main__":

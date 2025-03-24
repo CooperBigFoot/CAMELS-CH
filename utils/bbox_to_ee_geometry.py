@@ -1,5 +1,4 @@
 import ee
-import geopandas as gpd
 
 PROJECT = "masterthesis-450515"
 BASE_DIR = f"projects/{PROJECT}/assets"
@@ -7,7 +6,7 @@ BASE_DIR = f"projects/{PROJECT}/assets"
 
 try:
     ee.Initialize(project=PROJECT)
-except Exception as e:
+except Exception:
     ee.Authenticate()
     ee.Initialize(project=PROJECT)
 

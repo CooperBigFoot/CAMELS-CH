@@ -5,8 +5,7 @@ https://arxiv.org/abs/2303.06053
 TSMixer Model Implementation. The architecture is based on Figure 6 from the paper:
 """
 
-from typing import Dict, Optional, Tuple, Any, Union, List
-import numpy as np
+from typing import Dict, Optional, Any, Union
 from torch.optim import Adam
 from torch.nn import MSELoss
 import pytorch_lightning as pl

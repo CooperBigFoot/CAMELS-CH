@@ -1,7 +1,6 @@
 from typing import Dict, Any, Optional, Union, List
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from ..base.base_lit_model import BaseLitModel
 from .config import TFTConfig
 from .model import TemporalFusionTransformer

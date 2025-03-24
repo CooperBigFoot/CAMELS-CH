@@ -1,7 +1,7 @@
 """Base configuration class for hyperparameter tuning."""
 
 from dataclasses import dataclass, field, asdict
-from typing import Dict, Any, List, Optional, ClassVar
+from typing import Dict, Any, List, ClassVar
 import random
 import numpy as np
 import torch

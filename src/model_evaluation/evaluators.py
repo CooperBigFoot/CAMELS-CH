@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Tuple, Union, Optional
+from typing import Dict, List, Tuple, Optional
 import torch
 import pytorch_lightning as pl
 import copy

@@ -4,8 +4,6 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from typing import Union, Dict, Any
-import torch.nn as nn
 import pytorch_lightning as pl
 from .configs.base_config import BaseHyperparamConfig
 

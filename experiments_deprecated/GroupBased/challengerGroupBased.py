@@ -11,9 +11,6 @@ from pytorch_lightning.callbacks import (
     LearningRateMonitor,
 )
 from pytorch_lightning.loggers import TensorBoardLogger
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 from experiments.GroupBased.configGroupBased import ExperimentConfig
 from src.data_models.datamodule import HydroDataModule
 from src.models.TSMixer import LitTSMixer

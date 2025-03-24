@@ -8,8 +8,7 @@ https://hess.copernicus.org/articles/23/5089/2019/
 This implementation follows the model conventions defined in the project guidelines.
 """
 
-from typing import Dict, Optional, Tuple, Any, Union, List, Type
-import numpy as np
+from typing import Dict, Optional, Tuple, Any, Union
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl

@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict
 import optuna
 import matplotlib.pyplot as plt
 from optuna.visualization import plot_optimization_history, plot_param_importances, plot_contour

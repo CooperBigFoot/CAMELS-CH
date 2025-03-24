@@ -11,8 +11,6 @@ from pytorch_lightning.callbacks import (
     LearningRateMonitor,
 )
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 from experiments.GroupBased.configGroupBased import ExperimentConfig
 from src.data_models.datamodule import HydroDataModule
 from src.models.TSMixer import LitTSMixer
@@ -266,7 +264,7 @@ class GroupBasedFineTuneRunner:
         
         # Log data splitting information
         if self.config.USE_PROPORTIONAL_SPLIT:
-            print(f"\nFine-tuning with proportional splitting:")
+            print("\nFine-tuning with proportional splitting:")
             print(f"  - Training: {self.config.TRAIN_PROP*100:.1f}% of data")
             print(f"  - Validation: {self.config.VAL_PROP*100:.1f}% of data")
             print(f"  - Testing: {self.config.TEST_PROP*100:.1f}% of data")

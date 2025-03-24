@@ -3,7 +3,7 @@ Configuration for the RepeatLastValues model, a simple baseline that repeats
 the last observed value for the entire forecast horizon.
 """
 
-from typing import ClassVar, List, Optional, Any, Dict
+from typing import ClassVar, List, Optional
 from ..base.base_config import BaseConfig
 
 

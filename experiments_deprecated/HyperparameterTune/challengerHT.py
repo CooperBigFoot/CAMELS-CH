@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.models.TSMixer import LitTSMixer
-from src.data_models.datamodule import HydroDataModule, HydroTransferDataModule
+from src.data_models.datamodule import HydroDataModule
 from src.data_models.caravanify import Caravanify, CaravanifyConfig
 from experiments.HyperparameterTune.configHT import ExperimentConfig
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor
@@ -196,7 +196,7 @@ class ChallengerTuner:
 
         # Log splitting configuration
         if self.config.USE_PROPORTIONAL_SPLIT:
-            print(f"\nUsing proportional splitting with:")
+            print("\nUsing proportional splitting with:")
             print(f"  - Training: {self.config.TRAIN_PROP*100:.2f}% of data")
             print(f"  - Validation: {self.config.VAL_PROP*100:.2f}% of data")
             print(f"  - Testing: {self.config.TEST_PROP*100:.2f}% of data")
@@ -339,7 +339,6 @@ class ChallengerTuner:
         # Save optimization visualization if plotly is available
         try:
             import optuna.visualization as vis
-            import matplotlib.pyplot as plt
 
             # Plot optimization history
             fig1 = vis.plot_optimization_history(study)
