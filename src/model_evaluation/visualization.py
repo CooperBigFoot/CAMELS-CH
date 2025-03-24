@@ -551,3 +551,258 @@ def plot_basin_map(
         ax.set_axis_off()
 
     return fig, ax
+
+
+def plot_basin_difference_map(
+    evaluator_results: Dict[str, Dict],
+    model1_name: str,
+    model2_name: str,
+    metric: str = "NSE",
+    horizon: int = 1,
+    gauge_ids: Optional[List[str]] = None,
+    caravanify_instance=None,
+    fig_size: Tuple[int, int] = (12, 10),
+    cmap: str = "RdBu_r",  # Red-Blue reversed (red=negative, blue=positive differences)
+    vmin: Optional[float] = None,
+    vmax: Optional[float] = None,
+    title: Optional[str] = None,
+    basemap: bool = True,
+    difference_legend_title: Optional[str] = None,
+    threshold: Optional[float] = None,
+    show_axes: bool = True,
+    grid_alpha: float = 0.5,
+    hist_in_legend: bool = True,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot basins on a map colored by the difference in performance metrics between two models.
+    
+    Args:
+        evaluator_results: Dictionary with evaluator results
+        model1_name: Name of the first model (baseline)
+        model2_name: Name of the second model to compare against baseline
+        metric: Metric to use for comparison (default: "NSE")
+        horizon: Forecast horizon to visualize
+        gauge_ids: Optional list of gauge IDs to plot (if None, plot all)
+        caravanify_instance: Instance of Caravanify to get shapefiles
+        fig_size: Figure size as (width, height)
+        cmap: Colormap for difference coloring (default: "RdBu_r")
+        vmin: Minimum value for colormap scaling
+        vmax: Maximum value for colormap scaling
+        title: Custom title for the plot
+        basemap: Whether to add a basemap
+        difference_legend_title: Title for the colorbar legend
+        threshold: Optional threshold value to highlight significant differences
+        show_axes: Whether to display latitude and longitude axes
+        grid_alpha: Transparency of the coordinate grid
+        hist_in_legend: Whether to include a histogram in the legend
+        
+    Returns:
+        Tuple containing the figure and axes objects
+    """
+    if not caravanify_instance:
+        raise ValueError("A Caravanify instance is required to access basin shapefiles")
+    
+    # Validate inputs
+    for model_name in [model1_name, model2_name]:
+        if model_name not in evaluator_results:
+            raise ValueError(f"Model '{model_name}' not found in evaluator results")
+    
+    # Get basin metrics for both models
+    basin_metrics1 = evaluator_results[model1_name]["basin_metrics"]
+    basin_metrics2 = evaluator_results[model2_name]["basin_metrics"]
+    
+    # Extract metric values for the specified horizon
+    metric_values1 = {}
+    metric_values2 = {}
+    for basin, horizon_data in basin_metrics1.items():
+        if horizon in horizon_data and metric in horizon_data[horizon]:
+            value = horizon_data[horizon][metric]
+            if not np.isnan(value):
+                metric_values1[basin] = value
+                
+    for basin, horizon_data in basin_metrics2.items():
+        if horizon in horizon_data and metric in horizon_data[horizon]:
+            value = horizon_data[horizon][metric]
+            if not np.isnan(value):
+                metric_values2[basin] = value
+    
+    # Ensure there are common basins to compare
+    common_basins = set(metric_values1.keys()) & set(metric_values2.keys())
+    if not common_basins:
+        raise ValueError(f"No common basins found between models for metric '{metric}' at horizon {horizon}")
+    
+    # Calculate metric differences (model2 - model1)
+    metric_differences = {}
+    for basin in common_basins:
+        if gauge_ids and basin not in gauge_ids:
+            continue
+        metric_differences[basin] = metric_values2[basin] - metric_values1[basin]
+    
+    if not metric_differences:
+        raise ValueError("No basins to plot after filtering")
+    
+    # Get basin shapefiles
+    try:
+        all_shapefiles = caravanify_instance.get_shapefiles()
+        basin_gdf = all_shapefiles[
+            all_shapefiles["gauge_id"].isin(metric_differences.keys())
+        ].copy()
+        if basin_gdf.empty:
+            raise ValueError("No basin shapefiles found for the specified gauge IDs")
+        if basin_gdf.crs is not None and basin_gdf.crs != "EPSG:4326":
+            basin_gdf = basin_gdf.to_crs("EPSG:4326")
+    except Exception as e:
+        raise ValueError(f"Error getting basin shapefiles: {e}")
+    
+    # Add metric differences to GeoDataFrame
+    basin_gdf["metric_diff"] = basin_gdf["gauge_id"].map(metric_differences)
+    
+    # Calculate map bounds
+    x_min, y_min, x_max, y_max = basin_gdf.total_bounds
+    padding = 0.1
+    x_range, y_range = x_max - x_min, y_max - y_min
+    x_min, x_max, y_min, y_max = (
+        x_min - padding * x_range,
+        x_max + padding * x_range,
+        y_min - padding * y_range,
+        y_max + padding * y_range,
+    )
+    
+    # Set colormap range to be symmetric around zero if not specified
+    if vmin is None and vmax is None:
+        abs_max = max(abs(min(metric_differences.values())), abs(max(metric_differences.values())))
+        vmin, vmax = -abs_max, abs_max
+    elif vmin is None:
+        vmin = -vmax
+    elif vmax is None:
+        vmax = -vmin
+        
+    # Create figure with cartopy projection
+    projection = ccrs.PlateCarree()
+    fig, ax = plt.subplots(figsize=fig_size, subplot_kw={"projection": projection})
+    
+    # Add basemap features
+    if basemap:
+        ax.add_feature(cfeature.COASTLINE, linewidth=0.5)
+        ax.add_feature(cfeature.BORDERS, linestyle=":", linewidth=0.5)
+        ax.add_feature(cfeature.LAKES, alpha=0.5)
+        ax.add_feature(cfeature.RIVERS, linewidth=0.5)
+    
+    # Define colormap with special handling for threshold
+    if threshold is not None and threshold > 0:
+        # Create a custom colormap with white/neutral color in the insignificant range
+        colors = plt.cm.get_cmap(cmap)(np.linspace(0, 1, 256))
+        # Find the midpoint in the colormap (representing zero difference)
+        mid_idx = int(256 * (-vmin) / (vmax - vmin))
+        
+        # Create transition zones around zero based on threshold
+        neg_threshold_idx = int(256 * (-vmin - threshold) / (vmax - vmin))
+        pos_threshold_idx = int(256 * (-vmin + threshold) / (vmax - vmin))
+        
+        # Set colors in the insignificant range to a light gray
+        for i in range(neg_threshold_idx, pos_threshold_idx + 1):
+            if 0 <= i < 256:
+                colors[i] = mcolors.to_rgba('lightgray')
+        
+        # Create a new colormap
+        custom_cmap = mcolors.LinearSegmentedColormap.from_list("custom_diff", colors)
+        cmap_to_use = custom_cmap
+    else:
+        cmap_to_use = cmap
+    
+    # Create the norm for the colormap
+    norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+    
+    # Plot basins with difference colors
+    basin_gdf.plot(
+        column="metric_diff",
+        ax=ax,
+        cmap=cmap_to_use,
+        norm=norm,
+        edgecolor="black",
+        linewidth=0.5,
+        alpha=0.7,
+        transform=ccrs.PlateCarree(),
+    )
+    
+    # Set map extent
+    ax.set_extent([x_min, x_max, y_min, y_max], crs=ccrs.PlateCarree())
+    
+    # Add histogram in colorbar if requested
+    if hist_in_legend:
+        # Create the main color bar
+        sm = ScalarMappable(norm=norm, cmap=plt.cm.get_cmap(cmap_to_use))
+        sm.set_array([])
+        
+        # Create a separate axes for the colorbar
+        cbar_ax = fig.add_axes([0.92, 0.2, 0.02, 0.6])  # [left, bottom, width, height]
+        cbar = fig.colorbar(sm, cax=cbar_ax)
+        
+        # Set colorbar label
+        cbar.set_label(difference_legend_title or f"Δ{metric} ({model2_name} - {model1_name})", size=12)
+        
+        # Add a small histogram to show the distribution of differences
+        hist_ax = fig.add_axes([0.92, 0.1, 0.06, 0.1])  # Position below colorbar
+        hist_values = list(metric_differences.values())
+        hist_ax.hist(hist_values, bins=10, color='gray', alpha=0.7)
+        hist_ax.set_title('Distribution', fontsize=8)
+        hist_ax.tick_params(axis='both', which='major', labelsize=6)
+        hist_ax.axvline(x=0, color='black', linestyle='--', linewidth=0.8)
+        
+        # Add threshold lines if provided
+        if threshold is not None:
+            hist_ax.axvline(x=threshold, color='blue', linestyle=':', linewidth=0.8)
+            hist_ax.axvline(x=-threshold, color='red', linestyle=':', linewidth=0.8)
+    else:
+        # Standard colorbar without histogram
+        sm = ScalarMappable(norm=norm, cmap=plt.cm.get_cmap(cmap_to_use))
+        sm.set_array([])
+        cbar = fig.colorbar(sm, ax=ax)
+        cbar.set_label(difference_legend_title or f"Δ{metric} ({model2_name} - {model1_name})", size=12)
+    
+    # Add summary statistics to plot
+    pos_count = sum(1 for x in metric_differences.values() if x > 0)
+    neg_count = sum(1 for x in metric_differences.values() if x < 0)
+    if threshold is not None:
+        sig_pos_count = sum(1 for x in metric_differences.values() if x > threshold)
+        sig_neg_count = sum(1 for x in metric_differences.values() if x < -threshold)
+        insig_count = sum(1 for x in metric_differences.values() if -threshold <= x <= threshold)
+        
+        stats_text = (
+            f"Model Comparison Summary:\n"
+            f"{model2_name} better: {pos_count} basins ({sig_pos_count} significant)\n"
+            f"{model1_name} better: {neg_count} basins ({sig_neg_count} significant)\n"
+            f"Insignificant difference: {insig_count} basins"
+        )
+    else:
+        stats_text = (
+            f"Model Comparison Summary:\n"
+            f"{model2_name} better: {pos_count} basins\n"
+            f"{model1_name} better: {neg_count} basins"
+        )
+    
+    # Add the stats text box
+    ax.text(
+        0.02, 0.02, stats_text,
+        transform=ax.transAxes,
+        bbox=dict(facecolor='white', alpha=0.7, boxstyle='round'),
+        fontsize=9, verticalalignment='bottom'
+    )
+    
+    # Set title
+    ax.set_title(
+        title or f"Difference in {metric} at {horizon}-day Horizon: {model2_name} vs {model1_name}",
+        fontsize=14
+    )
+    
+    # Configure grid and axes
+    if show_axes:
+        gl = ax.gridlines(
+            draw_labels=True, linewidth=0.5, alpha=grid_alpha, linestyle="--"
+        )
+        gl.top_labels, gl.right_labels = False, False
+        gl.xlabel_style, gl.ylabel_style = {"size": 8}, {"size": 8}
+    else:
+        ax.set_axis_off()
+    
+    return fig, ax
