@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 import pytorch_lightning as pl
-from typing import Any, Optional
+from typing import Any
 
 
 class ModelFactory:

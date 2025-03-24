@@ -2,55 +2,59 @@
 
 import os
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 import random
 import numpy as np
 import torch
-from pathlib import Path
 
 
 @dataclass
 class BaseDataSharingConfig:
     """Base configuration for the Central Asian data sharing experiment.
-    
+
     This class provides common parameters and functionality for experiment configuration
     across different model types and country scenarios.
     """
+
     # Data parameters
     GROUP_IDENTIFIER: str = "gauge_id"
     TARGET: str = "streamflow"
     STATIC_FEATURES: List[str] = field(default_factory=list)
     FORCING_FEATURES: List[str] = field(default_factory=list)
-    
+
     # Common training parameters
     BATCH_SIZE: int = 2048
     MAX_EPOCHS: int = 50
     ACCELERATOR: str = "cuda" if torch.cuda.is_available() else "cpu"
     NUM_RUNS: int = 3  # Multiple runs for statistical significance
     MAX_WORKERS: int = min(6, os.cpu_count())
-    
+
     # Early stopping configuration
     EARLY_STOPPING_PATIENCE: int = 5
     EARLY_STOPPING_MIN_DELTA: float = 0.0001
-    
+
     # Data splitting configuration
     USE_PROPORTIONAL_SPLIT: bool = True
     TRAIN_PROP: float = 0.5
     VAL_PROP: float = 0.25
     TEST_PROP: float = 0.25
-    
+
     # Country scenarios
-    COUNTRIES: List[str] = field(default_factory=lambda: ["Tajikistan", "Kyrgyzstan", "Combined"])
-    
+    COUNTRIES: List[str] = field(
+        default_factory=lambda: ["Tajikistan", "Kyrgyzstan", "Combined"]
+    )
+
     # Dataset paths
     CA_CONFIG: Dict[str, Any] = field(default_factory=dict)
-    
+
     # Model types to evaluate
-    MODEL_TYPES: List[str] = field(default_factory=lambda: ["tide", "tsmixer", "ealstm", "tft"])
-    
+    MODEL_TYPES: List[str] = field(
+        default_factory=lambda: ["tide", "tsmixer", "ealstm", "tft"]
+    )
+
     # YAML paths for hyperparameters - to be set by experiment script
     YAML_PATHS: Dict[str, str] = field(default_factory=dict)
-    
+
     def __post_init__(self):
         """Initialize derived attributes and validate configuration."""
         # Initialize feature lists if not provided
@@ -86,13 +90,13 @@ class BaseDataSharingConfig:
         # Initialize CA configuration if not provided
         if not self.CA_CONFIG:
             self.CA_CONFIG = {
-                "ATTRIBUTE_DIR": "/workspace/CARAVANIFY/CA/post_processed/attributes",
-                "TIMESERIES_DIR": "/workspace/CARAVANIFY/CA/post_processed/timeseries/csv",
+                "ATTRIBUTE_DIR": "workspace/CARAVANIFY/CA/post_processed/attributes",
+                "TIMESERIES_DIR": "workspace/CARAVANIFY/CA/post_processed/timeseries/csv",
                 "GAUGE_ID_PREFIX": "CA",
                 "MIN_TRAIN_YEARS": 5,
-                "HUMAN_INFLUENCE_PATH": "/workspace/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
+                "HUMAN_INFLUENCE_PATH": "workspace/src/human_influence_index/results/human_influence_classification.csv",
             }
-            
+
         # Validate configuration
         self._validate_config()
 
@@ -102,11 +106,13 @@ class BaseDataSharingConfig:
             raise ValueError("Batch size must be positive")
         if self.MAX_WORKERS <= 0:
             raise ValueError("Max workers must be positive")
-        
+
         # Validate split proportions
         if self.USE_PROPORTIONAL_SPLIT:
             total_prop = self.TRAIN_PROP + self.VAL_PROP + self.TEST_PROP
-            if not 0.999 <= total_prop <= 1.001:  # Allow for small floating point errors
+            if (
+                not 0.999 <= total_prop <= 1.001
+            ):  # Allow for small floating point errors
                 raise ValueError(f"Split proportions must sum to 1.0, got {total_prop}")
             if any(p <= 0 for p in [self.TRAIN_PROP, self.VAL_PROP, self.TEST_PROP]):
                 raise ValueError("All split proportions must be positive")
@@ -121,7 +127,7 @@ class BaseDataSharingConfig:
             torch.cuda.manual_seed_all(seed)
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
-            
+
     def get_preprocessing_config(self) -> Dict:
         """Create preprocessing configuration."""
         from sklearn.pipeline import Pipeline

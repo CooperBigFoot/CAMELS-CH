@@ -1,7 +1,6 @@
 """Configuration for Central Asian data sharing experiment."""
 
-from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional
+from dataclasses import dataclass
 from pathlib import Path
 from .base_config import BaseDataSharingConfig
 
