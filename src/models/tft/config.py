@@ -48,7 +48,7 @@ class TFTConfig(BaseConfig):
         group_identifier: str = "gauge_id",
         scheduler_patience: int = 5,
         scheduler_factor: float = 0.5,
-        quantiles: List[float] = None,
+        quantiles: List[float] = [0.5],
         use_revin: bool = False,
         context_length_ratio: float = 1.0,
         use_embedding_for_context: bool = False,

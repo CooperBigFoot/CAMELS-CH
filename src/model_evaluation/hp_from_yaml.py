@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 import yaml
-from typing import Dict, Any, Set, List, Optional, Union, Tuple
+from typing import Dict, Any, Set, Tuple
 import importlib
 
 
@@ -123,7 +123,7 @@ def hp_from_yaml(model_type: str, yaml_path: str) -> Dict[str, Any]:
 
     if missing_params:
         print(
-            f"The following parameters were not found in the YAML file and will use defaults:"
+            "The following parameters were not found in the YAML file and will use defaults:"
         )
         for param in sorted(missing_params):
             # Indicate which category the parameter belongs to
