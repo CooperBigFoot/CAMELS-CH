@@ -124,20 +124,20 @@ def load_model_configs_and_datamodules(
             data_modules[model_type] = HydroDataModule(
                 time_series_df=time_series_data,
                 static_df=static_data,
-                group_identifier=config.GROUP_IDENTIFIER,
+                group_identifier=config.group_identifier,  # Changed from GROUP_IDENTIFIER
                 preprocessing_config=preprocessing_config,
                 input_length=input_length,
                 output_length=output_length,
                 batch_size=batch_size,
-                num_workers=min(config.MAX_WORKERS, os.cpu_count()),
-                features=config.FORCING_FEATURES + [config.TARGET],
-                static_features=[f for f in config.STATIC_FEATURES if f != "country"],
-                target=config.TARGET,
-                use_proportional_split=config.USE_PROPORTIONAL_SPLIT,
-                train_prop=config.TRAIN_PROP,
-                val_prop=config.VAL_PROP,
-                test_prop=config.TEST_PROP,
-                min_train_years=config.CA_CONFIG.get("MIN_TRAIN_YEARS", 5),
+                num_workers=min(config.max_workers, os.cpu_count()),
+                features=config.forcing_features + [config.target],  # Changed from FORCING_FEATURES and TARGET
+                static_features=[f for f in config.static_features if f != "country"],  # Changed from STATIC_FEATURES
+                target=config.target,  # Changed from TARGET
+                use_proportional_split=config.use_proportional_split,  # Changed from USE_PROPORTIONAL_SPLIT
+                train_prop=config.train_prop,  # Changed from TRAIN_PROP 
+                val_prop=config.val_prop,  # Changed from VAL_PROP
+                test_prop=config.test_prop,  # Changed from TEST_PROP
+                min_train_years=config.ca_config.get("min_train_years", 5),  # Changed from CA_CONFIG
             )
 
             print(

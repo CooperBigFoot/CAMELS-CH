@@ -57,6 +57,12 @@ class ExperimentConfig(BaseExperimentConfig):
         "temperature_2m_max",
         "total_precipitation_sum",
     ])
+    
+    # Property getter for CA_CONFIG uppercase attribute (backward compatibility)
+    @property
+    def CA_CONFIG(self) -> Dict[str, Any]:
+        """Uppercase getter for ca_config."""
+        return self.ca_config
 
     def get_country_dir(self, country: str) -> Dict[str, Path]:
         """Get country-specific directories.

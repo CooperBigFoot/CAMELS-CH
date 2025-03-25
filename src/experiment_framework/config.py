@@ -15,6 +15,41 @@ class BaseExperimentConfig:
     
     This class provides common parameters and validation methods that
     all experiment configurations should inherit from.
+    
+    Attributes:
+        exp_name: Name of the experiment
+        model_types: List of model types to use
+        num_runs: Number of training runs to perform
+        max_epochs: Maximum number of epochs for training
+        batch_size: Batch size for training
+        learning_rate: Learning rate for optimization
+        accelerator: Accelerator to use (auto, cpu, gpu, etc.)
+        early_stopping_patience: Patience for early stopping
+        early_stopping_min_delta: Minimum change for early stopping
+        save_top_k: Number of best models to save
+        save_last: Whether to save the last model
+        group_identifier: Column name for grouping data (e.g., gauge_id)
+        target: Target variable to predict
+        forcing_features: List of forcing features
+        static_features: List of static features
+        use_proportional_split: Whether to use proportional split
+        train_prop: Proportion of data for training
+        val_prop: Proportion of data for validation
+        test_prop: Proportion of data for testing
+        min_train_years: Minimum years of data for training
+        checkpoint_path: Path to checkpoint for loading
+        finetune: Whether to finetune a pretrained model
+        lr_factor: Factor to reduce learning rate by when finetuning
+        reset_optimizer: Whether to reset optimizer when loading
+        output_dir: Directory for outputs
+        save_predictions: Whether to save predictions
+        max_workers: Maximum number of workers
+        yaml_paths: Dictionary mapping model types to YAML paths
+        
+    Note:
+        This class provides backward compatibility for both lowercase (snake_case)
+        and uppercase attribute access patterns. The preferred convention is
+        lowercase snake_case following Python standards.
     """
     # Mandatory experiment parameters
     exp_name: str = field(default="unnamed_experiment")
@@ -93,6 +128,52 @@ class BaseExperimentConfig:
                 model_type: f"{base_dir}/{self.exp_name}/yaml_files/{model_type}.yaml"
                 for model_type in self.model_types
             }
+    
+    # Property getters for uppercase attribute access (backward compatibility)
+    @property
+    def GROUP_IDENTIFIER(self) -> str:
+        """Uppercase getter for group_identifier."""
+        return self.group_identifier
+    
+    @property
+    def TARGET(self) -> str:
+        """Uppercase getter for target."""
+        return self.target
+    
+    @property
+    def FORCING_FEATURES(self) -> List[str]:
+        """Uppercase getter for forcing_features."""
+        return self.forcing_features
+    
+    @property
+    def STATIC_FEATURES(self) -> List[str]:
+        """Uppercase getter for static_features."""
+        return self.static_features
+    
+    @property
+    def USE_PROPORTIONAL_SPLIT(self) -> bool:
+        """Uppercase getter for use_proportional_split."""
+        return self.use_proportional_split
+    
+    @property
+    def TRAIN_PROP(self) -> float:
+        """Uppercase getter for train_prop."""
+        return self.train_prop
+    
+    @property
+    def VAL_PROP(self) -> float:
+        """Uppercase getter for val_prop."""
+        return self.val_prop
+    
+    @property
+    def TEST_PROP(self) -> float:
+        """Uppercase getter for test_prop."""
+        return self.test_prop
+    
+    @property
+    def MAX_WORKERS(self) -> int:
+        """Uppercase getter for max_workers."""
+        return self.max_workers
     
     def validate(self) -> None:
         """Validate configuration parameters."""
