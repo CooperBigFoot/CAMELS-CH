@@ -119,6 +119,13 @@ def load_model_configs_and_datamodules(
             # Get preprocessing config
             preprocessing_config = config.get_preprocessing_config()
 
+            non_numeric_static = ["country"]
+            
+            # Create a copy of static features excluding non-numeric ones for preprocessing
+            numeric_static_features = [f for f in config.static_features 
+                                    if f not in non_numeric_static and f != config.GROUP_IDENTIFIER]
+            
+
             # Create DataModule with model-specific parameters
             data_modules[model_type] = HydroDataModule(
                 time_series_df=time_series_data,
