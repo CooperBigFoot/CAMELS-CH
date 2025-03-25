@@ -3,7 +3,7 @@ bidirectional: true
 bidirectional_fusion: concat
 dropout: 0.4330880728874676
 future_hidden_size: 45
-future_input_size: 9
+future_input_size: 2
 future_layers: 3
 group_identifier: gauge_id
 hidden_size: 45

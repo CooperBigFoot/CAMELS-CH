@@ -97,7 +97,7 @@ def parse_args():
     parser.add_argument(
         "--num-runs",
         type=int,
-        default=3,
+        default=1,
         help="Number of runs for each model"
     )
     

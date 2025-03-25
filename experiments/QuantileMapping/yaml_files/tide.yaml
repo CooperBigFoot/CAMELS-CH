@@ -1,7 +1,7 @@
 decoder_output_size: 21
 dropout: 0.3803925243084487
 future_forcing_projection_size: 0
-future_input_size: 9
+future_input_size: 2
 group_identifier: gauge_id
 hidden_size: 101
 input_len: 70
