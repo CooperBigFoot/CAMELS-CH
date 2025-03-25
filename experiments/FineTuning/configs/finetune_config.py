@@ -80,7 +80,3 @@ class FineTuningConfig(BaseDataSharingConfig):
                 f"Learning rate factor must be positive, got {self.LR_FACTOR}"
             )
 
-        if self.USE_DOMAIN_ADAPTATION and not self.ADAPTATION_METHOD:
-            raise ValueError(
-                "Adaptation method must be specified when using domain adaptation"
-            )
