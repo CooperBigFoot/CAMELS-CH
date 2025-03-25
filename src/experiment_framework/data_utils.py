@@ -273,6 +273,11 @@ def load_country_data(
     
     # Validate and clean data
     ts_data, static_data = validate_data(ts_data, static_data, config)
+
+    # Remove country column if it exists
+    if "country" in static_data.columns:
+        static_data = static_data.drop(columns=["country"])
+        logger.info("Removed 'country' column from static data")
     
     # Return the filtered data
     return {
