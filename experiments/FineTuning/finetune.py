@@ -221,12 +221,65 @@ def load_pretrained_model(
     except Exception as e:
         raise RuntimeError(f"Failed to load checkpoint: {e}")
 
-    # Adjust learning rate
+    # Adjust learning rate - ensure it propagates correctly to optimizer
     original_lr = model.hparams.learning_rate
     new_lr = original_lr / config.LR_FACTOR
+    
+    # Update learning rate in all relevant places
+    
+    # 1. Update in model hyperparameters
     model.hparams.learning_rate = new_lr
+    
+    # 2. Update in model config if it exists
+    if hasattr(model, "config"):
+        model.config.learning_rate = new_lr
+    
+    # 3. For models that might access lr directly
+    if hasattr(model, "learning_rate"):
+        model.learning_rate = new_lr
+        
+    # 4. Create a custom configure_optimizers method that overrides the model's method
+    original_configure_optimizers = model.configure_optimizers
+
+    def new_configure_optimizers():
+        """Override configure_optimizers to use reduced learning rate."""
+        # Get original optimizer and scheduler
+        result = original_configure_optimizers()
+        
+        # If the result is just an optimizer
+        if isinstance(result, torch.optim.Optimizer):
+            # Update learning rate for all parameter groups
+            for param_group in result.param_groups:
+                param_group['lr'] = new_lr
+            return result
+            
+        # If result is a tuple of (optimizer, scheduler)
+        elif isinstance(result, tuple) and len(result) >= 1:
+            optimizer = result[0]
+            # Handle case where optimizer is a list
+            if isinstance(optimizer, list):
+                for opt in optimizer:
+                    for param_group in opt.param_groups:
+                        param_group['lr'] = new_lr
+            else:
+                # Single optimizer
+                for param_group in optimizer.param_groups:
+                    param_group['lr'] = new_lr
+            return result
+        
+        # If we can't modify the result, return it as is
+        return result
+    
+    # Replace the original method with our custom one
+    model.configure_optimizers = new_configure_optimizers
 
     print(f"Adjusted learning rate from {original_lr:.6f} to {new_lr:.6f}")
+    
+    # Add attribute to track that this is a fine-tuned model
+    model.is_fine_tuned = True
+    model.original_lr = original_lr
+    model.fine_tuned_lr = new_lr
+    
     return model
 
 
@@ -273,6 +326,26 @@ def fine_tune_model(
             save_last=config.SAVE_LAST,
         ),
     ]
+    
+    # Add a callback to verify learning rate at start of training
+    class LRVerificationCallback(pl.Callback):
+        def on_train_start(self, trainer, pl_module):
+            # Get actual learning rate from optimizer
+            optimizer = trainer.optimizers[0]
+            actual_lr = optimizer.param_groups[0]['lr']
+            expected_lr = model.fine_tuned_lr if hasattr(model, 'fine_tuned_lr') else model.hparams.learning_rate
+            
+            # Verify learning rate
+            if abs(actual_lr - expected_lr) > 1e-6:  # Allow for small floating-point differences
+                print(f"WARNING: Actual learning rate ({actual_lr:.8f}) differs from expected ({expected_lr:.8f})")
+                # Force correct learning rate
+                for param_group in optimizer.param_groups:
+                    param_group['lr'] = expected_lr
+                print(f"Learning rate corrected to {expected_lr:.8f}")
+            else:
+                print(f"Verified learning rate: {actual_lr:.8f}")
+    
+    callbacks.append(LRVerificationCallback())
 
     # Configure trainer
     trainer = pl.Trainer(
@@ -303,6 +376,8 @@ def fine_tune_model(
             checkpoint_dir
             / f"{config.TARGET_COUNTRY}_{config.MODEL_TYPE}_epoch={trainer.current_epoch:02d}_val_loss={best_val_loss:.4f}.ckpt"
         ),
+        "original_lr": getattr(model, "original_lr", "unknown"),
+        "fine_tuned_lr": getattr(model, "fine_tuned_lr", "unknown"),
     }
 
     print(
