@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, List
-from experiments.DataSharing.configs.experiment_config import ExperimentConfig
+from experiments.DataSharingOld.configs.experiment_config import ExperimentConfig
 
 
 @dataclass

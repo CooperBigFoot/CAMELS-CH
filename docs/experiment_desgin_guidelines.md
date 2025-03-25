@@ -472,18 +472,41 @@ The core framework utilities should be organized as follows:
 
 ```
 src/experiment_framework/
-  ├── __init__.py                # Exports key functions
-  ├── config.py                  # Base dataclass configurations
+  ├── __init__.py                # Exports key functions and version information
+  ├── config.py                  # Base dataclass configuration with validation methods
+  │   └── BaseExperimentConfig   # Base configuration class that all experiments extend
   ├── utils.py                   # Common utility functions
-  │   ├── setup_dirs()           # Create output directories
-  │   ├── train_model()          # Standard training function
-  │   └── save_results()         # Save experiment results
+  │   ├── setup_dirs()           # Create output directories 
+  │   ├── setup_seeds()          # Set random seeds for reproducibility
+  │   ├── setup_logging()        # Configure logging for experiments
+  │   ├── train_model()          # Standard training function with multi-run support
+  │   ├── save_experiment_results() # Save experiment results in CSV and JSON formats
+  │   └── create_experiment_parser() # Create standard CLI parser
   ├── data_utils.py              # Data handling utilities
-  │   └── create_datamodule()    # Create HydroDataModule from data
+  │   ├── create_datamodule()    # Create HydroDataModule from data
+  │   ├── setup_preprocessing()  # Create preprocessing pipelines
+  │   ├── validate_data()        # Validate and clean data before using in experiments
+  │   └── load_country_data()    # Load country-specific data (optional utility)
   └── model_utils.py             # Model handling utilities
       ├── create_model()         # Create new model from config
-      └── load_pretrained_model() # Load model from checkpoint
+      ├── load_pretrained_model() # Load model from checkpoint with fine-tuning support
+      ├── load_model_configs_from_yaml() # Load model configs from YAML files
+      └── load_model_datamodules() # Create DataModules for each model type
 ```
+
+Each module has a clear responsibility:
+
+1. **config.py**: Defines the base configuration dataclass with validation, saving, and loading methods
+2. **utils.py**: Provides experiment workflow functions and utilities for directory setup, training, and results handling
+3. **data_utils.py**: Contains utilities for data processing, validation, and DataModule creation
+4. **model_utils.py**: Handles model creation, checkpoint loading, and configuration loading from YAML files
+
+When implementing a new experiment, you should:
+
+1. Create a new experiment directory following the standardized structure
+2. Implement a custom configuration class extending `BaseExperimentConfig`
+3. Create a data loading function that returns data in the expected format
+4. Use the framework's standard utilities for training and evaluation
 
 ## Framework Requirements
 

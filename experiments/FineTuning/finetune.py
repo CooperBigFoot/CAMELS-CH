@@ -25,8 +25,8 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 # Import project modules
 from experiments.FineTuning.configs.finetune_config import FineTuningConfig
-from experiments.DataSharing.utils import load_country_data
-from experiments.DataSharing.model_factory import ModelFactory
+from experiments.DataSharingOld.utils import load_country_data
+from experiments.DataSharingOld.model_factory import ModelFactory
 from src.model_evaluation.hp_from_yaml import load_model_config
 from src.data_models.datamodule import HydroDataModule
 

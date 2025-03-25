@@ -18,7 +18,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from experiments.QuantileMapping.configs.qm_config import QuantileMappingConfig
 from experiments.QuantileMapping.data_loader import load_data_by_source
-from experiments.DataSharing.utils import (
+from experiments.DataSharingOld.utils import (
     setup_dirs,
     train_and_save_model,
     save_experiment_results, 

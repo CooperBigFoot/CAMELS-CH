@@ -15,8 +15,8 @@ import pytorch_lightning as pl
 # Add project root to path
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from experiments.DataSharing.configs.experiment_config import ExperimentConfig
-from experiments.DataSharing.utils import (
+from experiments.DataSharingOld.configs.experiment_config import ExperimentConfig
+from experiments.DataSharingOld.utils import (
     setup_dirs,
     prepare_country_scenario,
     train_and_save_model,

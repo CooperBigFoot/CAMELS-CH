@@ -294,7 +294,7 @@ def train_and_save_model(
     Returns:
         Dictionary with training results
     """
-    from experiments.DataSharing.model_factory import ModelFactory
+    from experiments.DataSharingOld.model_factory import ModelFactory
 
     # Prepare data
     data_module.prepare_data()
