@@ -1,0 +1,5 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path
+tide,original,0.05151749029755592,53,experiments/QuantileMapping/results/checkpoints/original/tide/run_0/original_tide_epoch=53_val_loss=0.0515.ckpt
+tsmixer,original,0.054735638201236725,70,experiments/QuantileMapping/results/checkpoints/original/tsmixer/run_0/original_tsmixer_epoch=70_val_loss=0.0547.ckpt
+ealstm,original,0.057517945766448975,52,experiments/QuantileMapping/results/checkpoints/original/ealstm/run_0/original_ealstm_epoch=52_val_loss=0.0575.ckpt
+tft,original,0.05076565220952034,76,experiments/QuantileMapping/results/checkpoints/original/tft/run_0/original_tft_epoch=76_val_loss=0.0508.ckpt
