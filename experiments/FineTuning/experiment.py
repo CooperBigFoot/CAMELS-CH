@@ -144,7 +144,6 @@ def main():
             model_type=config.model_type,
             yaml_path=config.yaml_path,
             checkpoint_path=config.checkpoint_path,
-            finetune=True,  # Enable fine-tuning mode
             lr_factor=config.lr_factor,
         )
         print("Model loaded successfully")

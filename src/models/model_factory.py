@@ -56,7 +56,6 @@ def load_pretrained_model(
     model_type: str,
     yaml_path: str,
     checkpoint_path: str,
-    finetune: bool = False,
     lr_factor: float = 10.0,
 ) -> Tuple[Any, Dict[str, Any]]:
     """
@@ -66,7 +65,6 @@ def load_pretrained_model(
         model_type: Type of model to load
         yaml_path: Path to model hyperparameter YAML file
         checkpoint_path: Path to model checkpoint
-        finetune: Whether to prepare model for fine-tuning
         lr_factor: Factor to reduce learning rate by for fine-tuning
 
     Returns:
