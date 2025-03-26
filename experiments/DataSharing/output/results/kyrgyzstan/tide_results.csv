@@ -1,0 +1,2 @@
+model_type,country,run,best_val_loss,best_epoch,checkpoint_path
+tide,Kyrgyzstan,0,0.062273815274238586,20,experiments/DataSharing/output/checkpoints/kyrgyzstan/tide/run_0/Kyrgyzstan_tide_epoch=20_val_loss=0.0623.ckpt

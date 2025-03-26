@@ -1,0 +1,2 @@
+model_type,country,run,best_val_loss,best_epoch,checkpoint_path
+ealstm,Combined,0,0.05489305779337883,50,experiments/DataSharing/output/checkpoints/combined/ealstm/run_0/Combined_ealstm_epoch=50_val_loss=0.0549.ckpt
