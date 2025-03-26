@@ -105,4 +105,7 @@ def load_pretrained_model(
     model.original_lr = original_lr
     model.fine_tuned_lr = original_lr / lr_factor
 
+    model_hp["learning_rate"] = model.hparams.learning_rate
+    model_hp["original_lr"] = original_lr
+
     return model, model_hp

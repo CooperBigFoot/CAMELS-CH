@@ -1,7 +1,7 @@
 """
 Main script for running fine-tuning experiments on pre-trained hydrological models.
 
-This experiment loads pre-trained models and fine-tunes them with a reduced 
+This experiment loads pre-trained models and fine-tunes them with a reduced
 learning rate on a specific dataset (e.g., country-specific Central Asian data).
 """
 
@@ -90,10 +90,7 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--seed", 
-        type=int, 
-        default=42, 
-        help="Random seed for reproducibility"
+        "--seed", type=int, default=42, help="Random seed for reproducibility"
     )
 
     return parser.parse_args()
@@ -113,7 +110,7 @@ def main():
 
     # Load experiment configuration
     config = ExperimentConfig()
-    
+
     # Update config with command line arguments
     config.model_type = args.model
     config.checkpoint_path = args.checkpoint_path
@@ -123,24 +120,24 @@ def main():
     config.lr_factor = args.lr_factor
     config.max_epochs = args.epochs
     config.batch_size = args.batch_size
-    
+
     # Validate configuration
     try:
         config.validate()
     except ValueError as e:
         print(f"Configuration error: {e}")
         return
-    
+
     try:
         # Load model hyperparameters from YAML
         model_hp = hp_from_yaml(config.model_type, config.yaml_path)
-        
+
         # Prepare data module
         data_module = prepare_data_module(config, model_hp)
-        
+
         # Load pre-trained model
         print(f"Loading pre-trained model from {config.checkpoint_path}")
-        model, _ = load_pretrained_model(
+        model, model_hp = load_pretrained_model(
             model_type=config.model_type,
             yaml_path=config.yaml_path,
             checkpoint_path=config.checkpoint_path,
@@ -149,18 +146,19 @@ def main():
         print("Model loaded successfully")
 
         print(f"The new learning rate is: {model.hparams.learning_rate}")
-        
+
         # Fine-tune model
         results = fine_tune_model(model, model_hp, data_module, config)
-        
+
         # Save results
         save_results(results, config)
-        
+
         print("Fine-tuning completed successfully!")
-        
+
     except Exception as e:
         print(f"Error during fine-tuning: {str(e)}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 
