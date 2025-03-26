@@ -15,7 +15,6 @@ import pytorch_lightning as pl
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.models.model_factory import load_pretrained_model
-from src.model_evaluation.hp_from_yaml import hp_from_yaml
 from experiments.FineTuning.config import ExperimentConfig
 from experiments.FineTuning.utils import (
     prepare_data_module,
