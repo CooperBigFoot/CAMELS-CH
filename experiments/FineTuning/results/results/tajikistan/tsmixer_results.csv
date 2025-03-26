@@ -1,2 +1,2 @@
 model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr
-tsmixer,Tajikistan,0.05826541781425476,7,experiments/FineTuning/results/checkpoints/tajikistan/tsmixer/Tajikistan_tsmixer_epoch=07_val_loss=0.0583.ckpt,4.473636174621264e-05,4.473636174621264e-06
+tsmixer,Tajikistan,0.06461645662784576,22,experiments/FineTuning/results/checkpoints/tajikistan/tsmixer/Tajikistan_tsmixer_epoch=22_val_loss=0.0646.ckpt,4.473636174621264e-05,4.473636174621264e-06
