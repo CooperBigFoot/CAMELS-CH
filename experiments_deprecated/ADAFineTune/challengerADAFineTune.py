@@ -401,7 +401,7 @@ class AdversarialFinetuneRunner:
         # Delete explicit references to large objects
         if hasattr(self, "adapted_model"):
             del self.adapted_model
-            
+
         if hasattr(self, "fine_tuned_model"):
             del self.fine_tuned_model
 

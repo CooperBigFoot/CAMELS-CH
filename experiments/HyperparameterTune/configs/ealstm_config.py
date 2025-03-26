@@ -26,7 +26,7 @@ class EALSTMTuneConfig(BaseHyperparamConfig):
     BIDIRECTIONAL: bool = True
     FUTURE_HIDDEN_SIZE: int = 64
     FUTURE_LAYERS: int = 2
-    BIDIRECTIONAL_FUSION: str = "concat"  
+    BIDIRECTIONAL_FUSION: str = "concat"
 
     # Define hyperparameter search space
     HYPERPARAMETER_SPACE: ClassVar[Dict[str, Dict[str, Any]]] = {
@@ -40,6 +40,7 @@ class EALSTMTuneConfig(BaseHyperparamConfig):
             "num_layers": {"type": "int", "low": 1, "high": 3},
         },
     }
+
     def get_model_config(self) -> EALSTMConfig:
         """Create an EALSTMConfig from the current configuration.
 

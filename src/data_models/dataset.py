@@ -52,7 +52,7 @@ class HydroDataset(Dataset):
         self.group_identifier = group_identifier
         self.domain_id = domain_id
         self.domain_type = domain_type
-        
+
         # Determine forcing features (all features except target)
         self.forcing_features = [f for f in self.features if f != target]
         self.forcing_indices = [i for i, f in enumerate(self.features) if f != target]
@@ -159,11 +159,13 @@ class HydroDataset(Dataset):
         self.index = pd.DataFrame(
             index_list, columns=[self.group_identifier, "start_idx", "input_end_date"]
         )
-        
+
         # Log statistics about excluded sequences
         if nan_seq_count > 0:
-            print(f"Domain {self.domain_id}: Excluded {nan_seq_count} sequences with NaNs "
-                  f"({(nan_seq_count / (nan_seq_count + valid_seq_count) * 100):.1f}%)")
+            print(
+                f"Domain {self.domain_id}: Excluded {nan_seq_count} sequences with NaNs "
+                f"({(nan_seq_count / (nan_seq_count + valid_seq_count) * 100):.1f}%)"
+            )
 
     def __len__(self) -> int:
         """Return number of valid sequences in the dataset."""
@@ -180,9 +182,11 @@ class HydroDataset(Dataset):
         # Extract sequence data
         X = self.features_data[gauge_id][start_idx : start_idx + self.input_length]
         y = self.target_data[gauge_id][start_idx + self.input_length : end_idx]
-        
+
         # Extract future forcing data (excluding target)
-        future_full = self.features_data[gauge_id][start_idx + self.input_length : end_idx]
+        future_full = self.features_data[gauge_id][
+            start_idx + self.input_length : end_idx
+        ]
         future = future_full[:, self.forcing_indices]
 
         # Retrieve the original DataFrame indices for this sequence
@@ -205,7 +209,7 @@ class HydroDataset(Dataset):
         return {
             "X": X,
             "y": y,
-            "future": future, 
+            "future": future,
             "static": static,
             "domain_id": domain_tensor,
             "domain_name": self.domain_id,

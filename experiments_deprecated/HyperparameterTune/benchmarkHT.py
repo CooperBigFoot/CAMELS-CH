@@ -56,7 +56,7 @@ class BenchmarkTuner:
         # Prepare data frames
         ts_columns = self.config.FORCING_FEATURES + [self.config.TARGET]
         static_columns = self.config.STATIC_FEATURES
-        
+
         # Add required date column for data splitting
         ts_columns_with_date = ts_columns + ["date"] + [self.config.GROUP_IDENTIFIER]
 
@@ -112,9 +112,9 @@ class BenchmarkTuner:
         # Log data split information
         if self.config.USE_PROPORTIONAL_SPLIT:
             print("\nUsing proportional splitting with:")
-            print(f"  - Training: {self.config.TRAIN_PROP*100:.1f}% of data")
-            print(f"  - Validation: {self.config.VAL_PROP*100:.1f}% of data")
-            print(f"  - Testing: {self.config.TEST_PROP*100:.1f}% of data")
+            print(f"  - Training: {self.config.TRAIN_PROP * 100:.1f}% of data")
+            print(f"  - Validation: {self.config.VAL_PROP * 100:.1f}% of data")
+            print(f"  - Testing: {self.config.TEST_PROP * 100:.1f}% of data")
         else:
             print("\nUsing fixed-year splitting with:")
             print(f"  - Min train years: {self.config.CA_CONFIG['MIN_TRAIN_YEARS']}")
@@ -157,11 +157,19 @@ class BenchmarkTuner:
 
         # Log additional information
         trial.set_user_attr("best_epoch", trainer.current_epoch)
-        
+
         # Log dataset sizes
-        train_size = len(data_module.train_dataset) if hasattr(data_module, 'train_dataset') else 0
-        val_size = len(data_module.val_dataset) if hasattr(data_module, 'val_dataset') else 0
-        test_size = len(data_module.test_dataset) if hasattr(data_module, 'test_dataset') else 0
+        train_size = (
+            len(data_module.train_dataset)
+            if hasattr(data_module, "train_dataset")
+            else 0
+        )
+        val_size = (
+            len(data_module.val_dataset) if hasattr(data_module, "val_dataset") else 0
+        )
+        test_size = (
+            len(data_module.test_dataset) if hasattr(data_module, "test_dataset") else 0
+        )
         trial.set_user_attr("train_size", train_size)
         trial.set_user_attr("val_size", val_size)
         trial.set_user_attr("test_size", test_size)
@@ -243,11 +251,13 @@ class BenchmarkTuner:
 if __name__ == "__main__":
     # Initialize config
     config = ExperimentConfig()
-    
+
     # Log split configuration
     print("\nEXPERIMENT CONFIGURATION:")
     if config.USE_PROPORTIONAL_SPLIT:
-        print(f"Using proportional data splitting: {config.TRAIN_PROP:.1f}/{config.VAL_PROP:.1f}/{config.TEST_PROP:.1f}")
+        print(
+            f"Using proportional data splitting: {config.TRAIN_PROP:.1f}/{config.VAL_PROP:.1f}/{config.TEST_PROP:.1f}"
+        )
     else:
         print("Using fixed-year data splitting")
 

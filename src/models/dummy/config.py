@@ -9,7 +9,7 @@ from ..base.base_config import BaseConfig
 
 class RepeatLastValuesConfig(BaseConfig):
     """Configuration class for RepeatLastValues model.
-    
+
     RepeatLastValues is a simple baseline model that forecasts by repeating
     the last observed value of the target variable for the entire forecast horizon.
     """
@@ -55,7 +55,7 @@ class RepeatLastValuesConfig(BaseConfig):
             group_identifier=group_identifier,
             **kwargs,
         )
-        
+
         # Set only model-specific parameters
         self.hidden_size = hidden_size
         self.dropout = dropout

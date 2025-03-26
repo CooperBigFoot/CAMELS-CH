@@ -79,4 +79,3 @@ class FineTuningConfig(BaseDataSharingConfig):
             raise ValueError(
                 f"Learning rate factor must be positive, got {self.LR_FACTOR}"
             )
-

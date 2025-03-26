@@ -31,11 +31,11 @@ class EALSTMCell(nn.Module):
 
         # For calculating input gate (i_t) using only static features
         self.weight_sh = nn.Linear(static_size, hidden_size, bias=bias)
-        
+
         # Dynamic input transformations - use Linear layers instead of Parameter matrices
         self.dynamic_to_gates = nn.Linear(input_size, 3 * hidden_size, bias=bias)
         self.hidden_to_gates = nn.Linear(hidden_size, 3 * hidden_size, bias=False)
-        
+
         # Initialize forget gate bias to 1 to help with learning long-term dependencies
         nn.init.constant_(self.dynamic_to_gates.bias.data[:hidden_size], 1.0)
 
@@ -47,32 +47,32 @@ class EALSTMCell(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward pass for EA-LSTM cell."""
         batch_size = dynamic_x.size(0)
-        
+
         # Initialize hidden state if not provided
         if hidden_state is None:
             h_0 = torch.zeros(batch_size, self.hidden_size, device=dynamic_x.device)
             c_0 = torch.zeros(batch_size, self.hidden_size, device=dynamic_x.device)
         else:
             h_0, c_0 = hidden_state
-            
+
         # Calculate input gate using only static features
         # Important: This is the key difference from standard LSTM
         i_t = torch.sigmoid(self.weight_sh(static_x))
-        
+
         # Calculate forget, output gates and cell update using dynamic inputs and previous hidden state
         gates = self.dynamic_to_gates(dynamic_x) + self.hidden_to_gates(h_0)
-        
+
         # Split gates for separate components
         f_t, o_t, g_t = gates.chunk(3, 1)
-        
+
         # Apply activations and calculate new cell and hidden states
         f_t = torch.sigmoid(f_t)
         o_t = torch.sigmoid(o_t)
         g_t = torch.tanh(g_t)
-        
+
         c_1 = f_t * c_0 + i_t * g_t
         h_1 = o_t * torch.tanh(c_1)
-        
+
         return h_1, c_1
 
 
@@ -108,12 +108,16 @@ class EALSTM(nn.Module):
         )
 
         # Add projection layers between stacked LSTM layers to convert hidden states to input size
-        self.hidden_to_input_projections = nn.ModuleList(
-            [
-                nn.Linear(config.hidden_size, config.input_size)
-                for _ in range(config.num_layers - 1)
-            ]
-        ) if config.num_layers > 1 else None
+        self.hidden_to_input_projections = (
+            nn.ModuleList(
+                [
+                    nn.Linear(config.hidden_size, config.input_size)
+                    for _ in range(config.num_layers - 1)
+                ]
+            )
+            if config.num_layers > 1
+            else None
+        )
 
         # Add dropout between layers
         self.dropout = nn.Dropout(config.dropout) if config.dropout > 0 else None
@@ -179,11 +183,11 @@ class EALSTM(nn.Module):
                 else:
                     # Get the h_t from the previous layer's output
                     h_t, _ = hidden_states[layer - 1]
-                    
+
                     # Apply dropout if configured
                     if self.dropout is not None:
                         h_t = self.dropout(h_t)
-                    
+
                     # Project hidden state to match expected input size for next layer
                     layer_input = self.hidden_to_input_projections[layer - 1](h_t)
 

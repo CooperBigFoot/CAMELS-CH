@@ -37,12 +37,12 @@ class ExperimentConfig:
 
     # Dataset configuration
     TARGET: str = "streamflow"
-    STATIC_FEATURES: list = None # Will be initialized in __post_init__
-    FORCING_FEATURES: list = None # Will be initialized in __post_init__
+    STATIC_FEATURES: list = None  # Will be initialized in __post_init__
+    FORCING_FEATURES: list = None  # Will be initialized in __post_init__
 
     # Domain specific configs
-    CA_CONFIG: Dict[str, Any] = None # Will be initialized in __post_init__
-    CH_CONFIG: Dict[str, Any] = None # Will be initialized in __post_init__
+    CA_CONFIG: Dict[str, Any] = None  # Will be initialized in __post_init__
+    CH_CONFIG: Dict[str, Any] = None  # Will be initialized in __post_init__
 
     # Adversarial configs
     LAMBDA_ADV: float = 1.0

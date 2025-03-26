@@ -26,7 +26,6 @@ class TiDEConfig(BaseConfig):
         "scheduler_factor",
         "hidden_size",
         "dropout",
-
     ]
 
     def __init__(

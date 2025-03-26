@@ -27,7 +27,7 @@ __all__ = [
     "TemporalFusionTransformer",
     "GatedResidualNetwork",
     "VariableSelectionNetwork",
-    "StaticCovariateEncoder", 
+    "StaticCovariateEncoder",
     "InterpretableMultiHeadAttention",
     "GLU",
     "LitTFT",

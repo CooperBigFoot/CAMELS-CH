@@ -70,6 +70,7 @@ class GroupBasedFineTuneRunner:
             except Exception as e:
                 print(f"Error in run {run}: {str(e)}")
                 import traceback
+
                 traceback.print_exc()
                 continue
 
@@ -89,23 +90,31 @@ class GroupBasedFineTuneRunner:
 
             # Either load pretrained model or train from scratch
             if self.config.PRETRAINED_CHECKPOINT_PATH:
-                print(f"Loading pretrained model from: {self.config.PRETRAINED_CHECKPOINT_PATH}")
+                print(
+                    f"Loading pretrained model from: {self.config.PRETRAINED_CHECKPOINT_PATH}"
+                )
                 try:
                     # Load pretrained model from checkpoint
                     initial_model = LitTSMixer.load_from_checkpoint(
                         self.config.PRETRAINED_CHECKPOINT_PATH,
-                        config=self.config.get_benchmark_tsmixer_config()
+                        config=self.config.get_benchmark_tsmixer_config(),
                     )
                     self.group_models[group_key] = initial_model
                     print("Successfully loaded pretrained model")
                 except Exception as e:
                     print(f"Error loading pretrained model: {str(e)}")
                     print("Falling back to training initial model from scratch")
-                    initial_model = self.train_model(data_module, group_key, run, stage="initial")
+                    initial_model = self.train_model(
+                        data_module, group_key, run, stage="initial"
+                    )
                     self.group_models[group_key] = initial_model
             else:
-                print("No pretrained model specified. Training initial model from scratch.")
-                initial_model = self.train_model(data_module, group_key, run, stage="initial")
+                print(
+                    "No pretrained model specified. Training initial model from scratch."
+                )
+                initial_model = self.train_model(
+                    data_module, group_key, run, stage="initial"
+                )
                 self.group_models[group_key] = initial_model
 
             # Fine-tune model on CA data
@@ -113,7 +122,9 @@ class GroupBasedFineTuneRunner:
             self.group_finetuned_models[group_key] = finetuned_model
 
             # Evaluate fine-tuned model
-            results = self.evaluate_model(finetuned_model, data_module, group_key, run, stage="finetuned")
+            results = self.evaluate_model(
+                finetuned_model, data_module, group_key, run, stage="finetuned"
+            )
             group_results[group_key] = results
 
         # Evaluate cross-group performance
@@ -127,7 +138,7 @@ class GroupBasedFineTuneRunner:
     def prepare_data_module(self, group_key, group_data):
         # Same as in previous implementation
         preprocessing_configs = self.config.get_preprocessing_config()
-        
+
         ts_columns = self.config.FORCING_FEATURES + [
             self.config.TARGET,
             "date",
@@ -180,7 +191,7 @@ class GroupBasedFineTuneRunner:
     def train_model(self, data_module, group_key, run, stage="initial"):
         """Train a model for a specific group."""
         config = self.config.get_benchmark_tsmixer_config()
-        
+
         # Use benchmark config for initial training
         model = LitTSMixer(config)
         trainer = self.create_trainer(f"train_{group_key}_{stage}", run)
@@ -188,28 +199,32 @@ class GroupBasedFineTuneRunner:
 
         # Save full Lightning checkpoint (with global_step and all metadata)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_path = self.model_dir / group_key / f"tsmixer_{group_key}_{stage}_run{run}_{timestamp}.ckpt"
+        save_path = (
+            self.model_dir
+            / group_key
+            / f"tsmixer_{group_key}_{stage}_run{run}_{timestamp}.ckpt"
+        )
         trainer.save_checkpoint(save_path)
-        
+
         print(f"Saved complete model checkpoint to {save_path}")
-        
+
         # Optionally load best checkpoint if available
         best_checkpoint = trainer.checkpoint_callback.best_model_path
         if best_checkpoint:
             best_model = LitTSMixer.load_from_checkpoint(best_checkpoint, config=config)
             return best_model
-        
+
         return model
 
     def fine_tune_model(self, data_module, group_key, run):
         """
         Fine-tune model only on CA data with reduced learning rate.
-        
+
         Args:
             data_module: The original data module containing all datasets
             group_key: The group identifier key
             run: Current run number
-            
+
         Returns:
             The fine-tuned model instance
         """
@@ -217,12 +232,14 @@ class GroupBasedFineTuneRunner:
         initial_model = self.group_models[group_key]
 
         # Create a new model config with reduced learning rate
-        finetune_config = self.config.get_benchmark_tsmixer_config()  # Using benchmark config
+        finetune_config = (
+            self.config.get_benchmark_tsmixer_config()
+        )  # Using benchmark config
         finetune_config.learning_rate /= 10  # Reduce learning rate by 10x
 
         # Create a new model and load initial weights
         finetuned_model = LitTSMixer(finetune_config)
-        
+
         # NOTE: Backbone remains trainable - no freezing applied
 
         # Load initial model weights
@@ -231,9 +248,11 @@ class GroupBasedFineTuneRunner:
 
         # Train only on CA data (first dataset in the module)
         ca_ts_data = data_module.train_dataset.df_sorted[
-            data_module.train_dataset.df_sorted[self.config.GROUP_IDENTIFIER].str.startswith('CA_')
+            data_module.train_dataset.df_sorted[
+                self.config.GROUP_IDENTIFIER
+            ].str.startswith("CA_")
         ]
-        
+
         # Create data module with proportional splitting
         ca_data_module = HydroDataModule(
             time_series_df=ca_ts_data,
@@ -258,16 +277,16 @@ class GroupBasedFineTuneRunner:
             test_years=self.config.CA_CONFIG["TEST_YEARS"],
             max_missing_pct=self.config.CA_CONFIG["MAX_MISSING_PCT"],
         )
-        
+
         ca_data_module.prepare_data()
         ca_data_module.setup()
-        
+
         # Log data splitting information
         if self.config.USE_PROPORTIONAL_SPLIT:
             print("\nFine-tuning with proportional splitting:")
-            print(f"  - Training: {self.config.TRAIN_PROP*100:.1f}% of data")
-            print(f"  - Validation: {self.config.VAL_PROP*100:.1f}% of data")
-            print(f"  - Testing: {self.config.TEST_PROP*100:.1f}% of data")
+            print(f"  - Training: {self.config.TRAIN_PROP * 100:.1f}% of data")
+            print(f"  - Validation: {self.config.VAL_PROP * 100:.1f}% of data")
+            print(f"  - Testing: {self.config.TEST_PROP * 100:.1f}% of data")
             print(f"  - Train dataset size: {len(ca_data_module.train_dataset)}")
             print(f"  - Validation dataset size: {len(ca_data_module.val_dataset)}")
             print(f"  - Test dataset size: {len(ca_data_module.test_dataset)}")
@@ -275,20 +294,26 @@ class GroupBasedFineTuneRunner:
         # Train fine-tuned model
         trainer = self.create_trainer(f"finetune_{group_key}", run)
         trainer.fit(finetuned_model, ca_data_module)
-        
+
         # Save full Lightning checkpoint (with global_step and all metadata)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_path = self.model_dir / group_key / f"tsmixer_{group_key}_finetuned_run{run}_{timestamp}.ckpt"
+        save_path = (
+            self.model_dir
+            / group_key
+            / f"tsmixer_{group_key}_finetuned_run{run}_{timestamp}.ckpt"
+        )
         trainer.save_checkpoint(save_path)
-        
+
         print(f"Saved complete fine-tuned model checkpoint to {save_path}")
-        
+
         # Optionally load best checkpoint if available
         best_checkpoint = trainer.checkpoint_callback.best_model_path
         if best_checkpoint:
-            best_model = LitTSMixer.load_from_checkpoint(best_checkpoint, config=finetune_config)
+            best_model = LitTSMixer.load_from_checkpoint(
+                best_checkpoint, config=finetune_config
+            )
             return best_model
-        
+
         return finetuned_model
 
     def create_trainer(self, stage, run):
@@ -373,12 +398,14 @@ class GroupBasedFineTuneRunner:
                             "model_group": model_group,
                             "target_group": target_group,
                             "horizon": horizon,
-                            **horizon_metrics
+                            **horizon_metrics,
                         }
                         cross_df_rows.append(row)
 
             cross_df = pd.DataFrame(cross_df_rows)
-            cross_df.to_csv(self.results_dir / f"cross_group_evaluation_run{run}.csv", index=False)
+            cross_df.to_csv(
+                self.results_dir / f"cross_group_evaluation_run{run}.csv", index=False
+            )
 
     def combine_group_results(self, group_results):
         """Combine results from all groups."""
@@ -394,7 +421,10 @@ class GroupBasedFineTuneRunner:
 
         # Calculate combined overall metrics
         horizon_metrics = {}
-        basin_counts = {group_key: len(results["basin_metrics"]) for group_key, results in group_results.items()}
+        basin_counts = {
+            group_key: len(results["basin_metrics"])
+            for group_key, results in group_results.items()
+        }
         total_basins = sum(basin_counts.values())
 
         for horizon in range(1, self.config.OUTPUT_LENGTH + 1):
@@ -406,7 +436,9 @@ class GroupBasedFineTuneRunner:
                 weighted_sum = 0
                 for group_key, results in group_results.items():
                     group_weight = basin_counts[group_key] / total_basins
-                    weighted_sum += results["overall_metrics"][horizon][metric] * group_weight
+                    weighted_sum += (
+                        results["overall_metrics"][horizon][metric] * group_weight
+                    )
 
                 horizon_metrics[horizon][metric] = weighted_sum
 
@@ -423,14 +455,20 @@ class GroupBasedFineTuneRunner:
             data_module, horizons=list(range(1, self.config.OUTPUT_LENGTH + 1))
         )
 
-        results_df, overall_metrics, basin_metrics = evaluator.evaluate(model.test_results)
+        results_df, overall_metrics, basin_metrics = evaluator.evaluate(
+            model.test_results
+        )
 
         # Save results
-        results_path = self.results_dir / group_key / f"{stage}_detailed_results_{run}.csv"
+        results_path = (
+            self.results_dir / group_key / f"{stage}_detailed_results_{run}.csv"
+        )
         results_df.to_csv(results_path, index=True)
 
         overall_summary = evaluator.summarize_metrics(overall_metrics)
-        overall_path = self.results_dir / group_key / f"{stage}_overall_metrics_{run}.csv"
+        overall_path = (
+            self.results_dir / group_key / f"{stage}_overall_metrics_{run}.csv"
+        )
         overall_summary.to_csv(overall_path, index=True)
 
         basin_summary = evaluator.summarize_metrics(basin_metrics, per_basin=True)
@@ -446,14 +484,15 @@ class GroupBasedFineTuneRunner:
     def cleanup(self):
         """Clean up resources after each run."""
         import gc
-        
+
         self.group_models.clear()
         self.group_finetuned_models.clear()
-        
+
         gc.collect()
-        
+
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+
 
 if __name__ == "__main__":
     # Initialize config

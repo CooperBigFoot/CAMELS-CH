@@ -7,7 +7,11 @@ import pandas as pd
 import torch
 import optuna
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
+from pytorch_lightning.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from pytorch_lightning.loggers import TensorBoardLogger
 import multiprocessing
 
@@ -239,7 +243,7 @@ class HyperparameterTuner:
                 mode="min",
                 save_top_k=1,
                 save_last=True,
-            )
+            ),
         ]
 
         # Configure trainer

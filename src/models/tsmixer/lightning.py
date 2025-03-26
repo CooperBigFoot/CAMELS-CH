@@ -8,11 +8,12 @@ from ..base.base_lit_model import BaseLitModel
 from .config import TSMixerConfig
 from .model import TSMixer
 
+
 class LitTSMixer(BaseLitModel):
     """PyTorch Lightning Module implementation of TSMixer.
 
     This class extends BaseLitModel to provide a standardized interface for training,
-    validation, and testing of the TSMixer model within our hydrological forecasting 
+    validation, and testing of the TSMixer model within our hydrological forecasting
     framework.
     """
 

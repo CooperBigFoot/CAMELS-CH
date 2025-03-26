@@ -11,20 +11,20 @@ import os
 @dataclass
 class BaseHyperparamConfig:
     """Base configuration class for hyperparameter tuning experiments.
-    
+
     This class provides common parameters and functionality shared across all model types.
     Model-specific configs will inherit from this class and add their specific parameters.
     """
 
     # Model type identifier
     MODEL_TYPE: ClassVar["str"] = "base"  # Will be overridden by subclasses
-    
+
     # Data parameters
     GROUP_IDENTIFIER: str = "gauge_id"
     TARGET: str = "streamflow"
     STATIC_FEATURES: List[str] = field(default_factory=list)
     FORCING_FEATURES: List[str] = field(default_factory=list)
-    
+
     # Common training parameters
     BATCH_SIZE: int = 2048
     INPUT_LENGTH: int = 100
@@ -33,26 +33,26 @@ class BaseHyperparamConfig:
     ACCELERATOR: str = "cuda" if torch.cuda.is_available() else "cpu"
     NUM_RUNS: int = 1
     MAX_WORKERS: int = min(6, os.cpu_count())
-    
+
     # Learning rate with scheduling
     LEARNING_RATE: float = 1e-4
     LR_SCHEDULER_PATIENCE: int = 5
     LR_SCHEDULER_FACTOR: float = 0.5
-    
+
     # Common model parameters
     HIDDEN_SIZE: int = 64
     STATIC_EMBEDDING_SIZE: int = 10
     DROPOUT: float = 0.1
-    
+
     # Data splitting configuration
     USE_PROPORTIONAL_SPLIT: bool = True
     TRAIN_PROP: float = 0.5
     VAL_PROP: float = 0.25
     TEST_PROP: float = 0.25
-    
+
     # Dataset paths - will be updated by subclasses
     CA_CONFIG: Dict[str, Any] = field(default_factory=dict)
-    
+
     # Class variable to define hyperparameter search space
     # Will be overridden by subclasses
     HYPERPARAMETER_SPACE: ClassVar[Dict[str, Dict[str, Any]]] = {
@@ -63,7 +63,7 @@ class BaseHyperparamConfig:
             "learning_rate": {"type": "float", "low": 1e-5, "high": 1e-3, "log": True},
         }
     }
-    
+
     def __post_init__(self):
         """Initialize derived attributes and validate configuration."""
         # Initialize feature lists if not provided
@@ -107,7 +107,7 @@ class BaseHyperparamConfig:
                 "TEST_PROP": 0.25,
                 "HUMAN_INFLUENCE_PATH": "/workspace/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
             }
-            
+
         # Validate configuration
         self._validate_config()
 
@@ -119,11 +119,13 @@ class BaseHyperparamConfig:
             raise ValueError("Max workers must be positive")
         if self.INPUT_LENGTH <= 0:
             raise ValueError("Input length must be positive")
-        
+
         # Validate split proportions
         if self.USE_PROPORTIONAL_SPLIT:
             total_prop = self.TRAIN_PROP + self.VAL_PROP + self.TEST_PROP
-            if not 0.999 <= total_prop <= 1.001:  # Allow for small floating point errors
+            if (
+                not 0.999 <= total_prop <= 1.001
+            ):  # Allow for small floating point errors
                 raise ValueError(f"Split proportions must sum to 1.0, got {total_prop}")
             if any(p <= 0 for p in [self.TRAIN_PROP, self.VAL_PROP, self.TEST_PROP]):
                 raise ValueError("All split proportions must be positive")
@@ -144,7 +146,7 @@ class BaseHyperparamConfig:
             torch.cuda.manual_seed_all(seed)
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
-            
+
     def get_preprocessing_config(self) -> Dict:
         """Create preprocessing configuration."""
         from sklearn.pipeline import Pipeline
@@ -171,15 +173,15 @@ class BaseHyperparamConfig:
             "target": {"pipeline": target_pipeline},
             "static_features": {"pipeline": static_pipeline},
         }
-        
+
     def get_model_config(self) -> Dict[str, Any]:
         """Get model-specific configuration as a dictionary.
-        
+
         This method should be overridden by subclasses to provide
         the correct configuration structure for each model type.
         """
         raise NotImplementedError("Subclasses must implement get_model_config")
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary."""
         return asdict(self)

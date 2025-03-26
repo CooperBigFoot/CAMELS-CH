@@ -15,16 +15,16 @@ from src.data_models.caravanify import Caravanify, CaravanifyConfig
 def load_data_by_source(
     config: Any,
     data_source: str = "original",
-    quantile_mapped_folder: Optional[str] = None
+    quantile_mapped_folder: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Load either original or quantile mapped time series data with reduced feature set.
-    
+
     Args:
         config: Configuration object with dataset paths
         data_source: Data source type - either "original" or "quantile_mapped"
         quantile_mapped_folder: Path to folder with quantile mapped data
-        
+
     Returns:
         Dictionary containing time series and static data
     """
@@ -57,22 +57,26 @@ def load_data_by_source(
     static_columns = config.STATIC_FEATURES
     static_data = ca_caravan.get_static_attributes()[static_columns]
     gauge_ids = static_data[config.GROUP_IDENTIFIER].unique()
-    
+
     # Define reduced forcing features for both data sources
     reduced_forcing_features = config.FORCING_FEATURES
-    
+
     if data_source.lower() == "original":
         # Load original timeseries data but use only the reduced feature set
         print("Loading original time series data with reduced feature set")
-        ts_columns = reduced_forcing_features + [config.TARGET, "date", config.GROUP_IDENTIFIER]
+        ts_columns = reduced_forcing_features + [
+            config.TARGET,
+            "date",
+            config.GROUP_IDENTIFIER,
+        ]
         ts_data = ca_caravan.get_time_series()[ts_columns]
-        
+
     elif data_source.lower() == "quantile_mapped":
         # Load quantile mapped timeseries data
         print("Loading quantile mapped time series data")
         if not quantile_mapped_folder:
             raise ValueError("Quantile mapped folder path must be provided")
-            
+
         # Load quantile mapped time series using ThreadPoolExecutor
         ts_dir = Path(quantile_mapped_folder)
         file_paths = []
@@ -82,7 +86,7 @@ def load_data_by_source(
                 print(f"Warning: Timeseries file {fp} not found")
                 continue
             file_paths.append(fp)
-            
+
         if not file_paths:
             raise FileNotFoundError(f"No valid timeseries files found in {ts_dir}")
 
@@ -101,37 +105,49 @@ def load_data_by_source(
             time_series_dfs.extend(dfs)
 
         ts_data = pd.concat(time_series_dfs, ignore_index=True)
-        
+
         # Ensure all required columns are present
-        required_columns = reduced_forcing_features + [config.TARGET, "date", "gauge_id"]
+        required_columns = reduced_forcing_features + [
+            config.TARGET,
+            "date",
+            "gauge_id",
+        ]
         missing_columns = set(required_columns) - set(ts_data.columns)
         if missing_columns:
-            raise ValueError(f"Missing columns in quantile mapped data: {missing_columns}")
-            
+            raise ValueError(
+                f"Missing columns in quantile mapped data: {missing_columns}"
+            )
+
         # Select only the columns we need
         ts_data = ts_data[required_columns]
-        
+
         # Rename gauge_id to match config.GROUP_IDENTIFIER if needed
         if "gauge_id" != config.GROUP_IDENTIFIER:
             ts_data = ts_data.rename(columns={"gauge_id": config.GROUP_IDENTIFIER})
-        
+
     else:
-        raise ValueError(f"Unsupported data source: {data_source}. Use 'original' or 'quantile_mapped'")
-    
+        raise ValueError(
+            f"Unsupported data source: {data_source}. Use 'original' or 'quantile_mapped'"
+        )
+
     # Validate the loaded data
-    expected_columns = reduced_forcing_features + [config.TARGET, "date", config.GROUP_IDENTIFIER]
+    expected_columns = reduced_forcing_features + [
+        config.TARGET,
+        "date",
+        config.GROUP_IDENTIFIER,
+    ]
     for col in expected_columns:
         if col not in ts_data.columns:
             raise ValueError(f"Required column {col} not found in loaded data")
-    
+
     # Report data statistics
     print(f"Loaded {len(ts_data)} time series records across {len(gauge_ids)} basins")
     print(f"Time range: {ts_data['date'].min()} to {ts_data['date'].max()}")
     print(f"Using forcing features: {reduced_forcing_features}")
-    
+
     return {
         "time_series": ts_data,
         "static": static_data,
         "basin_count": len(gauge_ids),
-        "forcing_features": reduced_forcing_features
+        "forcing_features": reduced_forcing_features,
     }

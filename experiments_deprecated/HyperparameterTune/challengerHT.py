@@ -130,7 +130,7 @@ class ChallengerTuner:
 
         # Add date column required for data splitting
         ts_columns_with_date = ts_columns + ["date"] + [self.config.GROUP_IDENTIFIER]
-        
+
         # CA data
         self.ca_ts_data = self.ca_caravan.get_time_series()[ts_columns_with_date]
         self.ca_static_data = self.ca_caravan.get_static_attributes()[static_columns]
@@ -197,9 +197,9 @@ class ChallengerTuner:
         # Log splitting configuration
         if self.config.USE_PROPORTIONAL_SPLIT:
             print("\nUsing proportional splitting with:")
-            print(f"  - Training: {self.config.TRAIN_PROP*100:.2f}% of data")
-            print(f"  - Validation: {self.config.VAL_PROP*100:.2f}% of data")
-            print(f"  - Testing: {self.config.TEST_PROP*100:.2f}% of data")
+            print(f"  - Training: {self.config.TRAIN_PROP * 100:.2f}% of data")
+            print(f"  - Validation: {self.config.VAL_PROP * 100:.2f}% of data")
+            print(f"  - Testing: {self.config.TEST_PROP * 100:.2f}% of data")
         else:
             print("\nUsing fixed-year splitting with:")
             print(f"  - Min train years: {self.config.CA_CONFIG['MIN_TRAIN_YEARS']}")
@@ -235,13 +235,27 @@ class ChallengerTuner:
         # Prepare data
         merged_data_module.prepare_data()
         merged_data_module.setup()
-        
+
         # Log dataset sizes
-        train_size = len(merged_data_module.train_dataset) if hasattr(merged_data_module, 'train_dataset') else 0
-        val_size = len(merged_data_module.val_dataset) if hasattr(merged_data_module, 'val_dataset') else 0
-        test_size = len(merged_data_module.test_dataset) if hasattr(merged_data_module, 'test_dataset') else 0
-        print(f"Dataset sizes - Train: {train_size}, Validation: {val_size}, Test: {test_size}")
-        
+        train_size = (
+            len(merged_data_module.train_dataset)
+            if hasattr(merged_data_module, "train_dataset")
+            else 0
+        )
+        val_size = (
+            len(merged_data_module.val_dataset)
+            if hasattr(merged_data_module, "val_dataset")
+            else 0
+        )
+        test_size = (
+            len(merged_data_module.test_dataset)
+            if hasattr(merged_data_module, "test_dataset")
+            else 0
+        )
+        print(
+            f"Dataset sizes - Train: {train_size}, Validation: {val_size}, Test: {test_size}"
+        )
+
         # Store for later logging
         trial.set_user_attr("train_size", train_size)
         trial.set_user_attr("val_size", val_size)
@@ -250,7 +264,7 @@ class ChallengerTuner:
         # Create model with trial hyperparameters
         tsmixer_config = self.config.get_tsmixer_config()
         model = LitTSMixer(config=tsmixer_config)
-        
+
         # Log future forcing info
         print(f"Trial {trial.number} using fusion method: {fusion_method}")
         print(f"Future forcing size: {len(self.config.FORCING_FEATURES)}")
@@ -370,11 +384,13 @@ class ChallengerTuner:
 if __name__ == "__main__":
     # Initialize config
     config = ExperimentConfig()
-    
+
     # Log split configuration
     print("\nEXPERIMENT CONFIGURATION:")
     if config.USE_PROPORTIONAL_SPLIT:
-        print(f"Using proportional data splitting: {config.TRAIN_PROP:.2f}/{config.VAL_PROP:.2f}/{config.TEST_PROP:.2f}")
+        print(
+            f"Using proportional data splitting: {config.TRAIN_PROP:.2f}/{config.VAL_PROP:.2f}/{config.TEST_PROP:.2f}"
+        )
     else:
         print("Using fixed-year data splitting")
 

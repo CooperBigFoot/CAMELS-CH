@@ -1,7 +1,7 @@
 """EA-LSTM model implementation module.
 
 EA-LSTM (Entity-Aware LSTM) is a model architecture based on the paper:
-"Towards learning universal, regional, and local hydrological behaviors via 
+"Towards learning universal, regional, and local hydrological behaviors via
 machine learning applied to large-sample datasets" by Kratzert et al. (2019)
 https://hess.copernicus.org/articles/23/5089/2019/
 

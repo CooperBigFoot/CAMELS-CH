@@ -157,9 +157,9 @@ class BenchmarkRunner:
         # Log data splitting method
         if self.config.USE_PROPORTIONAL_SPLIT:
             print("\nUsing proportional splitting with:")
-            print(f"  - Training: {self.config.TRAIN_PROP*100:.1f}% of data")
-            print(f"  - Validation: {self.config.VAL_PROP*100:.1f}% of data")
-            print(f"  - Testing: {self.config.TEST_PROP*100:.1f}% of data")
+            print(f"  - Training: {self.config.TRAIN_PROP * 100:.1f}% of data")
+            print(f"  - Validation: {self.config.VAL_PROP * 100:.1f}% of data")
+            print(f"  - Testing: {self.config.TEST_PROP * 100:.1f}% of data")
             print(f"  - Train dataset size: {len(dm.train_dataset)}")
             print(f"  - Validation dataset size: {len(dm.val_dataset)}")
             print(f"  - Test dataset size: {len(dm.test_dataset)}")
@@ -174,9 +174,11 @@ class BenchmarkRunner:
     def train_model(self, data_module, run):
         """Train TSMixer on given data."""
         print("SETTING UP MODEL FOR TRAINING")
-        
+
         # Log information about future forcing features
-        print(f"Using {len(self.config.FORCING_FEATURES)} features as future forcing inputs")
+        print(
+            f"Using {len(self.config.FORCING_FEATURES)} features as future forcing inputs"
+        )
         print(f"Future forcing fusion method: {self.config.FUSION_METHOD}")
 
         # Create a TSMixer model with benchmark hyperparameters
@@ -243,11 +245,13 @@ class BenchmarkRunner:
 if __name__ == "__main__":
     # Initialize config
     config = ExperimentConfig()
-    
+
     # Log split configuration
     print("\nEXPERIMENT CONFIGURATION:")
     if config.USE_PROPORTIONAL_SPLIT:
-        print(f"Using proportional data splitting: {config.TRAIN_PROP:.1f}/{config.VAL_PROP:.1f}/{config.TEST_PROP:.1f}")
+        print(
+            f"Using proportional data splitting: {config.TRAIN_PROP:.1f}/{config.VAL_PROP:.1f}/{config.TEST_PROP:.1f}"
+        )
     else:
         print("Using fixed-year data splitting")
 

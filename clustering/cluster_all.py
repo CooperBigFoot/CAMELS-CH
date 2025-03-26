@@ -45,6 +45,7 @@ class ClusteringConfig:
 
     hemisphere_map: dict = None
 
+
 def load_country_data(country: str, config: ClusteringConfig) -> pd.DataFrame:
     """
     Load and preprocess data for a country using HydroDataModule.

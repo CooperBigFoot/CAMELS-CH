@@ -1,4 +1,5 @@
 """TSMixer model configuration for hyperparameter tuning."""
+
 import sys
 from pathlib import Path
 
@@ -14,12 +15,12 @@ class TSMixerTuneConfig(BaseHyperparamConfig):
     """Configuration for hyperparameter tuning of TSMixer models."""
 
     MODEL_TYPE: ClassVar[str] = "tsmixer"
-    
+
     # TSMixer specific parameters
     STATIC_EMBEDDING_SIZE: int = 10
     NUM_MIXING_LAYERS: int = 5
     FUSION_METHOD: str = "add"  # Options: "add" or "concat"
-    
+
     # Define hyperparameter search space
     HYPERPARAMETER_SPACE: ClassVar[Dict[str, Dict[str, Any]]] = {
         "common": {
@@ -32,15 +33,15 @@ class TSMixerTuneConfig(BaseHyperparamConfig):
             "num_mixing_layers": {"type": "int", "low": 2, "high": 15},
             "static_embedding_size": {"type": "int", "low": 5, "high": 20},
             "fusion_method": {"type": "categorical", "choices": ["add", "concat"]},
-        }
+        },
     }
-    
+
     def get_model_config(self) -> TSMixerConfig:
         """Create a TSMixerConfig from the current configuration."""
 
         # Calculate future_input_size as the number of forcing features
         future_input_size = len(self.FORCING_FEATURES)
-        
+
         return TSMixerConfig(
             input_len=self.INPUT_LENGTH,
             output_len=self.OUTPUT_LENGTH,

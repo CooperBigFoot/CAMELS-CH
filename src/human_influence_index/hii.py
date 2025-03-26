@@ -155,9 +155,7 @@ def main():
     result_df = norm_data[["gauge_id", "hii", "human_influence_category"]]
 
     # Save to CSV
-    output_dir = Path(
-        "/workspace/CAMELS-CH/src/human_influence_index/results"
-    )
+    output_dir = Path("/workspace/CAMELS-CH/src/human_influence_index/results")
     output_dir.mkdir(exist_ok=True)
     output_path = output_dir / "human_influence_classification.csv"
     result_df.to_csv(output_path, index=False)

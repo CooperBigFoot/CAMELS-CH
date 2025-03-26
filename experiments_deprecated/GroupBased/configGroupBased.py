@@ -20,19 +20,21 @@ class ExperimentConfig:
     ACCELERATOR: str = "cuda" if torch.cuda.is_available() else "cpu"
     NUM_RUNS: int = 1
     MAX_WORKERS: int = os.cpu_count()
-    
+
     # Path to pretrained checkpoint for fine-tuning
-    PRETRAINED_CHECKPOINT_PATH: Optional[str] = "/workspace/CAMELS-CH/experiments/GroupBased/saved_models/group_based_transfer/group1/tsmixer_group1_run0_20250314_084753.ckpt"
-    
+    PRETRAINED_CHECKPOINT_PATH: Optional[str] = (
+        "/workspace/CAMELS-CH/experiments/GroupBased/saved_models/group_based_transfer/group1/tsmixer_group1_run0_20250314_084753.ckpt"
+    )
+
     # Input/Output lengths used by both benchmark and challenger models
     INPUT_LENGTH: int = 256  # Default to challenger input length
     OUTPUT_LENGTH: int = 10
-    
+
     # Data splitting configuration
     USE_PROPORTIONAL_SPLIT: bool = True  # Enable proportional splitting
-    TRAIN_PROP: float = 0.5             # 50% of data for training
-    VAL_PROP: float = 0.25              # 25% of data for validation
-    TEST_PROP: float = 0.25             # 25% of data for testing
+    TRAIN_PROP: float = 0.5  # 50% of data for training
+    VAL_PROP: float = 0.25  # 25% of data for validation
+    TEST_PROP: float = 0.25  # 25% of data for testing
 
     # Group-based training configuration
     GROUP_TRAINING_ENABLED: bool = True
@@ -45,7 +47,7 @@ class ExperimentConfig:
     # Learning rates with scheduling
     LR_SCHEDULER_PATIENCE: int = 5
     LR_SCHEDULER_FACTOR: float = 0.5
-    
+
     # Future forcing configuration
     FUSION_METHOD: str = "add"  # Options: "add" or "concat"
 
@@ -59,7 +61,7 @@ class ExperimentConfig:
     BENCHMARK_LEARNING_RATE: float = 6.5e-5
     BENCHMARK_FUSION_METHOD: str = "add"  # Options: "add" or "concat"
 
-        # Benchmark model configuration
+    # Benchmark model configuration
     CHALLENGER_INPUT_LENGTH: int = 33
     CHALLENGER_OUTPUT_LENGTH: int = 10
     CHALLENGER_HIDDEN_SIZE: int = 127
@@ -201,11 +203,13 @@ class ExperimentConfig:
                 raise ValueError(
                     f"Source clusters file not found: {self.SOURCE_CLUSTERS_PATH}"
                 )
-                
+
         # Validate split proportions
         if self.USE_PROPORTIONAL_SPLIT:
             total_prop = self.TRAIN_PROP + self.VAL_PROP + self.TEST_PROP
-            if not 0.999 <= total_prop <= 1.001:  # Allow for small floating point errors
+            if (
+                not 0.999 <= total_prop <= 1.001
+            ):  # Allow for small floating point errors
                 raise ValueError(f"Split proportions must sum to 1.0, got {total_prop}")
             if any(p <= 0 for p in [self.TRAIN_PROP, self.VAL_PROP, self.TEST_PROP]):
                 raise ValueError("All split proportions must be positive")
@@ -231,7 +235,7 @@ class ExperimentConfig:
         """Generate a TSMixerConfig for benchmark with specific hyperparameters."""
         # Calculate future_input_size as the number of forcing features (excluding target)
         future_input_size = len(self.FORCING_FEATURES)
-        
+
         return TSMixerConfig(
             input_len=self.BENCHMARK_INPUT_LENGTH,
             input_size=len(self.FORCING_FEATURES) + 1,  # +1 for target
@@ -253,7 +257,7 @@ class ExperimentConfig:
         """Generate a TSMixerConfig for challenger with specific hyperparameters."""
         # Calculate future_input_size as the number of forcing features (excluding target)
         future_input_size = len(self.FORCING_FEATURES)
-        
+
         return TSMixerConfig(
             input_len=self.CHALLENGER_INPUT_LENGTH,
             input_size=len(self.FORCING_FEATURES) + 1,  # +1 for target

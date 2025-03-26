@@ -11,7 +11,7 @@ from .config import RepeatLastValuesConfig
 
 class LitRepeatLastValues(BaseLitModel):
     """PyTorch Lightning Module implementation of RepeatLastValues.
-    
+
     This wrapper handles training, validation, and testing procedures for the
     RepeatLastValues model, though the model itself doesn't actually learn.
     """
@@ -36,10 +36,7 @@ class LitRepeatLastValues(BaseLitModel):
         self.model = RepeatLastValues(config)
 
     def forward(
-        self, 
-        x: torch.Tensor, 
-        static: torch.Tensor = None, 
-        future: torch.Tensor = None
+        self, x: torch.Tensor, static: torch.Tensor = None, future: torch.Tensor = None
     ) -> torch.Tensor:
         """Forward pass that delegates to the RepeatLastValues model.
 
@@ -52,12 +49,12 @@ class LitRepeatLastValues(BaseLitModel):
             Predictions [batch_size, output_len, 1]
         """
         return self.model(x, static, future)
-    
+
     def configure_optimizers(self):
         """Configure optimizer and LR scheduler.
-        
+
         Overridden to use a minimal learning rate since this model doesn't actually learn.
-        
+
         Returns:
             Optimizer configured with minimal learning rate
         """

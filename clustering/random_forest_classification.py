@@ -565,9 +565,7 @@ def main(config: ClassificationConfig) -> None:
     # Define output file paths
     mi_heatmap_path = output_dir / "mutual_info_heatmap.png"
     feature_importance_path = output_dir / "feature_importance.png"
-    predictions_path = (
-        output_dir / "cluster_probabilities_shifted_15_clusters.csv"
-    )
+    predictions_path = output_dir / "cluster_probabilities_shifted_15_clusters.csv"
     metrics_path = output_dir / "performance_metrics_shifted_15_clusters.txt"
 
     # Load and combine data from source countries

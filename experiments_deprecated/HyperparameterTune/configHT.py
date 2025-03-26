@@ -23,9 +23,9 @@ class ExperimentConfig:
 
     # Data splitting configuration
     USE_PROPORTIONAL_SPLIT: bool = True  # Enable proportional splitting
-    TRAIN_PROP: float = 0.5             # 50% of data for training
-    VAL_PROP: float = 0.25              # 25% of data for validation
-    TEST_PROP: float = 0.25             # 25% of data for testing
+    TRAIN_PROP: float = 0.5  # 50% of data for training
+    VAL_PROP: float = 0.25  # 25% of data for validation
+    TEST_PROP: float = 0.25  # 25% of data for testing
 
     # Learning rates with scheduling
     LEARNING_RATE: float = 1e-4
@@ -84,8 +84,8 @@ class ExperimentConfig:
             "TIMESERIES_DIR": "/workspace/CARAVANIFY/CA/post_processed/timeseries/csv",
             "GAUGE_ID_PREFIX": "CA",
             "MIN_TRAIN_YEARS": 8,  # Legacy parameter, used when not using proportional split
-            "VAL_YEARS": 2,        # Legacy parameter, used when not using proportional split
-            "TEST_YEARS": 3,       # Legacy parameter, used when not using proportional split
+            "VAL_YEARS": 2,  # Legacy parameter, used when not using proportional split
+            "TEST_YEARS": 3,  # Legacy parameter, used when not using proportional split
             "MAX_MISSING_PCT": 10,
             "HUMAN_INFLUENCE_PATH": "/workspace/CAMELS-CH/src/human_influence_index/results/human_influence_classification.csv",
         }
@@ -139,11 +139,13 @@ class ExperimentConfig:
             raise ValueError("Input length must be positive")
         if self.NUM_LAYERS <= 0:
             raise ValueError("Number of layers must be positive")
-        
+
         # Validate split proportions
         if self.USE_PROPORTIONAL_SPLIT:
             total_prop = self.TRAIN_PROP + self.VAL_PROP + self.TEST_PROP
-            if not 0.999 <= total_prop <= 1.001:  # Allow for small floating point errors
+            if (
+                not 0.999 <= total_prop <= 1.001
+            ):  # Allow for small floating point errors
                 raise ValueError(f"Split proportions must sum to 1.0, got {total_prop}")
             if any(p <= 0 for p in [self.TRAIN_PROP, self.VAL_PROP, self.TEST_PROP]):
                 raise ValueError("All split proportions must be positive")
@@ -169,7 +171,7 @@ class ExperimentConfig:
         """Generate a TSMixerConfig from experiment parameters."""
         # Calculate future_input_size as the number of forcing features (excluding target)
         future_input_size = len(self.FORCING_FEATURES)
-        
+
         return TSMixerConfig(
             input_len=self.INPUT_LENGTH,
             input_size=len(self.FORCING_FEATURES) + 1,  # +1 for target

@@ -1,4 +1,5 @@
 """TiDE model configuration for hyperparameter tuning."""
+
 import sys
 from pathlib import Path
 
@@ -12,7 +13,7 @@ class TiDETuneConfig(BaseHyperparamConfig):
     """Configuration for hyperparameter tuning of TiDE models."""
 
     MODEL_TYPE: ClassVar["str"] = "tide"
-    
+
     # TiDE specific parameters
     NUM_ENCODER_LAYERS: int = 1
     NUM_DECODER_LAYERS: int = 1
@@ -21,7 +22,7 @@ class TiDETuneConfig(BaseHyperparamConfig):
     PAST_FEATURE_PROJECTION_SIZE: int = 0
     FUTURE_FORCING_PROJECTION_SIZE: int = 0
     USE_LAYER_NORM: bool = True
-    
+
     # Define hyperparameter search space
     HYPERPARAMETER_SPACE: ClassVar[Dict[str, Dict[str, Any]]] = {
         "common": {
@@ -36,14 +37,14 @@ class TiDETuneConfig(BaseHyperparamConfig):
             "decoder_output_size": {"type": "int", "low": 8, "high": 32},
             "temporal_decoder_hidden_size": {"type": "int", "low": 16, "high": 64},
             "use_layer_norm": {"type": "categorical", "choices": [True, False]},
-        }
+        },
     }
-    
+
     def get_model_config(self) -> TiDEConfig:
         """Create a TiDEConfig from the current configuration."""
         # Calculate future_input_size as the number of forcing features
         future_input_size = len(self.FORCING_FEATURES)
-        
+
         return TiDEConfig(
             input_len=self.INPUT_LENGTH,
             output_len=self.OUTPUT_LENGTH,

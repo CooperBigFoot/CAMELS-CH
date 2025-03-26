@@ -142,13 +142,13 @@ class BenchmarkRunner:
 
         dm.prepare_data()
         dm.setup()
-        
+
         # Log data splitting method
         if self.config.USE_PROPORTIONAL_SPLIT:
             print("\nUsing proportional splitting with:")
-            print(f"  - Training: {self.config.TRAIN_PROP*100:.2f}% of data")
-            print(f"  - Validation: {self.config.VAL_PROP*100:.2f}% of data")
-            print(f"  - Testing: {self.config.TEST_PROP*100:.2f}% of data")
+            print(f"  - Training: {self.config.TRAIN_PROP * 100:.2f}% of data")
+            print(f"  - Validation: {self.config.VAL_PROP * 100:.2f}% of data")
+            print(f"  - Testing: {self.config.TEST_PROP * 100:.2f}% of data")
             print(f"  - Train dataset size: {len(dm.train_dataset)}")
             print(f"  - Validation dataset size: {len(dm.val_dataset)}")
             print(f"  - Test dataset size: {len(dm.test_dataset)}")
@@ -157,27 +157,30 @@ class BenchmarkRunner:
             print(f"  - Min train years: {self.config.CA_CONFIG['MIN_TRAIN_YEARS']}")
             print(f"  - Validation years: {self.config.CA_CONFIG['VAL_YEARS']}")
             print(f"  - Test years: {self.config.CA_CONFIG['TEST_YEARS']}")
-            
+
         return dm
 
     def train_model(self, data_module, run):
         """Train TSMixer on given data."""
         print("SETTING UP MODEL FOR TRAINING")
-        
+
         # Log information about future forcing features
-        print(f"Using {len(self.config.FORCING_FEATURES)} features as future forcing inputs")
+        print(
+            f"Using {len(self.config.FORCING_FEATURES)} features as future forcing inputs"
+        )
         print(f"Future forcing fusion method: {self.config.FUSION_METHOD}")
-        
+
         model = LitTSMixer(self.config.get_benchmark_tsmixer_config())
         trainer = self.create_trainer("train", run)
         trainer.fit(model, data_module)
 
         # Save full Lightning checkpoint (with global_step and all metadata)
         from datetime import datetime
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         save_path = self.model_dir / f"tsmixer_benchmark_run{run}_{timestamp}.ckpt"
         trainer.save_checkpoint(save_path)
-        
+
         print(f"Saved complete model checkpoint to {save_path}")
         return model
 
@@ -235,11 +238,13 @@ class BenchmarkRunner:
 if __name__ == "__main__":
     # Initialize config
     config = ExperimentConfig()
-    
+
     # Log split configuration
     print("\nEXPERIMENT CONFIGURATION:")
     if config.USE_PROPORTIONAL_SPLIT:
-        print(f"Using proportional data splitting: {config.TRAIN_PROP:.2f}/{config.VAL_PROP:.2f}/{config.TEST_PROP:.2f}")
+        print(
+            f"Using proportional data splitting: {config.TRAIN_PROP:.2f}/{config.VAL_PROP:.2f}/{config.TEST_PROP:.2f}"
+        )
     else:
         print("Using fixed-year data splitting")
 

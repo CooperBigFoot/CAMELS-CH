@@ -156,13 +156,13 @@ class GroupBasedRunner:
 
         data_module.prepare_data()
         data_module.setup()
-        
+
         # Log data splitting method
         if self.config.USE_PROPORTIONAL_SPLIT:
             print(f"\nUsing proportional splitting for group {group_key} with:")
-            print(f"  - Training: {self.config.TRAIN_PROP*100:.1f}% of data")
-            print(f"  - Validation: {self.config.VAL_PROP*100:.1f}% of data")
-            print(f"  - Testing: {self.config.TEST_PROP*100:.1f}% of data")
+            print(f"  - Training: {self.config.TRAIN_PROP * 100:.1f}% of data")
+            print(f"  - Validation: {self.config.VAL_PROP * 100:.1f}% of data")
+            print(f"  - Testing: {self.config.TEST_PROP * 100:.1f}% of data")
             print(f"  - Train dataset size: {len(data_module.train_dataset)}")
             print(f"  - Validation dataset size: {len(data_module.val_dataset)}")
             print(f"  - Test dataset size: {len(data_module.test_dataset)}")
@@ -171,15 +171,17 @@ class GroupBasedRunner:
             print(f"  - Min train years: {self.config.CA_CONFIG['MIN_TRAIN_YEARS']}")
             print(f"  - Validation years: {self.config.CA_CONFIG['VAL_YEARS']}")
             print(f"  - Test years: {self.config.CA_CONFIG['TEST_YEARS']}")
-            
+
         return data_module
 
     def train_model(self, data_module, group_key, run):
         """Train a model for a specific group."""
         print(f"SETTING UP MODEL FOR GROUP {group_key} TRAINING")
-        
+
         # Log information about future forcing features
-        print(f"Using {len(self.config.FORCING_FEATURES)} features as future forcing inputs")
+        print(
+            f"Using {len(self.config.FORCING_FEATURES)} features as future forcing inputs"
+        )
         print(f"Future forcing fusion method: {self.config.FUSION_METHOD}")
 
         # Create TSMixer model
@@ -191,10 +193,15 @@ class GroupBasedRunner:
 
         # Save full Lightning checkpoint (with global_step and all metadata)
         from datetime import datetime
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_path = self.model_dir / group_key / f"tsmixer_{group_key}_run{run}_{timestamp}.ckpt"
+        save_path = (
+            self.model_dir
+            / group_key
+            / f"tsmixer_{group_key}_run{run}_{timestamp}.ckpt"
+        )
         trainer.save_checkpoint(save_path)
-        
+
         print(f"Saved complete model checkpoint to {save_path}")
         return model
 
@@ -254,11 +261,13 @@ class GroupBasedRunner:
 if __name__ == "__main__":
     # Initialize config
     config = ExperimentConfig()
-    
+
     # Log split configuration
     print("\nEXPERIMENT CONFIGURATION:")
     if config.USE_PROPORTIONAL_SPLIT:
-        print(f"Using proportional data splitting: {config.TRAIN_PROP:.1f}/{config.VAL_PROP:.1f}/{config.TEST_PROP:.1f}")
+        print(
+            f"Using proportional data splitting: {config.TRAIN_PROP:.1f}/{config.VAL_PROP:.1f}/{config.TEST_PROP:.1f}"
+        )
     else:
         print("Using fixed-year data splitting")
 

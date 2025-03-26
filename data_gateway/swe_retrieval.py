@@ -19,7 +19,9 @@ class DataGatewayClient:
         self.base_url = "https://data-gateway.ieasyhydro.org/api"
         self.api_key = api_key
 
-    def get_snow_reanalysis(self, hru_code, start_date=None, end_date=None, param="swe"):
+    def get_snow_reanalysis(
+        self, hru_code, start_date=None, end_date=None, param="swe"
+    ):
         """
         Retrieve snow reanalysis data for a specific location and parameter.
 
@@ -83,7 +85,7 @@ if __name__ == "__main__":
             hru_code="00003",
             start_date="2023-09-01",
             end_date="2023-09-30",
-            param="swe"
+            param="swe",
         )
         print(df)
     except Exception as e:
