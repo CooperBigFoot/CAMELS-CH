@@ -105,7 +105,7 @@ def load_data(config: Any, **kwargs) -> Dict[str, Any]:
 
 ### 3. Utility Functions for Model Creation
 
-Use the central model factory in `src/utils/model_factory.py`:
+Use the central model factory in `src/models/model_factory.py`:
 
 ```python
 def create_model(model_type: str, yaml_path: str) -> Tuple[Any, Dict[str, Any]]:
