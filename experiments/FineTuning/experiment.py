@@ -129,12 +129,6 @@ def main():
         return
 
     try:
-        # Load model hyperparameters from YAML
-        model_hp = hp_from_yaml(config.model_type, config.yaml_path)
-
-        # Prepare data module
-        data_module = prepare_data_module(config, model_hp)
-
         # Load pre-trained model
         print(f"Loading pre-trained model from {config.checkpoint_path}")
         model, model_hp = load_pretrained_model(
@@ -145,7 +139,10 @@ def main():
         )
         print("Model loaded successfully")
 
-        print(f"The new learning rate is: {model.hparams.learning_rate}")
+        # Prepare data module
+        data_module = prepare_data_module(config, model_hp)
+
+        print(f"The new learning rate is: {model_hp['learning_rate']}")
 
         # Fine-tune model
         results = fine_tune_model(model, model_hp, data_module, config)
