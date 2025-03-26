@@ -100,13 +100,11 @@ def load_pretrained_model(
     else:
         raise ValueError(f"Unsupported model type: {model_type}")
 
-    # Adjust learning rate for fine-tuning if needed
-    if finetune:
-        original_lr = model.hparams.learning_rate
-        model.hparams.learning_rate = original_lr / lr_factor
+    original_lr = model.hparams.learning_rate
+    model.hparams.learning_rate = original_lr / lr_factor
 
-        # Store original learning rate for reference
-        model.original_lr = original_lr
-        model.fine_tuned_lr = original_lr / lr_factor
+    # Store original learning rate for reference
+    model.original_lr = original_lr
+    model.fine_tuned_lr = original_lr / lr_factor
 
     return model, model_hp
