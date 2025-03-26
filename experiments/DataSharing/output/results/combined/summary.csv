@@ -1,0 +1,5 @@
+model_type,country,run,best_val_loss,best_epoch,checkpoint_path
+tide,Combined,0,0.051593028008937836,24,experiments/DataSharing/output/checkpoints/combined/tide/run_0/Combined_tide_epoch=24_val_loss=0.0516.ckpt
+tsmixer,Combined,0,0.05808328837156296,57,experiments/DataSharing/output/checkpoints/combined/tsmixer/run_0/Combined_tsmixer_epoch=57_val_loss=0.0581.ckpt
+ealstm,Combined,0,0.05489305779337883,50,experiments/DataSharing/output/checkpoints/combined/ealstm/run_0/Combined_ealstm_epoch=50_val_loss=0.0549.ckpt
+tft,Combined,0,0.05251481756567955,40,experiments/DataSharing/output/checkpoints/combined/tft/run_0/Combined_tft_epoch=40_val_loss=0.0525.ckpt
