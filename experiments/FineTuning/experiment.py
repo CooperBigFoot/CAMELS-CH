@@ -147,6 +147,8 @@ def main():
             lr_factor=config.lr_factor,
         )
         print("Model loaded successfully")
+
+        print(f"The new learning rate is: {model.hparams.learning_rate}")
         
         # Fine-tune model
         results = fine_tune_model(model, model_hp, data_module, config)
