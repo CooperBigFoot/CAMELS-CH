@@ -6,7 +6,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 from src.models.TSMixer import LitTSMixer
 from src.data_models.datamodule import HydroDataModule
 from src.data_models.caravanify import Caravanify, CaravanifyConfig
-from experiments.HyperparameterTune.configHT import ExperimentConfig
+from experiments.HyperparameterTuneOld.configHT import ExperimentConfig
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor
 from pytorch_lightning.loggers import TensorBoardLogger
 import pytorch_lightning as pl
