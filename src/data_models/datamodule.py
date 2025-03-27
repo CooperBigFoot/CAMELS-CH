@@ -480,7 +480,9 @@ class HydroDataModule(pl.LightningDataModule):
         """
         Split data into training, validation, and test sets.
 
-        Uses either fixed time spans or proportional splits based on configuration.
+        For proportional splitting, filters out NaN values first to ensure
+        splits contain only valid data points with accurate proportions.
+        For fixed-year splitting, maintains the original approach.
 
         Returns:
             Tuple of DataFrames for train, validation, and test sets
@@ -491,68 +493,47 @@ class HydroDataModule(pl.LightningDataModule):
             self.group_identifier
         ):
             # Sort data by date
-            basin_data = basin_data.sort_values("date")
+            basin_data = basin_data.sort_values("date").reset_index(drop=True)
 
             if self.use_proportional_split:
-                # Proportional split method
-                # Get valid period from quality report
+                # 1. Identify valid data points (not NaN for target)
+                valid_mask = ~basin_data[self.target].isna()
+                
+                # 2. Get valid data only (excluding NaNs completely)
+                valid_data = basin_data[valid_mask].reset_index(drop=True)
+                n_valid = len(valid_data)
+                
+                if n_valid == 0:
+                    print(f"Warning: Basin {gauge_id} has no valid points, skipping")
+                    continue
+                    
+                # 3. Calculate split points based on count of valid points
+                train_size = int(n_valid * self.train_prop)
+                val_size = int(n_valid * self.val_prop)
+                
+                # 4. Split the valid data directly
+                train_valid = valid_data.iloc[:train_size]
+                val_valid = valid_data.iloc[train_size:train_size+val_size]
+                test_valid = valid_data.iloc[train_size+val_size:]
+                
+                # 5. Add to result lists
+                train_data.append(train_valid)
+                val_data.append(val_valid)
+                test_data.append(test_valid)
+            else:
+                # Original fixed-years method
                 periods = self.quality_report["valid_periods"][gauge_id]
-
-                # Determine overall valid period (overlap of all required columns)
-                valid_starts = [
-                    period["start"]
-                    for period in periods.values()
-                    if period["start"] is not None
-                ]
                 valid_ends = [
                     period["end"]
                     for period in periods.values()
                     if period["end"] is not None
                 ]
-
-                if not valid_starts or not valid_ends:
+                
+                if not valid_ends:
                     print(f"Warning: Basin {gauge_id} has no valid periods, skipping")
                     continue
-
-                overall_start = max(valid_starts)
-                overall_end = min(valid_ends)
-
-                # Calculate total valid duration in days
-                total_valid_days = (overall_end - overall_start).days
-
-                # Define a minimum valid period (e.g., 1 year) to ensure meaningful splits
-                MIN_VALID_DAYS = 365
-                if total_valid_days < MIN_VALID_DAYS:
-                    print(
-                        f"Warning: Basin {gauge_id} has valid period less than {MIN_VALID_DAYS} days, skipping"
-                    )
-                    continue
-
-                # Calculate split boundary dates using the proportions
-                train_days = int(total_valid_days * self.train_prop)
-                val_days = int(total_valid_days * self.val_prop)
-                test_days = total_valid_days - (train_days + val_days)
-
-                # Calculate boundary dates
-                train_end = overall_start + pd.Timedelta(days=train_days)
-                val_end = train_end + pd.Timedelta(days=val_days)
-
-                # Create masks for each segment
-                train_mask = basin_data["date"] < train_end
-                val_mask = (basin_data["date"] >= train_end) & (
-                    basin_data["date"] < val_end
-                )
-                test_mask = basin_data["date"] >= val_end
-            else:
-                # Original fixed-years method
-                periods = self.quality_report["valid_periods"][gauge_id]
-                valid_end = min(
-                    [
-                        period["end"]
-                        for period in periods.values()
-                        if period["end"] is not None
-                    ]
-                )
+                    
+                valid_end = min(valid_ends)
 
                 test_start = valid_end - pd.Timedelta(
                     days=int(self.test_years * 365.25)
@@ -565,21 +546,22 @@ class HydroDataModule(pl.LightningDataModule):
                 )
                 train_mask = basin_data["date"] < val_start
 
-            # Append data segments to respective lists
-            train_data.append(basin_data[train_mask])
-            val_data.append(basin_data[val_mask])
-            test_data.append(basin_data[test_mask])
+                # Append data segments to respective lists
+                train_data.append(basin_data[train_mask])
+                val_data.append(basin_data[val_mask])
+                test_data.append(basin_data[test_mask])
 
-            # Log info about segment sizes for debugging
-            train_size = basin_data[train_mask].shape[0]
-            val_size = basin_data[val_mask].shape[0]
-            test_size = basin_data[test_mask].shape[0]
+                # Log info about segment sizes for debugging
+                train_size = basin_data[train_mask].shape[0]
+                val_size = basin_data[val_mask].shape[0]
+                test_size = basin_data[test_mask].shape[0]
 
-            if train_size == 0 or val_size == 0 or test_size == 0:
-                print(
-                    f"Warning: Basin {gauge_id} has empty split segments: "
-                    f"train={train_size}, val={val_size}, test={test_size}"
-                )
+                # Check for empty segments
+                if train_size == 0 or val_size == 0 or test_size == 0:
+                    print(
+                        f"Warning: Basin {gauge_id} has empty split segments: "
+                        f"train={train_size}, val={val_size}, test={test_size}"
+                    )
 
         return (
             pd.concat(train_data, ignore_index=True) if train_data else pd.DataFrame(),

@@ -1,332 +1,8 @@
 from typing import List, Tuple, Dict, Optional
 import pandas as pd
 import numpy as np
-from dataclasses import dataclass
-from sklearn.preprocessing import StandardScaler
 
-# TODO: add group identifier to scaling function to avoid hardcoding "gauge_id"
-# Pandas FutureWarning:
 pd.set_option("future.no_silent_downcasting", True)
-
-
-# Function to create a modified pd.concat that uses pyarrow when appropriate
-def concat_with_pyarrow(*args, **kwargs) -> pd.DataFrame:
-    """Wrapper for pandas concat that uses pyarrow engine when possible."""
-    result = pd.concat(*args, **kwargs)
-    return result
-
-
-# Function to create a modified pd.read_csv that uses pyarrow engine
-def read_csv_with_pyarrow(path, **kwargs) -> pd.DataFrame:
-    """Wrapper for pandas read_csv that always uses pyarrow engine."""
-    if "engine" not in kwargs:
-        kwargs["engine"] = "pyarrow"
-    return pd.read_csv(path, **kwargs)
-
-
-@dataclass
-class StaticScalingParameters:
-    """Store scalers for static attributes"""
-
-    scaler: StandardScaler
-    attribute_names: List[str]
-
-
-def scale_static_attributes(
-    static_df: pd.DataFrame,
-    attributes: List[str],
-    group_identifier: str = "gauge_id",
-) -> Tuple[pd.DataFrame, StaticScalingParameters]:
-    """
-    Scale static attributes while preserving group identifier relationships.
-
-    Args:
-        static_df: DataFrame containing static attributes with a group identifier column
-        attributes: List of attribute names to scale
-        group_identifier: Column name identifying the grouping variable (e.g., gauge_id, basin_id)
-
-    Returns:
-        Tuple of (scaled DataFrame, scaling parameters)
-
-    Raises:
-        ValueError: If group_identifier is missing from static_df or if specified attributes are not found
-    """
-    # Remove group identifier from attributes if present
-    scaling_attributes = [attr for attr in attributes if attr != group_identifier]
-
-    # Sort attributes for consistency
-    scaling_attributes = sorted(scaling_attributes)
-
-    # Verify group identifier exists
-    if group_identifier not in static_df.columns:
-        raise ValueError(f"static_df must contain a '{group_identifier}' column")
-
-    # Set group identifier as index to preserve relationships
-    df_indexed = static_df.set_index(group_identifier)
-
-    # Verify all attributes exist
-    missing_attrs = [
-        attr for attr in scaling_attributes if attr not in df_indexed.columns
-    ]
-    if missing_attrs:
-        raise ValueError(f"Attributes {missing_attrs} not found in static_df")
-
-    # Stack values from specified columns
-    static_stacked = df_indexed[scaling_attributes].values.reshape(-1, 1)
-
-    # Scale
-    scaler = StandardScaler()
-    scaled_values = scaler.fit_transform(static_stacked)
-
-    # Reshape and create DataFrame with scaled values
-    df_static_scaled = pd.DataFrame(
-        scaled_values.reshape(df_indexed.shape[0], -1),
-        columns=scaling_attributes,
-        index=df_indexed.index,
-    )
-
-    # Reset index to get group identifier as first column
-    df_static_scaled = df_static_scaled.reset_index()
-
-    return df_static_scaled, StaticScalingParameters(
-        scaler=scaler, attribute_names=scaling_attributes
-    )
-
-
-def inverse_scale_static_attributes(
-    static_scaled: pd.DataFrame,
-    scaling_params: StaticScalingParameters,
-    group_identifier: str = "gauge_id",
-) -> pd.DataFrame:
-    """
-    Inverse transform scaled static attributes back to their original scale.
-
-    Args:
-        static_scaled: DataFrame with scaled static attributes
-        scaling_params: ScalingParameters object containing the scaler and attribute names
-        group_identifier: Column name identifying the grouping variable (e.g., gauge_id, basin_id)
-
-    Returns:
-        DataFrame with inverse-transformed attributes
-
-    Raises:
-        ValueError: If required attributes are missing from the input DataFrame
-    """
-    # Preserve group identifier column
-    group_ids = static_scaled[group_identifier].copy()
-
-    # Ensure columns are in same order as during scaling
-    static_stacked = static_scaled[scaling_params.attribute_names].values.reshape(-1, 1)
-
-    # Apply inverse transform
-    inverse_transformed = scaling_params.scaler.inverse_transform(static_stacked)
-
-    # Create DataFrame with inverse-transformed values
-    df_inverse = pd.DataFrame(
-        inverse_transformed.reshape(static_scaled.shape[0], -1),
-        columns=scaling_params.attribute_names,
-    )
-
-    # Add back group identifier
-    df_inverse.insert(0, group_identifier, group_ids)
-
-    return df_inverse
-
-
-@dataclass
-class ScalingParameters:
-    """Store scalers for each feature and group combination (or global scaling)"""
-
-    scalers: Dict[str, Dict[str, StandardScaler]]
-    feature_names: List[str]
-    group_ids: List[str]
-
-
-def scale_time_series(
-    df_full: pd.DataFrame,
-    df_train: pd.DataFrame,
-    features: List[str],
-    by_group: bool = True,
-    group_identifier: str = "gauge_id",
-) -> Tuple[pd.DataFrame, ScalingParameters]:
-    """
-    Scale features using only training data for fitting.
-
-    Args:
-        df_full: Full DataFrame to scale
-        df_train: Training data DataFrame used for fitting scalers
-        features: List of feature names to scale
-        by_group: Whether to scale separately for each group
-        group_identifier: Column name identifying the grouping variable
-
-    Returns:
-        Tuple of (scaled DataFrame, scaling parameters)
-
-    Raises:
-        ValueError: If zero variance found in features or if group_identifier missing
-    """
-    if group_identifier not in df_full.columns:
-        raise ValueError(f"DataFrame must contain '{group_identifier}' column")
-
-    df_scaled = df_full.copy()
-    scalers = {feat: {} for feat in features}
-
-    if by_group:
-        for group_id in df_full[group_identifier].unique():
-            for feat in features:
-                mask = df_full[group_identifier] == group_id
-                train_mask = df_train[group_identifier] == group_id
-
-                train_data = df_train.loc[train_mask, feat].astype(float)
-
-                if np.isclose(train_data.var(), 0):
-                    raise ValueError(
-                        f"Zero variance in {feat} for {group_identifier} {group_id}"
-                    )
-
-                sc = StandardScaler()
-                sc.fit(train_data.values.reshape(-1, 1))
-
-                scaled_values = sc.transform(
-                    df_full.loc[mask, feat].values.reshape(-1, 1)
-                )
-                df_scaled.loc[mask, feat] = np.round(scaled_values, decimals=3)
-
-                scalers[feat][group_id] = sc
-    else:
-        for feat in features:
-            train_data = df_train[feat].astype(float)
-
-            if np.isclose(train_data.var(), 0):
-                raise ValueError(f"Zero variance in feature {feat}")
-
-            sc = StandardScaler()
-            sc.fit(train_data.values.reshape(-1, 1))
-
-            scaled_values = sc.transform(df_full[feat].values.reshape(-1, 1))
-            df_scaled[feat] = np.round(scaled_values, decimals=3)
-
-            scalers[feat]["global"] = sc
-
-    return df_scaled, ScalingParameters(
-        scalers=scalers,
-        feature_names=features,
-        group_ids=(
-            ["global"] if not by_group else df_full[group_identifier].unique().tolist()
-        ),
-    )
-
-
-def inverse_scale_time_series(
-    df: pd.DataFrame,
-    scaling_params: ScalingParameters,
-    group_identifier: str = "gauge_id",
-) -> pd.DataFrame:
-    """
-    Inverse transform scaled features, handling group-specific or global scaling.
-
-    Args:
-        df: DataFrame with scaled features
-        scaling_params: ScalingParameters object with scalers
-        group_identifier: Column name identifying the grouping variable
-
-    Returns:
-        DataFrame with inverse-transformed features
-
-    Raises:
-        ValueError: If group_identifier column is missing or if features cannot be inverse transformed
-    """
-    if group_identifier not in df.columns:
-        raise ValueError(f"DataFrame must contain '{group_identifier}' column")
-
-    df_inverse = df.copy()
-
-    if scaling_params.group_ids == ["global"]:
-        for feat in scaling_params.feature_names:
-            scaler = scaling_params.scalers[feat]["global"]
-            df_inverse[feat] = scaler.inverse_transform(df[[feat]])
-    else:
-        for group_id in scaling_params.group_ids:
-            mask = df[group_identifier] == group_id
-            if not mask.any():
-                continue
-            for feat in scaling_params.feature_names:
-                scaler = scaling_params.scalers[feat][group_id]
-                df_inverse.loc[mask, feat] = scaler.inverse_transform(
-                    df.loc[mask, [feat]]
-                )
-
-    return df_inverse
-
-
-def apply_log_transform(
-    df: pd.DataFrame,
-    transform_cols: List[str],
-    epsilon: float = 1e-8,
-    group_identifier: str = "gauge_id",
-) -> pd.DataFrame:
-    """
-    Apply log1p transform to specified columns in a dataframe.
-
-    Args:
-        df: Input dataframe containing grouped data
-        transform_cols: Column(s) to transform
-        epsilon: Small constant to add before log transform
-        group_identifier: Column name identifying the grouping variable
-
-    Returns:
-        DataFrame with transformed values
-
-    Raises:
-        ValueError: If columns not found in dataframe
-    """
-    if group_identifier not in df.columns:
-        raise ValueError(f"DataFrame must contain '{group_identifier}' column")
-
-    df_transformed = df.copy()
-
-    for col in transform_cols:
-        if col not in df_transformed.columns:
-            raise ValueError(f"Column {col} not found in dataframe")
-
-        df_transformed[col] = np.log1p(df_transformed[col] + epsilon)
-
-    return df_transformed
-
-
-def reverse_log_transform(
-    df: pd.DataFrame,
-    transform_cols: List[str],
-    epsilon: float = 1e-8,
-    group_identifier: str = "gauge_id",
-) -> pd.DataFrame:
-    """
-    Reverse log1p transform on specified columns in a dataframe.
-
-    Args:
-        df: Input dataframe containing log-transformed data
-        transform_cols: Column(s) to reverse transform
-        epsilon: Small constant added before log transform
-        group_identifier: Column name identifying the grouping variable
-
-    Returns:
-        DataFrame with original scale values
-
-    Raises:
-        ValueError: If columns not found in dataframe
-    """
-    if group_identifier not in df.columns:
-        raise ValueError(f"DataFrame must contain '{group_identifier}' column")
-
-    df_reversed = df.copy()
-
-    for col in transform_cols:
-        if col not in df_reversed.columns:
-            raise ValueError(f"Column {col} not found in dataframe")
-
-        df_reversed[col] = np.expm1(df_reversed[col]) - epsilon
-
-    return df_reversed
 
 
 def validate_input(
@@ -742,8 +418,14 @@ def check_missing_gaps(
     failed_columns = []
     for column in required_columns:
         is_missing = basin_data[column].isna()
-        gap_starts = is_missing[is_missing & ~is_missing.shift(1).fillna(False)].index
-        gap_ends = is_missing[is_missing & ~is_missing.shift(-1).fillna(False)].index
+
+        temp_shifted_1 = is_missing.shift(1).fillna(False)
+        shifted_1 = temp_shifted_1.infer_objects(copy=False)
+        gap_starts = is_missing[is_missing & ~shifted_1].index
+
+        temp_shifted_n1 = is_missing.shift(-1).fillna(False)
+        shifted_n1 = temp_shifted_n1.infer_objects(copy=False)
+        gap_ends = is_missing[is_missing & ~shifted_n1].index
 
         if len(gap_starts) > len(gap_ends):
             gap_ends = gap_ends.append(pd.Index([is_missing.index[-1]]))
@@ -1070,18 +752,14 @@ def impute_short_gaps(
     # Process each group separately
     for group_id, group_data in imputed_df.groupby(group_identifier):
         imputation_report[group_id] = {}
-
-        # Sort by date to ensure correct time-based imputation
         group_idx = group_data.index
 
         for column in columns:
             # Current column data
             series = imputed_df.loc[group_idx, column]
-
-            # Find gaps (runs of NaNs)
             is_nan = series.isna()
-            if not is_nan.any():  # Ensure parentheses are used for method call
-                # No NaNs to impute
+
+            if not is_nan.any():
                 imputation_report[group_id][column] = {
                     "short_gaps_count": 0,
                     "long_gaps_count": 0,
@@ -1092,10 +770,12 @@ def impute_short_gaps(
             # Track consecutive NaN runs
             run_starts = []
             run_lengths = []
+            run_indices = []
 
             in_run = False
             run_start = None
             run_length = 0
+            curr_indices = []
 
             # Find all runs of NaNs
             for i, (idx, is_missing) in enumerate(is_nan.items()):
@@ -1104,46 +784,55 @@ def impute_short_gaps(
                     in_run = True
                     run_start = idx
                     run_length = 1
+                    curr_indices = [idx]
                 elif is_missing and in_run:
                     # Continue current run
                     run_length += 1
+                    curr_indices.append(idx)
                 elif not is_missing and in_run:
                     # End of a run
                     run_starts.append(run_start)
                     run_lengths.append(run_length)
+                    run_indices.append(curr_indices)
                     in_run = False
                     run_start = None
                     run_length = 0
+                    curr_indices = []
 
             # Handle case where series ends with NaNs
             if in_run:
                 run_starts.append(run_start)
                 run_lengths.append(run_length)
+                run_indices.append(curr_indices)
 
-            # Separate short and long gaps
-            short_gaps = [
-                (start, length)
-                for start, length in zip(run_starts, run_lengths)
-                if length <= max_imputation_gap_size
-            ]
-            long_gaps = [
-                (start, length)
-                for start, length in zip(run_starts, run_lengths)
-                if length > max_imputation_gap_size
-            ]
+            # Get indices of short gaps only (<=max_imputation_gap_size)
+            short_gap_indices = []
+            for length, indices in zip(run_lengths, run_indices):
+                if length <= max_imputation_gap_size:
+                    short_gap_indices.extend(indices)
 
-            # Apply linear interpolation to the entire column for the group
-            # This will only fill the NaN values where interpolation is possible
-            series_imputed = imputed_df.loc[group_idx, column].interpolate(
-                method="linear"
-            )
-            imputed_df.loc[group_idx, column] = series_imputed
+            # Apply interpolation to entire series temporarily
+            temp_series = series.interpolate(method="linear")
+
+            # Only update values for short gaps, leaving long gaps as NaN
+            if short_gap_indices:
+                series.loc[short_gap_indices] = temp_series.loc[short_gap_indices]
+
+            # Update the dataframe with the properly interpolated series
+            imputed_df.loc[group_idx, column] = series
 
             # Record imputation statistics
+            short_gaps = sum(
+                1 for length in run_lengths if length <= max_imputation_gap_size
+            )
+            long_gaps = sum(
+                1 for length in run_lengths if length > max_imputation_gap_size
+            )
+
             imputation_report[group_id][column] = {
-                "short_gaps_count": len(short_gaps),
-                "long_gaps_count": len(long_gaps),
-                "imputed_values_count": sum(length for _, length in short_gaps),
+                "short_gaps_count": short_gaps,
+                "long_gaps_count": long_gaps,
+                "imputed_values_count": len(short_gap_indices),
             }
 
     return imputed_df, imputation_report
