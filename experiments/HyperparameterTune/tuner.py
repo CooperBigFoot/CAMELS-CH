@@ -13,6 +13,7 @@ from pytorch_lightning.callbacks import (
 )
 from pytorch_lightning.loggers import TensorBoardLogger
 import multiprocessing
+from typing import Dict, Any
 
 # Add project root to path
 sys.path.append(str(Path(__file__).resolve().parents[2]))
@@ -119,6 +120,73 @@ class HyperparameterTuner:
         
         return hyperparameters
     
+    def map_hyperparameters_to_model_config(self, hyperparameters: Dict[str, Any], 
+                                           time_series_data_features: int, 
+                                           static_data_features: int) -> Dict[str, Any]:
+        """Map hyperparameters from search space to model configuration format.
+        
+        This function transforms the hyperparameter names and values to match
+        the expected model configuration parameters, handling model-specific
+        requirements and calculating derived parameters.
+        
+        Args:
+            hyperparameters: Dictionary of hyperparameters from Optuna sampling
+            time_series_data_features: Number of time series features (including target)
+            static_data_features: Number of static features (excluding gauge_id)
+            
+        Returns:
+            Dictionary of parameters in the format expected by model configurations
+        """
+        model_config = {}
+        
+        # Common parameter mappings
+        parameter_mappings = {
+            "input_length": "input_len",
+            "hidden_size": "hidden_size",
+            "dropout": "dropout",
+            "learning_rate": "learning_rate",
+        }
+        
+        # Copy mapped parameters
+        for search_param, model_param in parameter_mappings.items():
+            if search_param in hyperparameters:
+                model_config[model_param] = hyperparameters[search_param]
+        
+        # Copy model-specific parameters directly (they already match expected names)
+        for param_name, param_value in hyperparameters.items():
+            if param_name not in parameter_mappings:
+                model_config[param_name] = param_value
+        
+        # Add required parameters from config
+        model_config["output_len"] = self.config.output_length
+        model_config["group_identifier"] = self.config.group_identifier
+        
+        # Calculate derived parameters
+        model_config["input_size"] = time_series_data_features
+        model_config["static_size"] = static_data_features
+        
+        # Add future_input_size (number of forcing features)
+        model_config["future_input_size"] = len(self.config.forcing_features)
+        
+        # Add scheduler parameters
+        model_config["scheduler_patience"] = 5
+        model_config["scheduler_factor"] = 0.5
+        
+        # Model-specific adjustments
+        if self.model_type == "tide":
+            # Handle specific TiDE parameters if not already set
+            if "past_feature_projection_size" not in model_config:
+                model_config["past_feature_projection_size"] = 0
+            if "future_forcing_projection_size" not in model_config:
+                model_config["future_forcing_projection_size"] = 0
+        
+        elif self.model_type == "ealstm":
+            # Handle specific EALSTM parameters if not already set
+            if "bidirectional_fusion" not in model_config:
+                model_config["bidirectional_fusion"] = "concat"
+        
+        return model_config
+    
     def objective(self, trial):
         """Optuna objective function for hyperparameter optimization.
         
@@ -150,6 +218,18 @@ class HyperparameterTuner:
         
         # Get preprocessing configs
         preprocessing_configs = self.config.get_preprocessing_config()
+        
+        # Calculate feature dimensions for model configuration
+        time_series_features = len(self.config.forcing_features) + 1  # +1 for target
+        static_features = len([f for f in self.config.static_features 
+                              if f != "country" and f != self.config.group_identifier])
+        
+        # Map hyperparameters to model configuration format
+        model_config = self.map_hyperparameters_to_model_config(
+            hyperparameters, 
+            time_series_features, 
+            static_features
+        )
         
         # Create data module
         data_module = HydroDataModule(
@@ -201,13 +281,13 @@ class HyperparameterTuner:
         trial.set_user_attr("val_size", val_size)
         trial.set_user_attr("test_size", test_size)
         
-        # Create temporary YAML file with hyperparameters for model creation
+        # Create temporary YAML file with mapped model configuration for model creation
         import tempfile
         import yaml
         
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             yaml_path = f.name
-            yaml.dump(hyperparameters, f)
+            yaml.dump(model_config, f)
         
         try:
             # Create model
