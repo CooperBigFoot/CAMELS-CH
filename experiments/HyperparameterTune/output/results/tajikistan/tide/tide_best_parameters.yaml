@@ -1,0 +1,14 @@
+best_value: 0.06186487153172493
+country: Tajikistan
+model_type: tide
+date: '2025-03-27 11:10:28'
+parameters:
+  input_length: 99
+  hidden_size: 76
+  dropout: 0.3078685206868833
+  learning_rate: 0.00018159850484411317
+  num_encoder_layers: 3
+  num_decoder_layers: 2
+  decoder_output_size: 22
+  temporal_decoder_hidden_size: 32
+  use_layer_norm: false

@@ -1,0 +1,17 @@
+best_value: 0.05255868658423424
+country: Tajikistan
+model_type: tft
+date: '2025-03-27 12:56:21'
+parameters:
+  input_length: 190
+  hidden_size: 48
+  dropout: 0.09262986969204212
+  learning_rate: 0.0002993620086989372
+  num_attention_heads: 8
+  lstm_layers: 3
+  attn_dropout: 0.12346441473728025
+  add_relative_index: false
+  use_revin: false
+  context_length_ratio: 0.5125053734835204
+  use_embedding_for_context: true
+  encoder_layers: 1

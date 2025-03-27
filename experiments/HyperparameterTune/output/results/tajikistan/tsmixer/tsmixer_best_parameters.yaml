@@ -1,0 +1,12 @@
+best_value: 0.05787888541817665
+country: Tajikistan
+model_type: tsmixer
+date: '2025-03-27 11:53:45'
+parameters:
+  input_length: 124
+  hidden_size: 84
+  dropout: 0.07046211248738132
+  learning_rate: 0.0004021554526690286
+  num_mixing_layers: 3
+  static_embedding_size: 20
+  fusion_method: add
