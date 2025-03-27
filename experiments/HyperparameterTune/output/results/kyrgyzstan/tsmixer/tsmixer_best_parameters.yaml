@@ -1,0 +1,12 @@
+best_value: 0.05344807729125023
+country: Kyrgyzstan
+model_type: tsmixer
+date: '2025-03-27 17:17:47'
+parameters:
+  input_length: 71
+  hidden_size: 80
+  dropout: 0.017194260557609198
+  learning_rate: 0.000658628931758311
+  num_mixing_layers: 5
+  static_embedding_size: 15
+  fusion_method: concat

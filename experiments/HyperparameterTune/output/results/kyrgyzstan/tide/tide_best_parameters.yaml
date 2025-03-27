@@ -1,0 +1,14 @@
+best_value: 0.05453148111701012
+country: Kyrgyzstan
+model_type: tide
+date: '2025-03-27 15:02:05'
+parameters:
+  input_length: 34
+  hidden_size: 110
+  dropout: 0.4040330172235821
+  learning_rate: 0.00029399848560567596
+  num_encoder_layers: 2
+  num_decoder_layers: 2
+  decoder_output_size: 24
+  temporal_decoder_hidden_size: 51
+  use_layer_norm: false
