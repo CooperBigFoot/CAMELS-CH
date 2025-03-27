@@ -1,2 +1,0 @@
-run,seed,best_val_loss,best_epoch,checkpoint_path
-0,42,0.05479813367128372,50,experiments/DataSharing/checkpoints/kyrgyzstan/ealstm/run_0/Kyrgyzstan_ealstm_epoch=50_val_loss=0.0548.ckpt

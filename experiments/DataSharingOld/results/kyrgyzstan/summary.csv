@@ -1,5 +1,0 @@
-model_type,country,best_val_loss,best_epoch,checkpoint_path
-tide,Kyrgyzstan,0.06183752790093422,20,experiments/DataSharing/checkpoints/kyrgyzstan/tide/run_0/Kyrgyzstan_tide_epoch=20_val_loss=0.0618.ckpt
-tsmixer,Kyrgyzstan,0.06020813807845116,50,experiments/DataSharing/checkpoints/kyrgyzstan/tsmixer/run_0/Kyrgyzstan_tsmixer_epoch=50_val_loss=0.0602.ckpt
-ealstm,Kyrgyzstan,0.05479813367128372,50,experiments/DataSharing/checkpoints/kyrgyzstan/ealstm/run_0/Kyrgyzstan_ealstm_epoch=50_val_loss=0.0548.ckpt
-tft,Kyrgyzstan,0.053303685039281845,50,experiments/DataSharing/checkpoints/kyrgyzstan/tft/run_0/Kyrgyzstan_tft_epoch=50_val_loss=0.0533.ckpt

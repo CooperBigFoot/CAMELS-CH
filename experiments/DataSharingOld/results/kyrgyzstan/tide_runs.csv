@@ -1,2 +1,0 @@
-run,seed,best_val_loss,best_epoch,checkpoint_path
-0,42,0.06183752790093422,20,experiments/DataSharing/checkpoints/kyrgyzstan/tide/run_0/Kyrgyzstan_tide_epoch=20_val_loss=0.0618.ckpt

@@ -1,2 +1,0 @@
-run,seed,best_val_loss,best_epoch,checkpoint_path
-0,42,0.11113861948251724,50,experiments/DataSharing/checkpoints/tajikistan/tsmixer/run_0/Tajikistan_tsmixer_epoch=50_val_loss=0.1111.ckpt

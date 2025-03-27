@@ -1,2 +1,0 @@
-run,seed,best_val_loss,best_epoch,checkpoint_path
-0,42,0.05480945482850075,50,experiments/DataSharing/checkpoints/combined/ealstm/run_0/Combined_ealstm_epoch=50_val_loss=0.0548.ckpt

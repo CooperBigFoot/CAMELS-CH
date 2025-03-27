@@ -1,2 +1,0 @@
-run,seed,best_val_loss,best_epoch,checkpoint_path
-0,42,0.09745418280363083,50,experiments/DataSharing/checkpoints/tajikistan/ealstm/run_0/Tajikistan_ealstm_epoch=50_val_loss=0.0975.ckpt
