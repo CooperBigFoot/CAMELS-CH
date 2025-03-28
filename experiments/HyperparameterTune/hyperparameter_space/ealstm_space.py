@@ -13,13 +13,11 @@ def get_ealstm_space() -> Dict[str, Dict[str, Any]]:
     return {
         "common": {
             "input_length": {"type": "int", "low": 30, "high": 365},
-            "hidden_size": {"type": "int", "low": 32, "high": 256},
-            "dropout": {"type": "float", "low": 0.0, "high": 0.5},
             "learning_rate": {"type": "float", "low": 1e-5, "high": 1e-3, "log": True},
         },
         "model_specific": {
             "num_layers": {"type": "int", "low": 1, "high": 3},
-            "bidirectional": {"type": "categorical", "choices": [True, False]},
-            "static_embedding_size": {"type": "int", "low": 5, "high": 20},
+            "hidden_size": {"type": "int", "low": 32, "high": 256},
+            "dropout": {"type": "float", "low": 0.0, "high": 0.5},
         },
     }

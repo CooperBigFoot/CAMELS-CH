@@ -48,7 +48,7 @@ class EALSTMConfig(BaseConfig):
         future_hidden_size: Optional[int] = None,
         future_layers: Optional[int] = None,
         bidirectional_fusion: str = "concat",
-        bidirectional: bool = False,
+        bidirectional: bool = True,
         **kwargs,
     ):
         """Initialize EA-LSTM configuration.
