@@ -1,0 +1,10 @@
+best_value: 0.05376865342259407
+country: Tajikistan
+model_type: ealstm
+date: '2025-03-28 09:38:54'
+parameters:
+  input_length: 71
+  learning_rate: 9.7803370166594e-05
+  num_layers: 1
+  hidden_size: 236
+  dropout: 0.12938999080000846
