@@ -1,0 +1,10 @@
+best_value: 0.05549325421452522
+country: Kyrgyzstan
+model_type: ealstm
+date: '2025-03-28 12:48:16'
+parameters:
+  input_length: 36
+  learning_rate: 0.0008706020878304854
+  num_layers: 3
+  hidden_size: 79
+  dropout: 0.09091248360355031
