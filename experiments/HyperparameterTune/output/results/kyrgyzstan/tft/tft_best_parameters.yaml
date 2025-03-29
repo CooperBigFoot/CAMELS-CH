@@ -1,0 +1,17 @@
+best_value: 0.054411593824625015
+country: Kyrgyzstan
+model_type: tft
+date: '2025-03-29 16:01:06'
+parameters:
+  input_length: 34
+  learning_rate: 0.00015996162179839556
+  hidden_size: 120
+  dropout: 0.3690491710631163
+  num_attention_heads: 3
+  lstm_layers: 1
+  attn_dropout: 0.12456198490898998
+  add_relative_index: true
+  use_revin: false
+  context_length_ratio: 0.9286955650046743
+  use_embedding_for_context: true
+  encoder_layers: 1
