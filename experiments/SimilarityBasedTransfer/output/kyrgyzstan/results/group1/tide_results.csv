@@ -1,0 +1,2 @@
+run,model_type,group,best_val_loss,best_epoch,checkpoint_path
+0,tide,group1,0.091701939702034,19,experiments/SimilarityBasedTransfer/output/kyrgyzstan/checkpoints/group1/tide/run_0/group1_tide_epoch=19_val_loss=0.0917.ckpt
