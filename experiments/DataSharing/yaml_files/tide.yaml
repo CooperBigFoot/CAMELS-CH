@@ -1,12 +1,12 @@
-decoder_output_size: 21
-dropout: 0.3803925243084487
+decoder_output_size: 22
+dropout: 0.3078685206868833
 future_forcing_projection_size: 0
 future_input_size: 9
 group_identifier: gauge_id
-hidden_size: 101
-input_len: 70
+hidden_size: 76
+input_len: 99
 input_size: 10
-learning_rate: 0.0001326033192269654
+learning_rate: 0.00018159850484411317
 num_decoder_layers: 2
 num_encoder_layers: 3
 output_len: 10
@@ -14,5 +14,5 @@ past_feature_projection_size: 0
 scheduler_factor: 0.5
 scheduler_patience: 5
 static_size: 10
-temporal_decoder_hidden_size: 36
+temporal_decoder_hidden_size: 32
 use_layer_norm: false

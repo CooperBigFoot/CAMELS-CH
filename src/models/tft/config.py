@@ -24,9 +24,7 @@ class TFTConfig(BaseConfig):
         "scheduler_patience",
         "scheduler_factor",
         "quantiles",
-        "use_revin",
         "context_length_ratio",
-        "use_embedding_for_context",
         "encoder_layers",
     ]
 
@@ -49,9 +47,7 @@ class TFTConfig(BaseConfig):
         scheduler_patience: int = 5,
         scheduler_factor: float = 0.5,
         quantiles: List[float] = [0.5],
-        use_revin: bool = False,
         context_length_ratio: float = 1.0,
-        use_embedding_for_context: bool = False,
         encoder_layers: int = 1,
         **kwargs,
     ):
@@ -76,9 +72,7 @@ class TFTConfig(BaseConfig):
             scheduler_patience: Patience for learning rate scheduler
             scheduler_factor: Factor for learning rate reduction
             quantiles: Quantiles to predict for probabilistic forecasting
-            use_revin: Whether to use reversible instance normalization
             context_length_ratio: Ratio of context length to input length
-            use_embedding_for_context: Whether to use embedding for context generation
             encoder_layers: Number of encoder layers
             **kwargs: Additional parameters
         """
@@ -104,9 +98,7 @@ class TFTConfig(BaseConfig):
         self.add_relative_index = add_relative_index
 
         self.quantiles = quantiles
-        self.use_revin = use_revin
         self.context_length_ratio = context_length_ratio
-        self.use_embedding_for_context = use_embedding_for_context
         self.encoder_layers = encoder_layers
 
         # Scheduler parameters
