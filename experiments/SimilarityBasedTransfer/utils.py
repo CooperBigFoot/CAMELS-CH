@@ -309,15 +309,15 @@ def load_model_configs_and_datamodules(
             model_configs[model_type] = model_config
             data_modules[model_type] = data_module
 
-            # Prepare data
-            data_module.prepare_data()
-            data_module.setup()
+            # # Prepare data
+            # data_module.prepare_data()
+            # data_module.setup()
 
-            # Log data splits
-            print(f"Data splits for group {group_key}, model {model_type}:")
-            print(f"  - Train: {len(data_module.train_dataset)} samples")
-            print(f"  - Validation: {len(data_module.val_dataset)} samples")
-            print(f"  - Test: {len(data_module.test_dataset)} samples")
+            # # Log data splits
+            # print(f"Data splits for group {group_key}, model {model_type}:")
+            # print(f"  - Train: {len(data_module.train_dataset)} samples")
+            # print(f"  - Validation: {len(data_module.val_dataset)} samples")
+            # print(f"  - Test: {len(data_module.test_dataset)} samples")
 
         except Exception as e:
             print(f"Error creating data module for {model_type}: {str(e)}")

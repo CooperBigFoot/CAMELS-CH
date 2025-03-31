@@ -132,7 +132,7 @@ def main():
     print(f"Groups: {', '.join(args.groups)}")
     print(f"Number of runs: {args.num_runs}")
     print(
-        f"Data split: {config.train_prop:.1f}/{config.val_prop:.1f}/{config.test_prop:.1f}"
+        f"Data split: {config.train_prop:.2f}/{config.val_prop:.2f}/{config.test_prop:.2f}"
     )
     print(f"{'=' * 50}\n")
 
