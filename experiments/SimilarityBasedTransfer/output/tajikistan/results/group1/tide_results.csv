@@ -1,0 +1,2 @@
+run,model_type,group,best_val_loss,best_epoch,checkpoint_path
+0,tide,group1,0.09946894645690918,24,experiments/SimilarityBasedTransfer/output/tajikistan/checkpoints/group1/tide/run_0/group1_tide_epoch=24_val_loss=0.0995.ckpt

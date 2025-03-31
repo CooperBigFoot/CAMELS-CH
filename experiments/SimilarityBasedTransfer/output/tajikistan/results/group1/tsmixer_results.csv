@@ -1,0 +1,2 @@
+run,model_type,group,best_val_loss,best_epoch,checkpoint_path
+0,tsmixer,group1,0.10422196239233017,19,experiments/SimilarityBasedTransfer/output/tajikistan/checkpoints/group1/tsmixer/run_0/group1_tsmixer_epoch=19_val_loss=0.1042.ckpt

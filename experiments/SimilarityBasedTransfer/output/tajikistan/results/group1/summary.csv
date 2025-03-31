@@ -1,0 +1,5 @@
+run,model_type,group,best_val_loss,best_epoch,checkpoint_path
+0,tide,group1,0.09946894645690918,24,experiments/SimilarityBasedTransfer/output/tajikistan/checkpoints/group1/tide/run_0/group1_tide_epoch=24_val_loss=0.0995.ckpt
+0,tsmixer,group1,0.10422196239233017,19,experiments/SimilarityBasedTransfer/output/tajikistan/checkpoints/group1/tsmixer/run_0/group1_tsmixer_epoch=19_val_loss=0.1042.ckpt
+0,ealstm,group1,0.11634860187768936,12,experiments/SimilarityBasedTransfer/output/tajikistan/checkpoints/group1/ealstm/run_0/group1_ealstm_epoch=12_val_loss=0.1163.ckpt
+0,tft,group1,0.11278236657381058,20,experiments/SimilarityBasedTransfer/output/tajikistan/checkpoints/group1/tft/run_0/group1_tft_epoch=20_val_loss=0.1128.ckpt

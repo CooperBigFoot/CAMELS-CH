@@ -1,0 +1,2 @@
+run,model_type,group,best_val_loss,best_epoch,checkpoint_path
+0,tft,group1,0.11278236657381058,20,experiments/SimilarityBasedTransfer/output/tajikistan/checkpoints/group1/tft/run_0/group1_tft_epoch=20_val_loss=0.1128.ckpt
