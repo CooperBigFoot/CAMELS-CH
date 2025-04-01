@@ -1,0 +1,2 @@
+model_type,country,run,best_val_loss,best_epoch,checkpoint_path
+tide,Combined,0,0.06412415206432343,23,experiments/DataSharing/output/checkpoints/combined/tide/run_0/Combined_tide_epoch=23_val_loss=0.0641.ckpt
