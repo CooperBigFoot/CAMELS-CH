@@ -1,0 +1,2 @@
+model_type,country,run,best_val_loss,best_epoch,checkpoint_path
+ealstm,Kyrgyzstan,0,0.05517537519335747,22,experiments/Benchmark/output/checkpoints/kyrgyzstan/ealstm/run_0/Kyrgyzstan_ealstm_epoch=22_val_loss=0.0552.ckpt

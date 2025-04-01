@@ -14,7 +14,7 @@ lstm_layers: 3
 num_attention_heads: 8
 output_len: 10
 quantiles:
-  - 0.5
+- 0.5
 scheduler_factor: 0.5
 scheduler_patience: 5
 static_size: 10

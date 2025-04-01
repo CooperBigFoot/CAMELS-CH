@@ -1,0 +1,2 @@
+model_type,country,run,best_val_loss,best_epoch,checkpoint_path
+ealstm,Tajikistan,0,0.055001385509967804,37,experiments/Benchmark/output/checkpoints/tajikistan/ealstm/run_0/Tajikistan_ealstm_epoch=37_val_loss=0.0550.ckpt
