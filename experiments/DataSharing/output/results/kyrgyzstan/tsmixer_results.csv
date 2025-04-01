@@ -1,2 +1,0 @@
-model_type,country,run,best_val_loss,best_epoch,checkpoint_path
-tsmixer,Kyrgyzstan,0,0.05755223333835602,71,experiments/DataSharing/output/checkpoints/kyrgyzstan/tsmixer/run_0/Kyrgyzstan_tsmixer_epoch=71_val_loss=0.0576.ckpt

@@ -1,2 +1,0 @@
-model_type,country,run,best_val_loss,best_epoch,checkpoint_path
-tsmixer,Tajikistan,0,0.09830906987190247,100,experiments/DataSharing/output/checkpoints/tajikistan/tsmixer/run_0/Tajikistan_tsmixer_epoch=100_val_loss=0.0983.ckpt

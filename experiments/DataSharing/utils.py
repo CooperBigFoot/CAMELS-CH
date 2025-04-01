@@ -22,6 +22,8 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from src.data_models.datamodule import HydroDataModule
 from src.models.model_factory import create_model
 
+from experiments.DataSharing.config import ExperimentConfig
+
 
 def setup_dirs(config: Any) -> Dict[str, Path]:
     """Create and return necessary directories for experiment outputs.
@@ -122,7 +124,7 @@ def train_model(
     yaml_path: str,
     data_module: HydroDataModule,
     country: str,
-    config: Any,
+    config: ExperimentConfig,
     run_idx: int,
 ) -> Dict[str, Any]:
     """
@@ -210,7 +212,7 @@ def train_model(
     return run_results
 
 
-def save_experiment_results(results: List[Dict[str, Any]], config: Any) -> None:
+def save_experiment_results(results: List[Dict[str, Any]], config: ExperimentConfig) -> None:
     """
     Save experiment results to CSV files.
 

@@ -1,2 +1,0 @@
-model_type,country,run,best_val_loss,best_epoch,checkpoint_path
-tft,Kyrgyzstan,0,0.054387640208005905,46,experiments/DataSharing/output/checkpoints/kyrgyzstan/tft/run_0/Kyrgyzstan_tft_epoch=46_val_loss=0.0544.ckpt

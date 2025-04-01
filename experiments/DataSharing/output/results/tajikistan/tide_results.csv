@@ -1,2 +1,0 @@
-model_type,country,run,best_val_loss,best_epoch,checkpoint_path
-tide,Tajikistan,0,0.05957580730319023,44,experiments/DataSharing/output/checkpoints/tajikistan/tide/run_0/Tajikistan_tide_epoch=44_val_loss=0.0596.ckpt

@@ -1,2 +1,0 @@
-model_type,country,run,best_val_loss,best_epoch,checkpoint_path
-tft,Combined,0,0.05251481756567955,40,experiments/DataSharing/output/checkpoints/combined/tft/run_0/Combined_tft_epoch=40_val_loss=0.0525.ckpt
