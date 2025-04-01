@@ -1,0 +1,2 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr
+tft,Tajikistan,0.05174466222524643,15,experiments/FineTuning/output/DataSharing/checkpoints/tajikistan/tft/Tajikistan_tft_epoch=15_val_loss=0.0517.ckpt,0.0002993620086989372,2.993620086989372e-05
