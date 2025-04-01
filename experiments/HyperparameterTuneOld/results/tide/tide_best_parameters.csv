@@ -1,2 +1,0 @@
-best_value,input_length,hidden_size,dropout,learning_rate,num_encoder_layers,num_decoder_layers,decoder_output_size,temporal_decoder_hidden_size,use_layer_norm
-0.053879618644714355,70,101,0.3803925243084487,0.0001326033192269654,3,2,21,36,False

@@ -1,2 +1,0 @@
-run,seed,best_val_loss,best_epoch,checkpoint_path
-0,42,0.057517945766448975,52,experiments/QuantileMapping/results/checkpoints/original/ealstm/run_0/original_ealstm_epoch=52_val_loss=0.0575.ckpt

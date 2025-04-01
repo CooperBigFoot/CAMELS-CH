@@ -1,2 +1,0 @@
-run,seed,best_val_loss,best_epoch,checkpoint_path
-0,42,0.05076565220952034,76,experiments/QuantileMapping/results/checkpoints/original/tft/run_0/original_tft_epoch=76_val_loss=0.0508.ckpt

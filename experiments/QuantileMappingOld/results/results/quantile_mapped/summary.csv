@@ -1,5 +1,0 @@
-model_type,country,best_val_loss,best_epoch,checkpoint_path
-tide,quantile_mapped,0.052513718605041504,40,experiments/QuantileMapping/results/checkpoints/quantile_mapped/tide/run_0/quantile_mapped_tide_epoch=40_val_loss=0.0525.ckpt
-tsmixer,quantile_mapped,0.05368245393037796,89,experiments/QuantileMapping/results/checkpoints/quantile_mapped/tsmixer/run_0/quantile_mapped_tsmixer_epoch=89_val_loss=0.0537.ckpt
-ealstm,quantile_mapped,0.05672966688871384,70,experiments/QuantileMapping/results/checkpoints/quantile_mapped/ealstm/run_0/quantile_mapped_ealstm_epoch=70_val_loss=0.0567.ckpt
-tft,quantile_mapped,0.053511422127485275,42,experiments/QuantileMapping/results/checkpoints/quantile_mapped/tft/run_0/quantile_mapped_tft_epoch=42_val_loss=0.0535.ckpt

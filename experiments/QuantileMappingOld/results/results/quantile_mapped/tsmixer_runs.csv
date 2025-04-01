@@ -1,2 +1,0 @@
-run,seed,best_val_loss,best_epoch,checkpoint_path
-0,42,0.05368245393037796,89,experiments/QuantileMapping/results/checkpoints/quantile_mapped/tsmixer/run_0/quantile_mapped_tsmixer_epoch=89_val_loss=0.0537.ckpt
