@@ -1,0 +1,2 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr
+tft,Kyrgyzstan,0.055191390216350555,12,experiments/FineTuning/output/SimilarityBased/checkpoints/kyrgyzstan/tft/Kyrgyzstan_tft_epoch=12_val_loss=0.0552.ckpt,0.00015996162179839556,1.5996162179839556e-05

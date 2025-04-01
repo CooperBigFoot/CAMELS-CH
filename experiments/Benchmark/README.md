@@ -1,7 +1,6 @@
-# Central Asian Data Sharing Experiment
+# Central Asian Benchmarking Experiment
 
-This experiment evaluates the impact of data sharing between Tajikistan and Kyrgyzstan on hydrological model performance. The core hypothesis is that combining data from both countries will lead to improved model performance compared to training on individual country data.
-
+This experiment is to train the Benchmark models in Central Asia
 ## Experiment Overview
 
 The experiment trains four deep learning models (TiDE, TSMixer, EA-LSTM, and TFT) on three different data scenarios:
@@ -9,8 +8,6 @@ The experiment trains four deep learning models (TiDE, TSMixer, EA-LSTM, and TFT
 1. Tajikistan data only
 2. Kyrgyzstan data only
 3. Combined data from both countries
-
-By comparing model performance across these scenarios, we can quantify the benefits of data sharing for hydrological modeling in data-sparse regions.
 
 ## Data Description
 

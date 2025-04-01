@@ -1,0 +1,2 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr
+ealstm,Kyrgyzstan,0.06339333951473236,9,experiments/FineTuning/output/SimilarityBased/checkpoints/kyrgyzstan/ealstm/Kyrgyzstan_ealstm_epoch=09_val_loss=0.0634.ckpt,0.0008706020878304854,8.706020878304854e-05
