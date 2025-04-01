@@ -22,7 +22,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from src.data_models.datamodule import HydroDataModule
 from src.models.model_factory import create_model
 
-from experiments.DataSharing.config import ExperimentConfig
+from config import ExperimentConfig
 
 
 def setup_dirs(config: Any) -> Dict[str, Path]:

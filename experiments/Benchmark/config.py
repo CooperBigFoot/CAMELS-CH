@@ -66,7 +66,7 @@ class ExperimentConfig:
     max_epochs: int = 100
     accelerator: str = "cuda" if torch.cuda.is_available() else "cpu"
     num_runs: int = 1
-    max_workers: int = min(6, os.cpu_count())
+    max_workers: int = min(6, os.cpu_count() or 1)
 
     # Early stopping configuration
     early_stopping_patience: int = 5
