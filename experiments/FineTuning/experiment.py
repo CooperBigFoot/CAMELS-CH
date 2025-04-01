@@ -63,7 +63,7 @@ def parse_args():
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="experiments/FineTuning/results",
+        default="experiments/FineTuning/output",
         help="Directory to save fine-tuned checkpoints",
     )
 
