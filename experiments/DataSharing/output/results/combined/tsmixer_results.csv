@@ -1,0 +1,2 @@
+model_type,country,run,best_val_loss,best_epoch,checkpoint_path
+tsmixer,Combined,0,0.052398692816495895,34,experiments/DataSharing/output/checkpoints/combined/tsmixer/run_0/Combined_tsmixer_epoch=34_val_loss=0.0524.ckpt
