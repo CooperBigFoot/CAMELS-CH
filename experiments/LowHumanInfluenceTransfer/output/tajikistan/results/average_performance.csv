@@ -1,0 +1,2 @@
+model_type,avg_val_loss,std_val_loss,min_val_loss,max_val_loss,avg_epochs,runs
+tft,0.18214036524295807,,0.18214036524295807,0.18214036524295807,14.0,1

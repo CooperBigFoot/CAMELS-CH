@@ -1,0 +1,2 @@
+model_type,run,best_val_loss,best_epoch,checkpoint_path
+tft,0,0.18214036524295807,14,experiments/LowHumanInfluenceTransfer/output/tajikistan/checkpoints/tft/run_0/global_tft_epoch=14_val_loss=0.1821.ckpt
