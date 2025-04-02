@@ -1,0 +1,2 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr
+tide,Kyrgyzstan,0.055771902203559875,12,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/kyrgyzstan/tide/Kyrgyzstan_tide_epoch=12_val_loss=0.0558.ckpt,0.00029399848560567596,2.9399848560567598e-05

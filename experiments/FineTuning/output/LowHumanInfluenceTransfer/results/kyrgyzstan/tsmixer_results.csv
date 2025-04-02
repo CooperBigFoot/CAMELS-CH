@@ -1,0 +1,2 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr
+tsmixer,Kyrgyzstan,0.056695301085710526,12,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/kyrgyzstan/tsmixer/Kyrgyzstan_tsmixer_epoch=12_val_loss=0.0567.ckpt,0.000658628931758311,6.58628931758311e-05
