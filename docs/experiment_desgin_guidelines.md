@@ -393,7 +393,7 @@ if __name__ == "__main__":
 
 ### 2. Model Creation
 
-- Use the central `model_factory.py` utility for all model creation
+- Use the central `src/models/model_factory.py` utility for all model creation
 - Keep model hyperparameters in YAML files, not hardcoded in the experiment
 - For pretrained models, always use the `load_pretrained_model` function
 
