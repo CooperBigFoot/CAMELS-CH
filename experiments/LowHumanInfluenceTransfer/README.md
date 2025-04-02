@@ -86,8 +86,6 @@ output_dir/
 │   ├── ealstm/
 │   └── ...
 └── results/
-    ├── summary.csv
-    ├── average_performance.csv
     ├── tsmixer/
     │   └── results.csv
     ├── ealstm/
