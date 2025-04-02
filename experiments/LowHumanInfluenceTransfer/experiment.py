@@ -37,7 +37,7 @@ def parse_args():
     
     # YAML paths for hyperparameters
     parser.add_argument(
-        "--yaml-path",
+        "--yaml-dir",
         type=str,
         default="experiments/LowHumanInfluenceTransfer/yaml_files",
         help="Directory containing model YAML files",
