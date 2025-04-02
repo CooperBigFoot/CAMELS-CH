@@ -1,0 +1,2 @@
+run,model_type,best_val_loss,best_epoch,checkpoint_path
+0,tide,0.1833980679512024,25,experiments/LowHumanInfluenceTransfer/output/kyrgyzstan/checkpoints/tide/run_0/global_tide_epoch=25_val_loss=0.1834.ckpt

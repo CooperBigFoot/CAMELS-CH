@@ -161,9 +161,9 @@ def main():
                 config=config,
             )
             
-            # Prepare data
-            data_module.prepare_data()
-            data_module.setup()
+            # # Prepare data
+            # data_module.prepare_data()
+            # data_module.setup()
             
             # Run multiple training runs
             for run_idx in range(args.num_runs):

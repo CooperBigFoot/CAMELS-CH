@@ -1,0 +1,2 @@
+run,model_type,best_val_loss,best_epoch,checkpoint_path
+0,tsmixer,0.18308132886886597,13,experiments/LowHumanInfluenceTransfer/output/kyrgyzstan/checkpoints/tsmixer/run_0/global_tsmixer_epoch=13_val_loss=0.1831.ckpt
