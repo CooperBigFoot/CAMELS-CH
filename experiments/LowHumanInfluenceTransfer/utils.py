@@ -34,12 +34,11 @@ def setup_dirs(config: ExperimentConfig) -> Dict[str, Path]:
     """
     base_dir = Path(config.output_dir)
 
-    # Define directory structure
+    # Define directory structure - removed models directory
     dirs = {
         "checkpoints": base_dir / "checkpoints",
         "logs": base_dir / "logs",
         "results": base_dir / "results",
-        "models": base_dir / "models",
     }
 
     # Create directories for each model type
@@ -47,7 +46,6 @@ def setup_dirs(config: ExperimentConfig) -> Dict[str, Path]:
         (dirs["checkpoints"] / model_type).mkdir(parents=True, exist_ok=True)
         (dirs["logs"] / model_type).mkdir(parents=True, exist_ok=True)
         (dirs["results"] / model_type).mkdir(parents=True, exist_ok=True)
-        (dirs["models"] / model_type).mkdir(parents=True, exist_ok=True)
 
     return dirs
 
@@ -183,24 +181,15 @@ def train_model(
         "val_loss", torch.tensor(float("inf"))
     ).item()
 
-    # Save the final model in a standard location for later fine-tuning
-    model_save_dir = Path(config.output_dir) / "models" / model_type
-    model_save_dir.mkdir(parents=True, exist_ok=True)
-    model_save_path = model_save_dir / f"global_{model_type}_run_{run_idx}.ckpt"
-
-    trainer.save_checkpoint(model_save_path)
-
-    # Store run results
+    # Store run results - removed saving to models directory
+    best_checkpoint_path = checkpoint_dir / f"global_{model_type}_epoch={trainer.current_epoch:02d}_val_loss={best_val_loss:.4f}.ckpt"
+    
     run_results = {
         "run": run_idx,
         "model_type": model_type,
         "best_val_loss": best_val_loss,
         "best_epoch": trainer.current_epoch,
-        "checkpoint_path": str(
-            checkpoint_dir
-            / f"global_{model_type}_epoch={trainer.current_epoch:02d}_val_loss={best_val_loss:.4f}.ckpt"
-        ),
-        "saved_model_path": str(model_save_path),
+        "checkpoint_path": str(best_checkpoint_path),
     }
 
     print(
@@ -220,44 +209,58 @@ def save_experiment_results(
         results: List of result dictionaries from training runs
         config: Experiment configuration
     """
-    # Group results by country
-    country_results = {}
+    # Group results by model type
+    model_results = {}
     for result in results:
-        country = result["country"]
-        if country not in country_results:
-            country_results[country] = []
-        country_results[country].append(result)
-
-    # Save results for each country
-    for country, country_data in country_results.items():
-        results_dir = config.get_results_dir(country, "")
-        results_dir.mkdir(parents=True, exist_ok=True)
-
-        # Create summary dataframe
-        summary_rows = []
-        for result in country_data:
-            summary_rows.append(
-                {
-                    "model_type": result["model_type"],
-                    "country": result["country"],
-                    "run": result["run"],
-                    "best_val_loss": result["best_val_loss"],
-                    "best_epoch": result["best_epoch"],
-                    "checkpoint_path": result["checkpoint_path"],
-                }
-            )
-
-        # Save summary
-        if summary_rows:
-            summary_df = pd.DataFrame(summary_rows)
-            summary_df.to_csv(results_dir / "summary.csv", index=False)
-
-            # Also save model-specific results
-            for model_type in config.model_types:
-                model_results = summary_df[summary_df["model_type"] == model_type]
-                if not model_results.empty:
-                    model_results.to_csv(
-                        results_dir / f"{model_type}_results.csv", index=False
-                    )
-
+        model_type = result["model_type"]
+        if model_type not in model_results:
+            model_results[model_type] = []
+        model_results[model_type].append(result)
+    
+    # Create summary dataframe
+    summary_rows = []
+    for result in results:
+        summary_rows.append({
+            "model_type": result["model_type"],
+            "run": result["run"],
+            "best_val_loss": result["best_val_loss"],
+            "best_epoch": result["best_epoch"],
+            "checkpoint_path": result["checkpoint_path"],
+        })
+    
+    # Save summary for all models
+    results_dir = Path(config.output_dir) / "results"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    
+    if summary_rows:
+        summary_df = pd.DataFrame(summary_rows)
+        summary_df.to_csv(results_dir / "summary.csv", index=False)
+        
+        # Calculate and save average performance per model
+        avg_results = []
+        for model_type in config.model_types:
+            model_df = summary_df[summary_df["model_type"] == model_type]
+            if not model_df.empty:
+                avg_results.append({
+                    "model_type": model_type,
+                    "avg_val_loss": model_df["best_val_loss"].mean(),
+                    "std_val_loss": model_df["best_val_loss"].std(),
+                    "min_val_loss": model_df["best_val_loss"].min(),
+                    "max_val_loss": model_df["best_val_loss"].max(),
+                    "avg_epochs": model_df["best_epoch"].mean(),
+                    "runs": len(model_df),
+                })
+        
+        if avg_results:
+            avg_df = pd.DataFrame(avg_results)
+            avg_df.to_csv(results_dir / "average_performance.csv", index=False)
+    
+    # Save model-specific results
+    for model_type, model_data in model_results.items():
+        model_dir = results_dir / model_type
+        model_dir.mkdir(parents=True, exist_ok=True)
+        
+        model_df = pd.DataFrame(model_data)
+        model_df.to_csv(model_dir / "results.csv", index=False)
+    
     print(f"Results saved to {config.output_dir}/results")

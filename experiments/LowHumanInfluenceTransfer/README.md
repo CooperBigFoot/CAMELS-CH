@@ -81,11 +81,9 @@ output_dir/
 │   ├── tsmixer/
 │   ├── ealstm/
 │   └── ...
-├── models/
-│   ├── tsmixer/
-│   ├── ealstm/
-│   └── ...
 └── results/
+    ├── summary.csv
+    ├── average_performance.csv
     ├── tsmixer/
     │   └── results.csv
     ├── ealstm/
@@ -97,7 +95,6 @@ output_dir/
 
 - `checkpoints/`: Contains model checkpoints for each run
 - `logs/`: TensorBoard logs for training progress
-- `models/`: Saved models ready for fine-tuning
 - `results/summary.csv`: Summary of all runs
 - `results/average_performance.csv`: Average performance metrics per model
 
@@ -113,7 +110,7 @@ Each model is trained using the following process:
 
 ## Fine-tuning Guidelines
 
-The pretrained models saved in the `models/` directory can be used for fine-tuning on Central Asian data. The recommended approach is:
+The pretrained models saved in the `checkpoints/` directory can be used for fine-tuning on Central Asian data. The recommended approach is:
 
 1. Load the pretrained model using the appropriate checkpoint
 2. Reduce the learning rate by a factor of 10-100
