@@ -74,7 +74,7 @@ def plot_rolling_forecast(
 
     ax.set_title(title, fontsize=14)
     ax.set_xlabel("Date", fontsize=12)
-    ax.set_ylabel("Streamflow [mm/s]", fontsize=12)
+    ax.set_ylabel("Streamflow [mm/d]", fontsize=12)
 
     # Format x-axis
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
