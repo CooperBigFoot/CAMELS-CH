@@ -1,0 +1,2 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr
+tide,Tajikistan,0.05238655209541321,17,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/tajikistan/tide/Tajikistan_tide_epoch=17_val_loss=0.0524.ckpt,0.00018159850484411317,1.8159850484411317e-05
