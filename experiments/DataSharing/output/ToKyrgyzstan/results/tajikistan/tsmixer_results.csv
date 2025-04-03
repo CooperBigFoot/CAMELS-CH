@@ -1,0 +1,6 @@
+model_type,country,run,best_val_loss,best_epoch,checkpoint_path
+tsmixer,Tajikistan,0,0.06197251379489899,21,experiments/DataSharing/output/ToKyrgyzstan/checkpoints/tajikistan/tsmixer/run_0/Tajikistan_tsmixer_epoch=21_val_loss=0.0620.ckpt
+tsmixer,Tajikistan,1,0.05853097140789032,27,experiments/DataSharing/output/ToKyrgyzstan/checkpoints/tajikistan/tsmixer/run_1/Tajikistan_tsmixer_epoch=27_val_loss=0.0585.ckpt
+tsmixer,Tajikistan,2,0.05945918336510658,30,experiments/DataSharing/output/ToKyrgyzstan/checkpoints/tajikistan/tsmixer/run_2/Tajikistan_tsmixer_epoch=30_val_loss=0.0595.ckpt
+tsmixer,Tajikistan,3,0.05873936042189598,35,experiments/DataSharing/output/ToKyrgyzstan/checkpoints/tajikistan/tsmixer/run_3/Tajikistan_tsmixer_epoch=35_val_loss=0.0587.ckpt
+tsmixer,Tajikistan,4,0.05987676978111267,35,experiments/DataSharing/output/ToKyrgyzstan/checkpoints/tajikistan/tsmixer/run_4/Tajikistan_tsmixer_epoch=35_val_loss=0.0599.ckpt

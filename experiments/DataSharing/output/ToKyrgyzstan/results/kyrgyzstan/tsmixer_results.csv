@@ -1,0 +1,6 @@
+model_type,country,run,best_val_loss,best_epoch,checkpoint_path
+tsmixer,Kyrgyzstan,0,0.05536787211894989,18,experiments/DataSharing/output/ToKyrgyzstan/checkpoints/kyrgyzstan/tsmixer/run_0/Kyrgyzstan_tsmixer_epoch=18_val_loss=0.0554.ckpt
+tsmixer,Kyrgyzstan,1,0.055615440011024475,18,experiments/DataSharing/output/ToKyrgyzstan/checkpoints/kyrgyzstan/tsmixer/run_1/Kyrgyzstan_tsmixer_epoch=18_val_loss=0.0556.ckpt
+tsmixer,Kyrgyzstan,2,0.05466238781809807,17,experiments/DataSharing/output/ToKyrgyzstan/checkpoints/kyrgyzstan/tsmixer/run_2/Kyrgyzstan_tsmixer_epoch=17_val_loss=0.0547.ckpt
+tsmixer,Kyrgyzstan,3,0.059139735996723175,18,experiments/DataSharing/output/ToKyrgyzstan/checkpoints/kyrgyzstan/tsmixer/run_3/Kyrgyzstan_tsmixer_epoch=18_val_loss=0.0591.ckpt
+tsmixer,Kyrgyzstan,4,0.05638812854886055,21,experiments/DataSharing/output/ToKyrgyzstan/checkpoints/kyrgyzstan/tsmixer/run_4/Kyrgyzstan_tsmixer_epoch=21_val_loss=0.0564.ckpt
