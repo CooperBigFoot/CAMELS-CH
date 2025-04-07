@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "Installing all packages"
-pip install "numpy<=3.0.0" "torch>=2.0.0,!=2.0.1,<3.0.0" "scipy>=1.8,<2.0" "pandas>=1.3.0,<3.0.0" "scikit-learn>=1.2,<2.0" "pytorch-forecasting>=1.2.0" "matplotlib>=3.10.0" "seaborn>=0.13.2" "pip-tools>=7.4.1" "cdsapi>=0.7.4" "geopandas>=1.0.1" "earthengine-api>=1.5.1" "geemap>=0.35.1" "folium>=0.19.4" "pytest>=8.3.4" "tensorboard>=2.19.0" "optuna>=4.2.1" "plotly>=6.0.0" "contextily>=1.6.2" "matplotlib-scalebar>=0.9.0" "ruff>=0.9.7" "ipykernel>=6.29.5" "geopy>=2.4.1" "geodatasets>=2024.8.0" "sktime>=0.36.0" "numba>=0.61.0" "pyarrow>=19.0.1" "ace-tools>=0.0" "tslearn>=0.6.3" "dtaidistance>=2.3.13" "h5py>=3.13.0" "python-dotenv>=0.9.9" "lightning>=2.5.0.post0"
+pip install "numpy<=3.0.0" "torch>=2.0.0,!=2.0.1,<3.0.0" "scipy>=1.8,<2.0" "pandas>=1.3.0,<3.0.0" "scikit-learn>=1.2,<2.0" "pytorch-forecasting>=1.2.0" "matplotlib>=3.10.0" "seaborn>=0.13.2" "pip-tools>=7.4.1" "cdsapi>=0.7.4" "geopandas>=1.0.1" "earthengine-api>=1.5.1" "geemap>=0.35.1" "folium>=0.19.4" "pytest>=8.3.4" "tensorboard>=2.19.0" "optuna>=4.2.1" "plotly>=6.0.0" "contextily>=1.6.2" "matplotlib-scalebar>=0.9.0" "ruff>=0.9.7" "ipykernel>=6.29.5" "geopy>=2.4.1" "geodatasets>=2024.8.0" "sktime>=0.36.0" "numba>=0.61.0" "pyarrow>=19.0.1" "ace-tools>=0.0" "tslearn>=0.6.3" "dtaidistance>=2.3.13" "h5py>=3.13.0" "python-dotenv>=0.9.9" "lightning>=2.5.0.post0" "customtkinter>=5.2.2"
 
 # Configure Git user
 echo "Configuring Git..."

@@ -38,4 +38,5 @@ dependencies = [
   "dotenv>=0.9.9",
   "lightning>=2.5.0.post0",
   "cartopy>=0.24.1",
+  "customtkinter>=5.2.2",
 ]

@@ -17,7 +17,7 @@ def plot_rolling_forecast(
     horizon: int,
     group_identifier: str,
     fig_size: tuple = (12, 6),
-    title: str = None,
+    title: str = "",
     color_scheme: Dict[str, str] = None,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
@@ -95,12 +95,10 @@ def plot_metric_boxplot(
     horizons: Optional[List[int]] = None,
     fig_size: Tuple[int, int] = (14, 7),
     title: Optional[str] = None,
-    violin: bool = False,
-    individual_points: bool = True,
     palette: Optional[Union[str, List[str]]] = None,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
-    Create a boxplot or violin plot comparing multiple models' metrics across horizons.
+    Create a boxplot comparing multiple models' metrics across horizons.
 
     Args:
         evaluator_results: Dictionary with evaluator results for multiple models
@@ -109,8 +107,6 @@ def plot_metric_boxplot(
         horizons: List of horizons to include (if None, use all available horizons)
         fig_size: Figure size as (width, height)
         title: Custom title for the plot
-        violin: If True, use violin plots instead of boxplots
-        individual_points: If True, show individual data points
         palette: Color palette for the plot (string or list of colors)
 
     Returns:
@@ -165,38 +161,10 @@ def plot_metric_boxplot(
     # Create figure
     fig, ax = plt.subplots(figsize=fig_size)
 
-    # Create violin plot or boxplot
-    if violin:
-        sns.violinplot(
-            x="horizon",
-            y="metric_value",
-            hue="model",
-            data=df,
-            palette=palette,
-            split=len(model_names) == 2,  # Split violins only if comparing 2 models
-            inner="quartile",
-            ax=ax,
-        )
-    else:
-        sns.boxplot(
-            x="horizon", y="metric_value", hue="model", data=df, palette=palette, ax=ax
-        )
-
-    # Add individual points if requested
-    if individual_points:
-        sns.stripplot(
-            x="horizon",
-            y="metric_value",
-            hue="model",
-            data=df,
-            size=3,
-            alpha=0.3,
-            jitter=True,
-            dodge=True,
-            palette=palette,
-            legend=False,
-            ax=ax,
-        )
+    # Create boxplot
+    sns.boxplot(
+        x="horizon", y="metric_value", hue="model", data=df, palette=palette, ax=ax
+    )
 
     # Add median value labels for each model and horizon
     if len(model_names) <= 3:  # Only add labels if not too many models
@@ -208,7 +176,6 @@ def plot_metric_boxplot(
                     median = filtered["metric_value"].median()
 
                     # Calculate position for the text
-                    # For boxplots, we need to offset based on model position
                     model_count = len(model_names)
                     box_width = 0.8  # Default box width in seaborn
                     position = h_idx
@@ -241,9 +208,15 @@ def plot_metric_boxplot(
             title = f"Distribution of {metric} Values by Horizon"
     ax.set_title(title, fontsize=14)
 
-    # Customize legend
-    if len(model_names) > 1:
-        ax.legend(title="Model", loc="best")
+    # Customize legend - place at bottom with 4 columns
+    ax.legend(
+        title="Model",
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.15),
+        ncol=4,
+        frameon=True,
+        fontsize=10,
+    )
 
     # Add grid lines for better readability
     ax.grid(True, axis="y", alpha=0.3, linestyle="--")
