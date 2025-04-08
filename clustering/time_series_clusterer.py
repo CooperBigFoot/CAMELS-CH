@@ -413,8 +413,16 @@ class TimeSeriesClusterer:
         plt.subplots_adjust(bottom=0.1)
         plt.tight_layout()
 
+
+        plt.tight_layout()
+        plt.subplots_adjust(bottom=0.1)
+
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches="tight")
+
+        plt.tight_layout()
+        # Adjust after tight_layout to make room for the legend
+        plt.subplots_adjust(bottom=0.1)
         plt.show()
 
     def describe_clusters(self) -> List[dict]:

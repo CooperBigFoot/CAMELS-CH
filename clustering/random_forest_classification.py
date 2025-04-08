@@ -23,9 +23,6 @@ from src.data_models.caravanify import Caravanify, CaravanifyConfig
 @dataclass
 class ClassificationConfig:
     """Configuration for the time series clustering process."""
-
-    n_clusters: int
-
     # Data directories
     attributes_base_dir: str
     timeseries_base_dir: str
@@ -657,7 +654,6 @@ if __name__ == "__main__":
         cluster_assignment_path="/workspace/CAMELS-CH/clustering_results/cluster_assignments_shifted.csv",
         source_countries=["CH", "CL", "USA"],
         target_country="CA",
-        n_clusters=13,
     )
 
     main(config)
