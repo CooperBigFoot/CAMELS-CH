@@ -195,7 +195,7 @@ def main(config: ClusteringConfig):
             "cluster": list(id_to_cluster.values()),
         }
     )
-    # results_df.to_csv(results_csv_path, index=False)
+    results_df.to_csv(results_csv_path, index=False)
     print(f"Results saved to {results_csv_path}")
 
 
