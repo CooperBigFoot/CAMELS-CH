@@ -94,7 +94,7 @@ def load_country_data(country: str, config: ClusteringConfig) -> pd.DataFrame:
 
     # Return cleaned daily data
     return data_module.train_dataset.df_sorted
-
+    # return ts_data
 
 def main(config: ClusteringConfig):
     """
@@ -140,6 +140,9 @@ def main(config: ClusteringConfig):
         hemisphere_map=hemisphere_map,
     )
 
+    nan_count = pd.isna(ts_data_standardized).sum()
+    print(f"NaN count in standardized time series data: {nan_count}")
+    
     # Proceed with clustering
     print(f"Prepared standardized data with shape: {ts_data_standardized.shape}")
 
