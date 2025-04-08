@@ -651,7 +651,7 @@ if __name__ == "__main__":
         attributes_base_dir="/workspace/CARAVANIFY",
         timeseries_base_dir="/workspace/CARAVANIFY",
         output_dir="./classification_results",
-        cluster_assignment_path="/workspace/CAMELS-CH/clustering_results/cluster_assignments_shifted.csv",
+        cluster_assignment_path="/workspace/CAMELS-CH/clustering_results/cluster_assignments_shifted_refactor.csv",
         source_countries=["CH", "CL", "USA"],
         target_country="CA",
     )
