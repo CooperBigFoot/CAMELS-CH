@@ -9,6 +9,7 @@ from joblib import Parallel, delayed
 from dtaidistance import dtw
 
 
+sns.set_context("paper", font_scale=1.3)
 RANDOM_SEED = 42
 
 
@@ -296,7 +297,7 @@ class TimeSeriesClusterer:
         """
         Plot clusters with centroids and sample series from each cluster in a grid layout.
         Only bottom-most plots in each column have x-axis labels, and only leftmost plots
-        in each row have y-axis labels.
+        in each row have y-axis labels. Uses a single legend at the bottom.
 
         Args:
             max_series_per_cluster (int): Maximum number of series to plot per cluster
@@ -306,19 +307,21 @@ class TimeSeriesClusterer:
             raise ValueError("Model not fitted yet. Call fit() before plot_clusters().")
 
         # Define distinct colors for centroids
-        centroid_colors = sns.color_palette("husl", self.n_clusters)
+        centroid_colors = sns.color_palette("colorblind", self.n_clusters)
 
         # Calculate grid dimensions
         cols = min(3, self.n_clusters)  # Max 3 columns
         rows = (self.n_clusters + cols - 1) // cols  # Ceiling division to get rows
 
         # Create a single figure with subplots
-        fig, axes = plt.subplots(
-            rows, cols, figsize=(cols * 5, rows * 4), squeeze=False
-        )
+        fig, axes = plt.subplots(rows, cols, figsize=(10, 14), squeeze=False)
 
         # Flatten the axes array for easier indexing
         axes_flat = axes.flatten()
+
+        # Create empty lists to store handles and labels for the legend
+        legend_handles = []
+        legend_labels = []
 
         # Loop through each cluster
         for i in range(self.n_clusters):
@@ -333,16 +336,36 @@ class TimeSeriesClusterer:
             cluster_series = cluster_series[:max_series_per_cluster]
 
             # Plot individual series in gray
-            for series in cluster_series:
-                ax.plot(series, color="gray", alpha=0.4)
+            # Create a line for sample members (only add to legend from the first subplot)
+            if i == 0:
+                # Plot one series and save its handle for the legend
+                sample_line = ax.plot(
+                    cluster_series[0] if len(cluster_series) > 0 else [],
+                    color="gray",
+                    alpha=0.4,
+                )[0]
+                legend_handles.append(sample_line)
+                legend_labels.append("Cluster members")
+
+                # Plot the rest without adding to legend
+                for series in cluster_series[1:]:
+                    ax.plot(series, color="gray", alpha=0.4)
+            else:
+                # Plot all series without adding to legend
+                for series in cluster_series:
+                    ax.plot(series, color="gray", alpha=0.4)
 
             # Plot centroid in color
-            ax.plot(
+            centroid_line = ax.plot(
                 self.cluster_centers_[i],
                 color=centroid_colors[i % len(centroid_colors)],
                 linewidth=3,
-                label="Cluster Centroid",
-            )
+            )[0]
+
+            # Only add the first centroid to the legend
+            if i == 0:
+                legend_handles.append(centroid_line)
+                legend_labels.append("Cluster centroid")
 
             # Set title for all plots
             ax.set_title(f"Cluster {i}")
@@ -365,7 +388,8 @@ class TimeSeriesClusterer:
             # Add horizontal dashed line at y=0
             ax.axhline(0, color="black", linestyle="--", linewidth=0.5)
 
-            ax.legend()
+            # Remove individual legends
+            # ax.legend()
             ax.grid(True, alpha=0.3)
             sns.despine(ax=ax)
 
@@ -373,10 +397,25 @@ class TimeSeriesClusterer:
         for j in range(self.n_clusters, len(axes_flat)):
             fig.delaxes(axes_flat[j])
 
+        # Add a single legend at the bottom of the figure
+        fig.legend(
+            handles=legend_handles,
+            labels=legend_labels,
+            loc="lower center",
+            ncol=2,
+            bbox_to_anchor=(0.5, 0),
+            frameon=True,
+        )
+
+        # Add padding at the bottom for the legend
+        plt.subplots_adjust(bottom=0.1)
+
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches="tight")
 
         plt.tight_layout()
+        # Adjust after tight_layout to make room for the legend
+        plt.subplots_adjust(bottom=0.1)
         plt.show()
 
     def describe_clusters(self) -> List[dict]:
