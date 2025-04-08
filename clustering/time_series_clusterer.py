@@ -314,7 +314,7 @@ class TimeSeriesClusterer:
         rows = (self.n_clusters + cols - 1) // cols  # Ceiling division to get rows
 
         # Create a single figure with subplots
-        fig, axes = plt.subplots(rows, cols, figsize=(10, 15), squeeze=False)
+        fig, axes = plt.subplots(rows, cols, figsize=(8, 12), squeeze=False)
 
         # Flatten the axes array for easier indexing
         axes_flat = axes.flatten()
@@ -410,12 +410,13 @@ class TimeSeriesClusterer:
         # Add padding at the bottom for the legend
         plt.subplots_adjust(bottom=0.1)
 
-        if save_path:
-            plt.savefig(save_path, dpi=300, bbox_inches="tight")
 
         plt.tight_layout()
-        # Adjust after tight_layout to make room for the legend
         plt.subplots_adjust(bottom=0.1)
+
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches="tight")
+            
         plt.show()
 
     def describe_clusters(self) -> List[dict]:

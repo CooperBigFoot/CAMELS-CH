@@ -44,10 +44,7 @@ def prepare_timeseries_data(
     year = df[date_col].dt.year
 
     # For southern hemisphere: water year starts on April 1
-    # -> if month >= 4, water year is the current year, otherwise previous year.
     southern_wy = np.where(month >= 4, year, year - 1)
-
-    # For northern hemisphere (using original logic): water year = current year if month < 10, else next year.
     northern_wy = np.where(month < 10, year, year + 1)
 
     # Assign water_year based on hemisphere

@@ -476,7 +476,6 @@ class HydroDataModule(pl.LightningDataModule):
         train_df, val_df, test_df = self._split_data()
         self._apply_preprocessing(train_df)
 
-    # TODO: Checking for empty splits should also be done for the proportional split
     def _split_data(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         Split data into training, validation, and test sets.
