@@ -28,17 +28,17 @@ class ClusteringConfig:
     timeseries_base_dir: str
 
     # Clustering parameters
-    min_clusters: int = 4
-    max_clusters: int = 20
+    min_clusters: int = 10
+    max_clusters: int = 18
     max_iter: int = 75
     n_jobs: int = -1
     warping_window: float = 0.2
 
     # Output paths
     output_dir: str = "./clustering_results"
-    elbow_plot_filename: str = "elbow_plot_shifted.png"
-    cluster_plot_filename: str = "cluster_plot_shifted_test.png"
-    results_csv_filename: str = "cluster_assignments_shifted_test.csv"
+    elbow_plot_filename: str = "elbow_plot_shifted_refactor.png"
+    cluster_plot_filename: str = "cluster_plot_shifted_refactor.png"
+    results_csv_filename: str = "cluster_assignments_shifted_refactor.csv"
 
     # Optimization method
     optimization_method: str = "elbow"  # 'elbow' or 'silhouette'
@@ -154,27 +154,27 @@ def main(config: ClusteringConfig):
     )
 
     # Optimize clusters
-    # print(
-    #     f"Optimizing number of clusters from {config.min_clusters} to {config.max_clusters}..."
-    # )
-    # clusterer.optimize_clusters(
-    #     ts_data_standardized, config.min_clusters, config.max_clusters
-    # )
+    print(
+        f"Optimizing number of clusters from {config.min_clusters} to {config.max_clusters}..."
+    )
+    clusterer.optimize_clusters(
+        ts_data_standardized, config.min_clusters, config.max_clusters
+    )
 
     # Plot and save optimization results
-    # plt.figure(figsize=(15, 7))
-    # clusterer.plot_cluster_optimization(save_path=elbow_plot_path)
-    # plt.close()
-    # print(f"Saved optimization plot to {elbow_plot_path}")
+    plt.figure(figsize=(15, 7))
+    clusterer.plot_cluster_optimization(save_path=elbow_plot_path)
+    plt.close()
+    print(f"Saved optimization plot to {elbow_plot_path}")
 
     # Get recommended number of clusters
-    # optimal_clusters = clusterer.recommend_clusters(method=config.optimization_method)
-    # print(f"Recommended number of clusters: {optimal_clusters}")
+    optimal_clusters = clusterer.recommend_clusters(method=config.optimization_method)
+    print(f"Recommended number of clusters: {optimal_clusters}")
 
     # # Fit with recommended clusters
-    # print(f"Fitting clusterer with {optimal_clusters} clusters...")
+    print(f"Fitting clusterer with {optimal_clusters} clusters...")
     clusterer = TimeSeriesClusterer(
-        n_clusters=15,
+        n_clusters=optimal_clusters,
         max_iter=config.max_iter,
         n_jobs=config.n_jobs,
         warping_window=config.warping_window,
@@ -207,7 +207,7 @@ if __name__ == "__main__":
         timeseries_base_dir="/workspace/CARAVANIFY",
         output_dir="./clustering_results",
         min_clusters=10,
-        max_clusters=20,
+        max_clusters=18,
         max_iter=75,
         n_jobs=-1,
         warping_window=0.2,
