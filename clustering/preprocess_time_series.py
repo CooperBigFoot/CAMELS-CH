@@ -16,8 +16,7 @@ def prepare_timeseries_data(
 ) -> Tuple[np.ndarray, List[str]]:
     """
     Prepare time series data for clustering by aggregating to weekly data and standardizing.
-    Adjusts water year calculation based on hemisphere: for southern hemisphere (e.g., Chile),
-    the water year runs from April to March, while for northern it runs from October to September.
+    Excludes any basin with NaN values in the final standardized data.
 
     Args:
         df: DataFrame with daily streamflow data.
@@ -84,20 +83,49 @@ def prepare_timeseries_data(
 
     basin_ids = wide_df.index.tolist()
     ts_data = []
+    valid_basin_ids = []
 
+    # Process each basin and filter out any with NaNs in final result
     for basin_id in basin_ids:
         series = wide_df.loc[basin_id].values
+
         # Fill any missing values with linear interpolation
-        series = pd.Series(series).interpolate().values
+        try:
+            interpolated = pd.Series(series).interpolate().values
 
-        # Z-score standardization if requested
-        if standardize:
-            std_series = zscore(series)
-            ts_data.append(std_series)
-        else:
-            ts_data.append(series)
+            # If we still have NaNs after interpolation, skip this basin
+            if np.isnan(interpolated).any():
+                continue
 
-    return np.array(ts_data), basin_ids
+            # Apply standardization if requested
+            if standardize:
+                std_series = zscore(interpolated)
+                # Check for NaNs after standardization (e.g., constant series with std=0)
+                if np.isnan(std_series).any():
+                    continue
+                ts_data.append(std_series)
+            else:
+                ts_data.append(interpolated)
+
+            # Only add basin_id if we successfully processed its data
+            valid_basin_ids.append(basin_id)
+
+        except Exception as e:
+            # Skip basins with any errors during processing
+            continue
+
+    # Print diagnostics about filtering
+    orig_count = len(basin_ids)
+    final_count = len(valid_basin_ids)
+    print(
+        f"Started with {orig_count} basins, removed {orig_count - final_count} with NaNs, kept {final_count}"
+    )
+
+    # Return only the valid, NaN-free data
+    if final_count == 0:
+        raise ValueError("No valid basins remained after filtering NaNs")
+
+    return np.array(ts_data), valid_basin_ids
 
 
 def plot_standardized_hydrographs(
