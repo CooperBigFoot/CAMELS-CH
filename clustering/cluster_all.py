@@ -73,28 +73,28 @@ def load_country_data(country: str, config: ClusteringConfig) -> pd.DataFrame:
     ts_data = ts_data[ts_colunms]
 
     # Configure HydroDataModule for preprocessing
-    data_module = HydroDataModule(
-        time_series_df=ts_data,
-        group_identifier="gauge_id",
-        min_train_years=0,
-        max_missing_pct=10,
-        features=["streamflow"],
-        target="streamflow",
-        domain_id=country,
-        train_prop=1,
-        val_prop=0,
-        test_prop=0,
-    )
+    # data_module = HydroDataModule(
+    #     time_series_df=ts_data,
+    #     group_identifier="gauge_id",
+    #     min_train_years=0,
+    #     max_missing_pct=10,
+    #     features=["streamflow"],
+    #     target="streamflow",
+    #     domain_id=country,
+    #     train_prop=1,
+    #     val_prop=0,
+    #     test_prop=0,
+    # )
 
-    # Process data
-    data_module.prepare_data()
-    data_module.setup("fit")
+    # # Process data
+    # data_module.prepare_data()
+    # data_module.setup("fit")
 
-    print(f"  Cleaned data for {country}")
+    # print(f"  Cleaned data for {country}")
 
-    # Return cleaned daily data
-    return data_module.train_dataset.df_sorted
-    # return ts_data
+    # # Return cleaned daily data
+    # return data_module.train_dataset.df_sorted
+    return ts_data
 
 def main(config: ClusteringConfig):
     """
@@ -154,25 +154,25 @@ def main(config: ClusteringConfig):
     )
 
     # Optimize clusters
-    print(
-        f"Optimizing number of clusters from {config.min_clusters} to {config.max_clusters}..."
-    )
-    clusterer.optimize_clusters(
-        ts_data_standardized, config.min_clusters, config.max_clusters
-    )
+    # print(
+    #     f"Optimizing number of clusters from {config.min_clusters} to {config.max_clusters}..."
+    # )
+    # clusterer.optimize_clusters(
+    #     ts_data_standardized, config.min_clusters, config.max_clusters
+    # )
 
     # Plot and save optimization results
-    plt.figure(figsize=(15, 7))
-    clusterer.plot_cluster_optimization(save_path=elbow_plot_path)
-    plt.close()
-    print(f"Saved optimization plot to {elbow_plot_path}")
+    # plt.figure(figsize=(15, 7))
+    # clusterer.plot_cluster_optimization(save_path=elbow_plot_path)
+    # plt.close()
+    # print(f"Saved optimization plot to {elbow_plot_path}")
 
     # Get recommended number of clusters
-    optimal_clusters = clusterer.recommend_clusters(method=config.optimization_method)
-    print(f"Recommended number of clusters: {optimal_clusters}")
+    # optimal_clusters = clusterer.recommend_clusters(method=config.optimization_method)
+    # print(f"Recommended number of clusters: {optimal_clusters}")
 
     # # Fit with recommended clusters
-    print(f"Fitting clusterer with {optimal_clusters} clusters...")
+    # print(f"Fitting clusterer with {optimal_clusters} clusters...")
     clusterer = TimeSeriesClusterer(
         n_clusters=15,
         max_iter=config.max_iter,
@@ -181,8 +181,6 @@ def main(config: ClusteringConfig):
     )
     clusterer.fit(ts_data_standardized, basin_ids)
 
-    # Plot and save clusters
-    plt.figure(figsize=(20, 15))
     clusterer.plot_clusters(max_series_per_cluster=200, save_path=cluster_plot_path)
     plt.close()
     print(f"Saved cluster plot to {cluster_plot_path}")
@@ -197,7 +195,7 @@ def main(config: ClusteringConfig):
             "cluster": list(id_to_cluster.values()),
         }
     )
-    results_df.to_csv(results_csv_path, index=False)
+    # results_df.to_csv(results_csv_path, index=False)
     print(f"Results saved to {results_csv_path}")
 
 

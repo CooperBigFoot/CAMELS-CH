@@ -314,7 +314,7 @@ class TimeSeriesClusterer:
         rows = (self.n_clusters + cols - 1) // cols  # Ceiling division to get rows
 
         # Create a single figure with subplots
-        fig, axes = plt.subplots(rows, cols, figsize=(10, 14), squeeze=False)
+        fig, axes = plt.subplots(rows, cols, figsize=(10, 15), squeeze=False)
 
         # Flatten the axes array for easier indexing
         axes_flat = axes.flatten()
