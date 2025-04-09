@@ -54,7 +54,7 @@ class ExperimentConfig:
     )
 
     # Group-based configuration
-    ca_groups_path: str = "/workspace/CAMELS-CH/classification_results/final_basin_assignments_11_clusters.csv.csv"
+    ca_groups_path: str = "/workspace/CAMELS-CH/classification_results/final_basin_assignments_11_clusters.csv"
     source_clusters_path: str = (
         "/workspace/CAMELS-CH/clustering_results/cluster_assignments_shifted_refactor.csv"
     )
@@ -63,9 +63,9 @@ class ExperimentConfig:
     group_mappings: Dict[str, Dict] = field(
         default_factory=lambda: {
             "group1": {
-                "name": "Group 1 [13, 14]",
-                "clusters": [13, 14],
-                "ca_group_label": "Group 1 [13, 14]",
+                "name": "Group 1 [0, 10]",
+                "clusters": [0, 10],
+                "ca_group_label": "Group 1 [0, 10]",
             },
         }
     )
