@@ -56,7 +56,7 @@ class ExperimentConfig:
     # Group-based configuration
     ca_groups_path: str = "/workspace/CAMELS-CH/classification_results/final_basin_assignments_11_clusters.csv"
     source_clusters_path: str = (
-        "/workspace/CAMELS-CH/clustering_results/cluster_assignments_shifted.csv"
+        "/workspace/CAMELS-CH/clustering_results/cluster_assignments_shifted_refactor.csv"
     )
 
     # Define group mappings - can be expanded to include more groups

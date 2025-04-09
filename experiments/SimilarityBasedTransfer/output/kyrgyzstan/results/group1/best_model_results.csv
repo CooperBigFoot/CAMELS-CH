@@ -1,5 +1,5 @@
 run,model_type,group,best_val_loss,best_epoch,checkpoint_path
-0,tide,group1,0.091701939702034,19,experiments/SimilarityBasedTransfer/output/kyrgyzstan/checkpoints/group1/tide/run_0/group1_tide_epoch=19_val_loss=0.0917.ckpt
-0,tsmixer,group1,0.10428401827812195,15,experiments/SimilarityBasedTransfer/output/kyrgyzstan/checkpoints/group1/tsmixer/run_0/group1_tsmixer_epoch=15_val_loss=0.1043.ckpt
-0,ealstm,group1,0.10676002502441406,30,experiments/SimilarityBasedTransfer/output/kyrgyzstan/checkpoints/group1/ealstm/run_0/group1_ealstm_epoch=30_val_loss=0.1068.ckpt
-0,tft,group1,0.10346676409244537,24,experiments/SimilarityBasedTransfer/output/kyrgyzstan/checkpoints/group1/tft/run_0/group1_tft_epoch=24_val_loss=0.1035.ckpt
+0,tide,group1,0.10525349527597427,29,experiments/SimilarityBasedTransfer/output/kyrgyzstan/checkpoints/group1/tide/run_0/group1_tide_epoch=29_val_loss=0.1053.ckpt
+1,tsmixer,group1,0.1155996024608612,12,experiments/SimilarityBasedTransfer/output/kyrgyzstan/checkpoints/group1/tsmixer/run_1/group1_tsmixer_epoch=12_val_loss=0.1156.ckpt
+4,ealstm,group1,0.12125065922737122,24,experiments/SimilarityBasedTransfer/output/kyrgyzstan/checkpoints/group1/ealstm/run_4/group1_ealstm_epoch=24_val_loss=0.1213.ckpt
+4,tft,group1,0.11611814796924591,41,experiments/SimilarityBasedTransfer/output/kyrgyzstan/checkpoints/group1/tft/run_4/group1_tft_epoch=41_val_loss=0.1161.ckpt
