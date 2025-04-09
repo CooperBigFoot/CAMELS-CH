@@ -1,2 +1,6 @@
 run,model_type,group,best_val_loss,best_epoch,checkpoint_path
-0,tsmixer,group1,0.10428401827812195,15,experiments/SimilarityBasedTransfer/output/kyrgyzstan/checkpoints/group1/tsmixer/run_0/group1_tsmixer_epoch=15_val_loss=0.1043.ckpt
+0,tsmixer,group1,0.12187502533197403,13,experiments/SimilarityBasedTransfer/output/kyrgyzstan/checkpoints/group1/tsmixer/run_0/group1_tsmixer_epoch=13_val_loss=0.1219.ckpt
+1,tsmixer,group1,0.1155996024608612,12,experiments/SimilarityBasedTransfer/output/kyrgyzstan/checkpoints/group1/tsmixer/run_1/group1_tsmixer_epoch=12_val_loss=0.1156.ckpt
+2,tsmixer,group1,0.12137270718812943,10,experiments/SimilarityBasedTransfer/output/kyrgyzstan/checkpoints/group1/tsmixer/run_2/group1_tsmixer_epoch=10_val_loss=0.1214.ckpt
+3,tsmixer,group1,0.12455971539020538,12,experiments/SimilarityBasedTransfer/output/kyrgyzstan/checkpoints/group1/tsmixer/run_3/group1_tsmixer_epoch=12_val_loss=0.1246.ckpt
+4,tsmixer,group1,0.12241432070732117,13,experiments/SimilarityBasedTransfer/output/kyrgyzstan/checkpoints/group1/tsmixer/run_4/group1_tsmixer_epoch=13_val_loss=0.1224.ckpt
