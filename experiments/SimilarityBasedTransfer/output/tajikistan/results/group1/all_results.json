@@ -1,0 +1,42 @@
+[
+    {
+        "run": 0,
+        "model_type": "tft",
+        "group": "group1",
+        "best_val_loss": 0.13290785253047943,
+        "best_epoch": 21,
+        "checkpoint_path": "experiments/SimilarityBasedTransfer/output/tajikistan/checkpoints/group1/tft/run_0/group1_tft_epoch=21_val_loss=0.1329.ckpt"
+    },
+    {
+        "run": 1,
+        "model_type": "tft",
+        "group": "group1",
+        "best_val_loss": 0.12375478446483612,
+        "best_epoch": 24,
+        "checkpoint_path": "experiments/SimilarityBasedTransfer/output/tajikistan/checkpoints/group1/tft/run_1/group1_tft_epoch=24_val_loss=0.1238.ckpt"
+    },
+    {
+        "run": 2,
+        "model_type": "tft",
+        "group": "group1",
+        "best_val_loss": 0.12324468046426773,
+        "best_epoch": 20,
+        "checkpoint_path": "experiments/SimilarityBasedTransfer/output/tajikistan/checkpoints/group1/tft/run_2/group1_tft_epoch=20_val_loss=0.1232.ckpt"
+    },
+    {
+        "run": 3,
+        "model_type": "tft",
+        "group": "group1",
+        "best_val_loss": 0.13058841228485107,
+        "best_epoch": 21,
+        "checkpoint_path": "experiments/SimilarityBasedTransfer/output/tajikistan/checkpoints/group1/tft/run_3/group1_tft_epoch=21_val_loss=0.1306.ckpt"
+    },
+    {
+        "run": 4,
+        "model_type": "tft",
+        "group": "group1",
+        "best_val_loss": 0.1315772533416748,
+        "best_epoch": 15,
+        "checkpoint_path": "experiments/SimilarityBasedTransfer/output/tajikistan/checkpoints/group1/tft/run_4/group1_tft_epoch=15_val_loss=0.1316.ckpt"
+    }
+]
