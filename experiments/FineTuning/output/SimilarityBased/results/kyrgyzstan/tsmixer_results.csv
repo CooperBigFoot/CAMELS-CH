@@ -1,0 +1,6 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr,run
+tsmixer,Kyrgyzstan,0.05506420135498047,10,experiments/FineTuning/output/SimilarityBased/checkpoints/kyrgyzstan/tsmixer/run_0/Kyrgyzstan_tsmixer_run0_10_0.0551.ckpt,0.000658628931758311,6.58628931758311e-05,0
+tsmixer,Kyrgyzstan,0.05727013573050499,9,experiments/FineTuning/output/SimilarityBased/checkpoints/kyrgyzstan/tsmixer/run_1/Kyrgyzstan_tsmixer_run1_09_0.0573.ckpt,0.000658628931758311,6.58628931758311e-05,1
+tsmixer,Kyrgyzstan,0.05785897374153137,11,experiments/FineTuning/output/SimilarityBased/checkpoints/kyrgyzstan/tsmixer/run_2/Kyrgyzstan_tsmixer_run2_11_0.0579.ckpt,0.000658628931758311,6.58628931758311e-05,2
+tsmixer,Kyrgyzstan,0.05671507120132446,11,experiments/FineTuning/output/SimilarityBased/checkpoints/kyrgyzstan/tsmixer/run_3/Kyrgyzstan_tsmixer_run3_11_0.0567.ckpt,0.000658628931758311,6.58628931758311e-05,3
+tsmixer,Kyrgyzstan,0.05718164145946503,12,experiments/FineTuning/output/SimilarityBased/checkpoints/kyrgyzstan/tsmixer/run_4/Kyrgyzstan_tsmixer_run4_12_0.0572.ckpt,0.000658628931758311,6.58628931758311e-05,4
