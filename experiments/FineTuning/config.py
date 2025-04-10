@@ -16,6 +16,7 @@ class ExperimentConfig:
     # Fine-tuning parameters
     lr_factor: float = 10.0  # Factor to reduce learning rate by for fine-tuning
     target_country: str = ""  # Country to fine-tune on
+    num_runs: int = 1  # Number of fine-tuning runs to perform
     
     # Data parameters
     group_identifier: str = "gauge_id"
@@ -103,6 +104,10 @@ class ExperimentConfig:
             total_prop = self.train_prop + self.val_prop + self.test_prop
             if abs(total_prop - 1.0) > 0.001:  # Allow for small floating point errors
                 raise ValueError(f"Split proportions must sum to 1.0, got {total_prop}")
+        
+        # Validate num_runs
+        if self.num_runs < 1:
+            raise ValueError(f"Number of runs must be at least 1, got {self.num_runs}")
                 
     def get_preprocessing_config(self) -> Dict[str, Dict[str, Any]]:
         """Create standard preprocessing configuration."""
@@ -129,16 +134,49 @@ class ExperimentConfig:
             "static_features": {"pipeline": static_pipeline},
         }
         
-    def get_checkpoint_dir(self) -> Path:
-        """Get directory to save fine-tuned model checkpoints."""
-        if self.target_country:
-            return Path(self.output_dir) / "checkpoints" / self.target_country.lower() / self.model_type
-        else:
-            return Path(self.output_dir) / "checkpoints" / self.model_type
+    def get_checkpoint_dir(self, run_idx: int = None) -> Path:
+        """Get directory to save fine-tuned model checkpoints.
+        
+        Args:
+            run_idx: Optional run index for multiple runs
             
-    def get_logs_dir(self) -> Path:
-        """Get directory to save fine-tuning logs."""
+        Returns:
+            Path to checkpoint directory
+        """
         if self.target_country:
-            return Path(self.output_dir) / "logs" / self.target_country.lower() / self.model_type
+            base_dir = Path(self.output_dir) / "checkpoints" / self.target_country.lower() / self.model_type
         else:
-            return Path(self.output_dir) / "logs" / self.model_type
+            base_dir = Path(self.output_dir) / "checkpoints" / self.model_type
+            
+        if run_idx is not None:
+            return base_dir / f"run_{run_idx}"
+        return base_dir
+            
+    def get_logs_dir(self, run_idx: int = None) -> Path:
+        """Get directory to save fine-tuning logs.
+        
+        Args:
+            run_idx: Optional run index for multiple runs
+            
+        Returns:
+            Path to logs directory
+        """
+        if self.target_country:
+            base_dir = Path(self.output_dir) / "logs" / self.target_country.lower() / self.model_type
+        else:
+            base_dir = Path(self.output_dir) / "logs" / self.model_type
+            
+        if run_idx is not None:
+            return base_dir / f"run_{run_idx}"
+        return base_dir
+        
+    def get_results_dir(self) -> Path:
+        """Get directory to save results.
+        
+        Returns:
+            Path to results directory
+        """
+        if self.target_country:
+            return Path(self.output_dir) / "results" / self.target_country.lower()
+        else:
+            return Path(self.output_dir) / "results"

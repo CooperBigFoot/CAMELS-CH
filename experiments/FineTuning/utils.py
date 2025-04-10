@@ -7,7 +7,7 @@ import sys
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 import torch
 import pandas as pd
@@ -23,26 +23,23 @@ from src.data_models.datamodule import HydroDataModule
 from experiments.FineTuning.config import ExperimentConfig
 
 
-def setup_dirs(config: ExperimentConfig) -> Dict[str, Path]:
+def setup_dirs(config: ExperimentConfig, run_idx: int = None) -> Dict[str, Path]:
     """Create and return necessary directories for experiment outputs.
 
     Args:
         config: Experiment configuration
+        run_idx: Optional run index for multiple runs
 
     Returns:
         Dictionary of Path objects for different directories
     """
-    checkpoint_dir = config.get_checkpoint_dir()
-    logs_dir = config.get_logs_dir()
+    checkpoint_dir = config.get_checkpoint_dir(run_idx)
+    logs_dir = config.get_logs_dir(run_idx)
+    results_dir = config.get_results_dir()
 
     # Create directories
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
-
-    # Create results directory
-    results_dir = Path(config.output_dir) / "results"
-    if config.target_country:
-        results_dir = results_dir / config.target_country.lower()
     results_dir.mkdir(parents=True, exist_ok=True)
 
     return {"checkpoints": checkpoint_dir, "logs": logs_dir, "results": results_dir}
@@ -111,6 +108,7 @@ def fine_tune_model(
     model_hp: Dict[str, Any],
     data_module: HydroDataModule,
     config: ExperimentConfig,
+    run_idx: int = 0,
 ) -> Dict[str, Any]:
     """Fine-tune a pre-trained model.
 
@@ -119,25 +117,29 @@ def fine_tune_model(
         model_hp: Model hyperparameters
         data_module: DataModule for training
         config: Experiment configuration
+        run_idx: Run index for multiple runs
 
     Returns:
         Dictionary with fine-tuning results
     """
-    # Setup directories
-    dirs = setup_dirs(config)
+    # Setup directories for this run
+    dirs = setup_dirs(config, run_idx)
 
-    # Configure logger name
+    # Configure logger name and version
     if config.target_country:
         logger_name = f"{config.target_country}_{config.model_type}"
     else:
         logger_name = config.model_type
 
-    # Configure logger
+    # Configure logger with run-specific version
     logger = TensorBoardLogger(
         save_dir=str(dirs["logs"]),
         name=logger_name,
-        version="fine_tuned",
+        version=f"run_{run_idx}",
     )
+
+    # Run-specific filename for checkpoints
+    checkpoint_filename = f"{logger_name}_run{run_idx}_{{epoch:02d}}_{{val_loss:.4f}}"
 
     # Setup callbacks
     callbacks = [
@@ -150,7 +152,7 @@ def fine_tune_model(
         LearningRateMonitor(logging_interval="epoch"),
         ModelCheckpoint(
             dirpath=str(dirs["checkpoints"]),
-            filename=f"{logger_name}_{{epoch:02d}}_{{val_loss:.4f}}",
+            filename=checkpoint_filename,
             monitor="val_loss",
             mode="min",
             save_top_k=config.save_top_k,
@@ -170,7 +172,7 @@ def fine_tune_model(
 
     # Train model
     print(
-        f"Starting fine-tuning for {config.model_type} on {config.target_country or 'all'} data"
+        f"Starting fine-tuning run {run_idx} for {config.model_type} on {config.target_country or 'all'} data"
     )
     trainer.fit(model, data_module)
 
@@ -187,31 +189,31 @@ def fine_tune_model(
         "best_epoch": trainer.current_epoch,
         "checkpoint_path": str(
             dirs["checkpoints"]
-            / f"{logger_name}_epoch={trainer.current_epoch:02d}_val_loss={best_val_loss:.4f}.ckpt"
+            / f"{checkpoint_filename.format(epoch=trainer.current_epoch, val_loss=best_val_loss)}.ckpt"
         ),
         "original_lr": getattr(model, "original_lr", "unknown"),
         "fine_tuned_lr": getattr(model, "fine_tuned_lr", "unknown"),
     }
 
     print(
-        f"Fine-tuning completed with best val_loss: {best_val_loss:.4f} at epoch {trainer.current_epoch}"
+        f"Fine-tuning run {run_idx} completed with best val_loss: {best_val_loss:.4f} at epoch {trainer.current_epoch}"
     )
 
     return results
 
 
-def save_results(results: Dict[str, Any], config: ExperimentConfig) -> None:
+def save_results(results: List[Dict[str, Any]], config: ExperimentConfig) -> None:
     """Save fine-tuning results to a CSV file.
 
     Args:
-        results: Fine-tuning results
+        results: List of fine-tuning results from multiple runs
         config: Experiment configuration
     """
     # Setup directories if not already done
     dirs = setup_dirs(config)
 
     # Create results DataFrame
-    results_df = pd.DataFrame([results])
+    results_df = pd.DataFrame(results)
 
     # Generate output path
     output_path = dirs["results"] / f"{config.model_type}_results.csv"
@@ -219,3 +221,14 @@ def save_results(results: Dict[str, Any], config: ExperimentConfig) -> None:
     # Save to CSV
     results_df.to_csv(output_path, index=False)
     print(f"Results saved to {output_path}")
+    
+    # Also save the best results
+    if not results_df.empty:
+        best_idx = results_df["best_val_loss"].idxmin()
+        best_result = results_df.loc[best_idx]
+        
+        best_output_path = dirs["results"] / f"{config.model_type}_best_result.csv"
+        pd.DataFrame([best_result.to_dict()]).to_csv(best_output_path, index=False)
+        
+        print(f"Best result (run {best_result['run']}) saved to {best_output_path}")
+        print(f"Best validation loss: {best_result['best_val_loss']:.4f}")

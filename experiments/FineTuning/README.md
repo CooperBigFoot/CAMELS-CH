@@ -36,6 +36,22 @@ python experiments/FineTuning/experiment.py \
 - `--epochs`: Maximum fine-tuning epochs (default: 100)
 - `--batch-size`: Batch size for fine-tuning (default: 2048)
 - `--seed`: Random seed for reproducibility (default: 42)
+- `--num-runs`: Number of fine-tuning runs to perform (default: 1)
+
+## Multiple Runs
+
+The experiment supports running multiple fine-tuning instances with different random seeds to assess model stability. Use the `--num-runs` parameter to specify the number of runs:
+
+```bash
+python experiments/FineTuning/experiment.py \
+  --model tide \
+  --checkpoint-path /path/to/pretrained/checkpoint.ckpt \
+  --yaml-path /path/to/model/config.yaml \
+  --country Tajikistan \
+  --num-runs 5
+```
+
+Each run uses a different seed (base_seed + run_index) but the same pre-trained checkpoint. Results from all runs are aggregated, and the best performing model (based on validation loss) is highlighted in the results.
 
 ## Output Structure
 
@@ -46,17 +62,22 @@ output_dir/
 ├── checkpoints/
 │   ├── [country]/
 │   │   └── [model_type]/
-│   │       └── [model]_[epoch]_[val_loss].ckpt
+│   │       ├── run_0/
+│   │       │   └── [model]_run0_[epoch]_[val_loss].ckpt
+│   │       ├── run_1/
+│   │       │   └── [model]_run1_[epoch]_[val_loss].ckpt
 ├── logs/
 │   ├── [country]/
 │   │   └── [model_type]/
-│   │       └── fine_tuned/
+│   │       ├── run_0/
+│   │       ├── run_1/
 └── results/
     ├── [country]/
-    │   └── [model_type]_results.csv
+    │   ├── [model_type]_results.csv
+    │   └── [model_type]_best_result.csv
 ```
 
-The results CSV files contain information about the fine-tuning process, including best validation loss, training epochs, and learning rates.
+The results CSV files contain information about the fine-tuning process, including best validation loss, training epochs, and learning rates for each run.
 
 ## Components
 
@@ -67,7 +88,7 @@ The results CSV files contain information about the fine-tuning process, includi
 
 ## Example
 
-Fine-tune a TiDE model on Tajikistan data:
+Fine-tune a TiDE model on Tajikistan data with 3 runs:
 
 ```bash
 python experiments/FineTuning/experiment.py \
@@ -75,7 +96,8 @@ python experiments/FineTuning/experiment.py \
   --checkpoint-path experiments/DataSharing/checkpoints/combined/tide/run_0/Combined_tide_epoch=15_val_loss=0.2345.ckpt \
   --yaml-path experiments/DataSharing/yaml_files/tide.yaml \
   --country Tajikistan \
-  --lr-factor 10.0
+  --lr-factor 10.0 \
+  --num-runs 3
 ```
 
 ## Dependencies
