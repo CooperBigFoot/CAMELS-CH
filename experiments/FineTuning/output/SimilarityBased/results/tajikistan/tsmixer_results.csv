@@ -1,0 +1,6 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr,run
+tsmixer,Tajikistan,0.048206642270088196,21,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/tsmixer/run_0/Tajikistan_tsmixer_run0_21_0.0482.ckpt,0.0004021554526690286,4.021554526690286e-05,0
+tsmixer,Tajikistan,0.04894155263900757,10,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/tsmixer/run_1/Tajikistan_tsmixer_run1_10_0.0489.ckpt,0.0004021554526690286,4.021554526690286e-05,1
+tsmixer,Tajikistan,0.04858037829399109,16,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/tsmixer/run_2/Tajikistan_tsmixer_run2_16_0.0486.ckpt,0.0004021554526690286,4.021554526690286e-05,2
+tsmixer,Tajikistan,0.04761967062950134,16,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/tsmixer/run_3/Tajikistan_tsmixer_run3_16_0.0476.ckpt,0.0004021554526690286,4.021554526690286e-05,3
+tsmixer,Tajikistan,0.048494916409254074,17,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/tsmixer/run_4/Tajikistan_tsmixer_run4_17_0.0485.ckpt,0.0004021554526690286,4.021554526690286e-05,4

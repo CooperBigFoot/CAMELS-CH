@@ -1,0 +1,6 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr,run
+ealstm,Tajikistan,0.048858679831027985,15,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/ealstm/run_0/Tajikistan_ealstm_run0_15_0.0489.ckpt,9.7803370166594e-05,9.7803370166594e-06,0
+ealstm,Tajikistan,0.048272497951984406,13,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/ealstm/run_1/Tajikistan_ealstm_run1_13_0.0483.ckpt,9.7803370166594e-05,9.7803370166594e-06,1
+ealstm,Tajikistan,0.04840442165732384,13,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/ealstm/run_2/Tajikistan_ealstm_run2_13_0.0484.ckpt,9.7803370166594e-05,9.7803370166594e-06,2
+ealstm,Tajikistan,0.04891478642821312,16,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/ealstm/run_3/Tajikistan_ealstm_run3_16_0.0489.ckpt,9.7803370166594e-05,9.7803370166594e-06,3
+ealstm,Tajikistan,0.048031996935606,14,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/ealstm/run_4/Tajikistan_ealstm_run4_14_0.0480.ckpt,9.7803370166594e-05,9.7803370166594e-06,4

@@ -1,0 +1,6 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr,run
+tft,Tajikistan,0.04819585010409355,13,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/tft/run_0/Tajikistan_tft_run0_13_0.0482.ckpt,0.0002993620086989372,2.993620086989372e-05,0
+tft,Tajikistan,0.04648122936487198,12,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/tft/run_1/Tajikistan_tft_run1_12_0.0465.ckpt,0.0002993620086989372,2.993620086989372e-05,1
+tft,Tajikistan,0.045924004167318344,12,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/tft/run_2/Tajikistan_tft_run2_12_0.0459.ckpt,0.0002993620086989372,2.993620086989372e-05,2
+tft,Tajikistan,0.047217149287462234,12,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/tft/run_3/Tajikistan_tft_run3_12_0.0472.ckpt,0.0002993620086989372,2.993620086989372e-05,3
+tft,Tajikistan,0.04697151854634285,15,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/tft/run_4/Tajikistan_tft_run4_15_0.0470.ckpt,0.0002993620086989372,2.993620086989372e-05,4

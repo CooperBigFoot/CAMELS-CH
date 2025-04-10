@@ -1,0 +1,2 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr,run
+tide,Tajikistan,0.04784289747476578,11,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/tide/run_3/Tajikistan_tide_run3_11_0.0478.ckpt,0.00018159850484411317,1.8159850484411317e-05,3

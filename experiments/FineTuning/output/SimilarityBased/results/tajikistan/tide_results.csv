@@ -1,0 +1,6 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr,run
+tide,Tajikistan,0.04875747859477997,11,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/tide/run_0/Tajikistan_tide_run0_11_0.0488.ckpt,0.00018159850484411317,1.8159850484411317e-05,0
+tide,Tajikistan,0.04843049496412277,11,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/tide/run_1/Tajikistan_tide_run1_11_0.0484.ckpt,0.00018159850484411317,1.8159850484411317e-05,1
+tide,Tajikistan,0.04835427924990654,10,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/tide/run_2/Tajikistan_tide_run2_10_0.0484.ckpt,0.00018159850484411317,1.8159850484411317e-05,2
+tide,Tajikistan,0.04784289747476578,11,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/tide/run_3/Tajikistan_tide_run3_11_0.0478.ckpt,0.00018159850484411317,1.8159850484411317e-05,3
+tide,Tajikistan,0.04862835630774498,11,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/tide/run_4/Tajikistan_tide_run4_11_0.0486.ckpt,0.00018159850484411317,1.8159850484411317e-05,4

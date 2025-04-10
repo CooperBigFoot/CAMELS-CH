@@ -1,0 +1,2 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr,run
+ealstm,Tajikistan,0.048031996935606,14,experiments/FineTuning/output/SimilarityBased/checkpoints/tajikistan/ealstm/run_4/Tajikistan_ealstm_run4_14_0.0480.ckpt,9.7803370166594e-05,9.7803370166594e-06,4
