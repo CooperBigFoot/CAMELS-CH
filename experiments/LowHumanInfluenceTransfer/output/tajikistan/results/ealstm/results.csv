@@ -1,0 +1,6 @@
+run,model_type,best_val_loss,best_epoch,checkpoint_path
+0,ealstm,0.19647718966007233,12,experiments/LowHumanInfluenceTransfer/output/tajikistan/checkpoints/ealstm/run_0/global_ealstm_epoch=12_val_loss=0.1965.ckpt
+1,ealstm,0.19172845780849457,14,experiments/LowHumanInfluenceTransfer/output/tajikistan/checkpoints/ealstm/run_1/global_ealstm_epoch=14_val_loss=0.1917.ckpt
+2,ealstm,0.1951986700296402,12,experiments/LowHumanInfluenceTransfer/output/tajikistan/checkpoints/ealstm/run_2/global_ealstm_epoch=12_val_loss=0.1952.ckpt
+3,ealstm,0.19266240298748016,14,experiments/LowHumanInfluenceTransfer/output/tajikistan/checkpoints/ealstm/run_3/global_ealstm_epoch=14_val_loss=0.1927.ckpt
+4,ealstm,0.19010479748249054,14,experiments/LowHumanInfluenceTransfer/output/tajikistan/checkpoints/ealstm/run_4/global_ealstm_epoch=14_val_loss=0.1901.ckpt
