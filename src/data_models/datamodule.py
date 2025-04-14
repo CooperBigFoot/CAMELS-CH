@@ -389,12 +389,13 @@ class HydroDataModule(pl.LightningDataModule):
 
                     if has_duplicates:
                         # Add prefix to these gauge_ids
-                        merged_df.iloc[
-                            start_idx:end_idx,
-                            merged_df.columns.get_loc(self.group_identifier),
-                        ] = (
-                            prefix
-                            + merged_df.iloc[start_idx:end_idx][self.group_identifier]
+                        # Create a mask for the rows we want to update
+                        mask = merged_df.index.isin(range(start_idx, end_idx))
+                        
+                        # Apply the prefix to gauge identifiers
+                        merged_df.loc[mask, self.group_identifier] = (
+                            prefix 
+                            + merged_df.loc[mask, self.group_identifier]
                         )
 
                     start_idx = end_idx
@@ -498,24 +499,24 @@ class HydroDataModule(pl.LightningDataModule):
             if self.use_proportional_split:
                 # 1. Identify valid data points (not NaN for target)
                 valid_mask = ~basin_data[self.target].isna()
-                
+
                 # 2. Get valid data only (excluding NaNs completely)
                 valid_data = basin_data[valid_mask].reset_index(drop=True)
                 n_valid = len(valid_data)
-                
+
                 if n_valid == 0:
                     print(f"Warning: Basin {gauge_id} has no valid points, skipping")
                     continue
-                    
+
                 # 3. Calculate split points based on count of valid points
                 train_size = int(n_valid * self.train_prop)
                 val_size = int(n_valid * self.val_prop)
-                
+
                 # 4. Split the valid data directly
                 train_valid = valid_data.iloc[:train_size]
-                val_valid = valid_data.iloc[train_size:train_size+val_size]
-                test_valid = valid_data.iloc[train_size+val_size:]
-                
+                val_valid = valid_data.iloc[train_size : train_size + val_size]
+                test_valid = valid_data.iloc[train_size + val_size :]
+
                 # 5. Add to result lists
                 train_data.append(train_valid)
                 val_data.append(val_valid)
@@ -528,11 +529,11 @@ class HydroDataModule(pl.LightningDataModule):
                     for period in periods.values()
                     if period["end"] is not None
                 ]
-                
+
                 if not valid_ends:
                     print(f"Warning: Basin {gauge_id} has no valid periods, skipping")
                     continue
-                    
+
                 valid_end = min(valid_ends)
 
                 test_start = valid_end - pd.Timedelta(
