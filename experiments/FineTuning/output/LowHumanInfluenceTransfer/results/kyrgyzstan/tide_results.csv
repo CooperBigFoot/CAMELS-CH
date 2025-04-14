@@ -1,0 +1,6 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr,run
+tide,Kyrgyzstan,0.05516337975859642,11,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/kyrgyzstan/tide/run_0/Kyrgyzstan_tide_run0_11_0.0552.ckpt,0.00029399848560567596,2.9399848560567598e-05,0
+tide,Kyrgyzstan,0.056181084364652634,11,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/kyrgyzstan/tide/run_1/Kyrgyzstan_tide_run1_11_0.0562.ckpt,0.00029399848560567596,2.9399848560567598e-05,1
+tide,Kyrgyzstan,0.05785897746682167,13,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/kyrgyzstan/tide/run_2/Kyrgyzstan_tide_run2_13_0.0579.ckpt,0.00029399848560567596,2.9399848560567598e-05,2
+tide,Kyrgyzstan,0.055567722767591476,12,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/kyrgyzstan/tide/run_3/Kyrgyzstan_tide_run3_12_0.0556.ckpt,0.00029399848560567596,2.9399848560567598e-05,3
+tide,Kyrgyzstan,0.055624932050704956,12,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/kyrgyzstan/tide/run_4/Kyrgyzstan_tide_run4_12_0.0556.ckpt,0.00029399848560567596,2.9399848560567598e-05,4

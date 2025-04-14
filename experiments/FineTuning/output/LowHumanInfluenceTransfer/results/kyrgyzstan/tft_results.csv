@@ -1,0 +1,6 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr,run
+tft,Kyrgyzstan,0.05756017938256264,13,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/kyrgyzstan/tft/run_0/Kyrgyzstan_tft_run0_13_0.0576.ckpt,0.00015996162179839556,1.5996162179839556e-05,0
+tft,Kyrgyzstan,0.057041723281145096,9,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/kyrgyzstan/tft/run_1/Kyrgyzstan_tft_run1_09_0.0570.ckpt,0.00015996162179839556,1.5996162179839556e-05,1
+tft,Kyrgyzstan,0.054287176579236984,11,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/kyrgyzstan/tft/run_2/Kyrgyzstan_tft_run2_11_0.0543.ckpt,0.00015996162179839556,1.5996162179839556e-05,2
+tft,Kyrgyzstan,0.05550071597099304,13,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/kyrgyzstan/tft/run_3/Kyrgyzstan_tft_run3_13_0.0555.ckpt,0.00015996162179839556,1.5996162179839556e-05,3
+tft,Kyrgyzstan,0.05499489605426788,11,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/kyrgyzstan/tft/run_4/Kyrgyzstan_tft_run4_11_0.0550.ckpt,0.00015996162179839556,1.5996162179839556e-05,4

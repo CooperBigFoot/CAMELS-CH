@@ -1,0 +1,6 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr,run
+ealstm,Tajikistan,0.05153292044997215,15,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/tajikistan/ealstm/run_0/Tajikistan_ealstm_run0_15_0.0515.ckpt,9.7803370166594e-05,9.7803370166594e-06,0
+ealstm,Tajikistan,0.052906595170497894,16,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/tajikistan/ealstm/run_1/Tajikistan_ealstm_run1_16_0.0529.ckpt,9.7803370166594e-05,9.7803370166594e-06,1
+ealstm,Tajikistan,0.052830636501312256,16,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/tajikistan/ealstm/run_2/Tajikistan_ealstm_run2_16_0.0528.ckpt,9.7803370166594e-05,9.7803370166594e-06,2
+ealstm,Tajikistan,0.050997182726860046,14,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/tajikistan/ealstm/run_3/Tajikistan_ealstm_run3_14_0.0510.ckpt,9.7803370166594e-05,9.7803370166594e-06,3
+ealstm,Tajikistan,0.052819203585386276,15,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/tajikistan/ealstm/run_4/Tajikistan_ealstm_run4_15_0.0528.ckpt,9.7803370166594e-05,9.7803370166594e-06,4

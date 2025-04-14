@@ -1,0 +1,6 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr,run
+tsmixer,Tajikistan,0.04935667663812637,21,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/tajikistan/tsmixer/run_0/Tajikistan_tsmixer_run0_21_0.0494.ckpt,0.0004021554526690286,4.021554526690286e-05,0
+tsmixer,Tajikistan,0.04921542853116989,30,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/tajikistan/tsmixer/run_1/Tajikistan_tsmixer_run1_30_0.0492.ckpt,0.0004021554526690286,4.021554526690286e-05,1
+tsmixer,Tajikistan,0.04994846135377884,17,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/tajikistan/tsmixer/run_2/Tajikistan_tsmixer_run2_17_0.0499.ckpt,0.0004021554526690286,4.021554526690286e-05,2
+tsmixer,Tajikistan,0.04932217672467232,30,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/tajikistan/tsmixer/run_3/Tajikistan_tsmixer_run3_30_0.0493.ckpt,0.0004021554526690286,4.021554526690286e-05,3
+tsmixer,Tajikistan,0.04921022430062294,21,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/tajikistan/tsmixer/run_4/Tajikistan_tsmixer_run4_21_0.0492.ckpt,0.0004021554526690286,4.021554526690286e-05,4
