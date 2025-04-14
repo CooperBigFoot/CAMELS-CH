@@ -40,7 +40,7 @@ def parse_args():
     parser.add_argument(
         "--yaml-dir",
         type=str,
-        default="experiments/DataSharing/yaml_files",
+        default="experiments/Benchmark/yaml_files",
         help="Directory containing model YAML files",
     )
 
@@ -48,7 +48,7 @@ def parse_args():
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="experiments/DataSharing/output",
+        default="experiments/Benchmark/output",
         help="Output directory for results",
     )
 
@@ -86,7 +86,7 @@ def parse_args():
 
 
 def main():
-    """Run the data sharing experiment."""
+    """Run the experiment."""
     # Parse command line arguments
     args = parse_args()
 
@@ -112,18 +112,26 @@ def main():
     # Setup directories
     setup_dirs(config)
 
-    # Prepare YAML paths
+    # Prepare YAML paths for each country and model
     yaml_dir = Path(args.yaml_dir)
-    yaml_paths = {
-        model_type: str(yaml_dir / f"{model_type}.yaml") for model_type in args.models
-    }
+    yaml_paths = {}
 
-    # Check that YAML files exist
-    for model_type, yaml_path in yaml_paths.items():
-        if not Path(yaml_path).exists():
-            raise FileNotFoundError(
-                f"YAML file for {model_type} not found: {yaml_path}"
-            )
+    for country in args.countries:
+        country_lower = country.lower()
+        yaml_paths[country] = {}
+        
+        for model_type in args.models:
+            yaml_path = yaml_dir / country_lower / f"{model_type}.yaml"
+            
+            # Check if country-specific file exists, otherwise use default
+            if not yaml_path.exists():
+                yaml_path = yaml_dir / f"{model_type}.yaml"
+                
+            yaml_paths[country][model_type] = str(yaml_path)
+            
+            # Verify the file exists
+            if not Path(yaml_path).exists():
+                raise FileNotFoundError(f"YAML file for {model_type} (country: {country}) not found: {yaml_path}")
 
     # Store all results
     all_results = []
@@ -152,7 +160,7 @@ def main():
                         time_series_data=time_series_data,
                         static_data=static_data,
                         model_type=model_type,
-                        yaml_path=yaml_paths[model_type],
+                        yaml_path=yaml_paths[country][model_type],
                         config=config,
                     )
 
