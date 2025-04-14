@@ -1,0 +1,6 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr,run
+ealstm,Kyrgyzstan,0.06054810807108879,10,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/kyrgyzstan/ealstm/run_0/Kyrgyzstan_ealstm_run0_10_0.0605.ckpt,0.0008706020878304854,8.706020878304854e-05,0
+ealstm,Kyrgyzstan,0.05940987542271614,9,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/kyrgyzstan/ealstm/run_1/Kyrgyzstan_ealstm_run1_09_0.0594.ckpt,0.0008706020878304854,8.706020878304854e-05,1
+ealstm,Kyrgyzstan,0.057856421917676926,9,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/kyrgyzstan/ealstm/run_2/Kyrgyzstan_ealstm_run2_09_0.0579.ckpt,0.0008706020878304854,8.706020878304854e-05,2
+ealstm,Kyrgyzstan,0.05961863696575165,9,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/kyrgyzstan/ealstm/run_3/Kyrgyzstan_ealstm_run3_09_0.0596.ckpt,0.0008706020878304854,8.706020878304854e-05,3
+ealstm,Kyrgyzstan,0.05875568464398384,8,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/kyrgyzstan/ealstm/run_4/Kyrgyzstan_ealstm_run4_08_0.0588.ckpt,0.0008706020878304854,8.706020878304854e-05,4

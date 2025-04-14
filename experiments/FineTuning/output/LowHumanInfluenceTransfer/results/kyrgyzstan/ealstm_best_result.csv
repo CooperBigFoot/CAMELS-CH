@@ -1,0 +1,2 @@
+model_type,country,best_val_loss,best_epoch,checkpoint_path,original_lr,fine_tuned_lr,run
+ealstm,Kyrgyzstan,0.057856421917676926,9,experiments/FineTuning/output/LowHumanInfluenceTransfer/checkpoints/kyrgyzstan/ealstm/run_2/Kyrgyzstan_ealstm_run2_09_0.0579.ckpt,0.0008706020878304854,8.706020878304854e-05,2
