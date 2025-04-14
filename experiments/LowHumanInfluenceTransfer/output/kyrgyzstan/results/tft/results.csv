@@ -1,2 +1,6 @@
 run,model_type,best_val_loss,best_epoch,checkpoint_path
 0,tft,0.17395853996276855,15,experiments/LowHumanInfluenceTransfer/output/kyrgyzstan/checkpoints/tft/run_0/global_tft_epoch=15_val_loss=0.1740.ckpt
+1,tft,0.17475496232509613,15,experiments/LowHumanInfluenceTransfer/output/kyrgyzstan/checkpoints/tft/run_1/global_tft_epoch=15_val_loss=0.1748.ckpt
+2,tft,0.1753346025943756,14,experiments/LowHumanInfluenceTransfer/output/kyrgyzstan/checkpoints/tft/run_2/global_tft_epoch=14_val_loss=0.1753.ckpt
+3,tft,0.17616526782512665,20,experiments/LowHumanInfluenceTransfer/output/kyrgyzstan/checkpoints/tft/run_3/global_tft_epoch=20_val_loss=0.1762.ckpt
+4,tft,0.17591741681098938,17,experiments/LowHumanInfluenceTransfer/output/kyrgyzstan/checkpoints/tft/run_4/global_tft_epoch=17_val_loss=0.1759.ckpt

@@ -1,2 +1,6 @@
 run,model_type,best_val_loss,best_epoch,checkpoint_path
 0,tide,0.1833980679512024,25,experiments/LowHumanInfluenceTransfer/output/kyrgyzstan/checkpoints/tide/run_0/global_tide_epoch=25_val_loss=0.1834.ckpt
+1,tide,0.18401998281478882,21,experiments/LowHumanInfluenceTransfer/output/kyrgyzstan/checkpoints/tide/run_1/global_tide_epoch=21_val_loss=0.1840.ckpt
+2,tide,0.18044720590114594,25,experiments/LowHumanInfluenceTransfer/output/kyrgyzstan/checkpoints/tide/run_2/global_tide_epoch=25_val_loss=0.1804.ckpt
+3,tide,0.18188409507274628,32,experiments/LowHumanInfluenceTransfer/output/kyrgyzstan/checkpoints/tide/run_3/global_tide_epoch=32_val_loss=0.1819.ckpt
+4,tide,0.18336829543113708,21,experiments/LowHumanInfluenceTransfer/output/kyrgyzstan/checkpoints/tide/run_4/global_tide_epoch=21_val_loss=0.1834.ckpt
