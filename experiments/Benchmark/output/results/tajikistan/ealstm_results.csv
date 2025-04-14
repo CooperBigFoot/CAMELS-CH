@@ -1,0 +1,6 @@
+model_type,country,run,best_val_loss,best_epoch,checkpoint_path
+ealstm,Tajikistan,0,0.055001385509967804,37,experiments/Benchmark/output/checkpoints/tajikistan/ealstm/run_0/Tajikistan_ealstm_epoch=37_val_loss=0.0550.ckpt
+ealstm,Tajikistan,1,0.05688467249274254,36,experiments/Benchmark/output/checkpoints/tajikistan/ealstm/run_1/Tajikistan_ealstm_epoch=36_val_loss=0.0569.ckpt
+ealstm,Tajikistan,2,0.05552605539560318,35,experiments/Benchmark/output/checkpoints/tajikistan/ealstm/run_2/Tajikistan_ealstm_epoch=35_val_loss=0.0555.ckpt
+ealstm,Tajikistan,3,0.05513865128159523,39,experiments/Benchmark/output/checkpoints/tajikistan/ealstm/run_3/Tajikistan_ealstm_epoch=39_val_loss=0.0551.ckpt
+ealstm,Tajikistan,4,0.055408451706171036,38,experiments/Benchmark/output/checkpoints/tajikistan/ealstm/run_4/Tajikistan_ealstm_epoch=38_val_loss=0.0554.ckpt

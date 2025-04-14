@@ -1,0 +1,6 @@
+model_type,country,run,best_val_loss,best_epoch,checkpoint_path
+tft,Kyrgyzstan,0,0.055568985641002655,26,experiments/Benchmark/output/checkpoints/kyrgyzstan/tft/run_0/Kyrgyzstan_tft_epoch=26_val_loss=0.0556.ckpt
+tft,Kyrgyzstan,1,0.05485586076974869,25,experiments/Benchmark/output/checkpoints/kyrgyzstan/tft/run_1/Kyrgyzstan_tft_epoch=25_val_loss=0.0549.ckpt
+tft,Kyrgyzstan,2,0.06939179450273514,14,experiments/Benchmark/output/checkpoints/kyrgyzstan/tft/run_2/Kyrgyzstan_tft_epoch=14_val_loss=0.0694.ckpt
+tft,Kyrgyzstan,3,0.0571320503950119,15,experiments/Benchmark/output/checkpoints/kyrgyzstan/tft/run_3/Kyrgyzstan_tft_epoch=15_val_loss=0.0571.ckpt
+tft,Kyrgyzstan,4,0.05736236274242401,21,experiments/Benchmark/output/checkpoints/kyrgyzstan/tft/run_4/Kyrgyzstan_tft_epoch=21_val_loss=0.0574.ckpt

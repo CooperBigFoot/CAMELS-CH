@@ -1,0 +1,6 @@
+model_type,country,run,best_val_loss,best_epoch,checkpoint_path
+tft,Tajikistan,0,0.05405627191066742,54,experiments/Benchmark/output/checkpoints/tajikistan/tft/run_0/Tajikistan_tft_epoch=54_val_loss=0.0541.ckpt
+tft,Tajikistan,1,0.055235590785741806,53,experiments/Benchmark/output/checkpoints/tajikistan/tft/run_1/Tajikistan_tft_epoch=53_val_loss=0.0552.ckpt
+tft,Tajikistan,2,0.0524543896317482,57,experiments/Benchmark/output/checkpoints/tajikistan/tft/run_2/Tajikistan_tft_epoch=57_val_loss=0.0525.ckpt
+tft,Tajikistan,3,0.05365090072154999,55,experiments/Benchmark/output/checkpoints/tajikistan/tft/run_3/Tajikistan_tft_epoch=55_val_loss=0.0537.ckpt
+tft,Tajikistan,4,0.05340089276432991,65,experiments/Benchmark/output/checkpoints/tajikistan/tft/run_4/Tajikistan_tft_epoch=65_val_loss=0.0534.ckpt

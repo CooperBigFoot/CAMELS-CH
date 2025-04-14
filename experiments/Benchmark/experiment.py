@@ -182,7 +182,7 @@ def main():
                         try:
                             run_results = train_model(
                                 model_type=model_type,
-                                yaml_path=yaml_paths[model_type],
+                                yaml_path=yaml_paths[country][model_type],
                                 data_module=data_module,
                                 country=country,
                                 config=config,

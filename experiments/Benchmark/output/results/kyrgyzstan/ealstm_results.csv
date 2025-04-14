@@ -1,0 +1,6 @@
+model_type,country,run,best_val_loss,best_epoch,checkpoint_path
+ealstm,Kyrgyzstan,0,0.05517537519335747,22,experiments/Benchmark/output/checkpoints/kyrgyzstan/ealstm/run_0/Kyrgyzstan_ealstm_epoch=22_val_loss=0.0552.ckpt
+ealstm,Kyrgyzstan,1,0.054079387336969376,16,experiments/Benchmark/output/checkpoints/kyrgyzstan/ealstm/run_1/Kyrgyzstan_ealstm_epoch=16_val_loss=0.0541.ckpt
+ealstm,Kyrgyzstan,2,0.05519143491983414,20,experiments/Benchmark/output/checkpoints/kyrgyzstan/ealstm/run_2/Kyrgyzstan_ealstm_epoch=20_val_loss=0.0552.ckpt
+ealstm,Kyrgyzstan,3,0.05697522312402725,19,experiments/Benchmark/output/checkpoints/kyrgyzstan/ealstm/run_3/Kyrgyzstan_ealstm_epoch=19_val_loss=0.0570.ckpt
+ealstm,Kyrgyzstan,4,0.05531561002135277,20,experiments/Benchmark/output/checkpoints/kyrgyzstan/ealstm/run_4/Kyrgyzstan_ealstm_epoch=20_val_loss=0.0553.ckpt
