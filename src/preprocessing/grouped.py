@@ -382,7 +382,6 @@ class GroupedTransformer(BaseEstimator, TransformerMixin):
                 f"Warning: Groups {unseen_groups} not seen during fit, passing through unchanged"
             )
 
-        # If not using multiprocessing, fall back to original implementation
         if self.n_jobs == 1:
             # Process each group separately
             for group in groups_to_process:

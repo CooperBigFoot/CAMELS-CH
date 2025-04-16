@@ -40,4 +40,5 @@ dependencies = [
   "cartopy>=0.24.1",
   "customtkinter>=5.2.2",
   "rasterio>=1.4.3",
+  "duckdb>=1.2.2",
 ]
