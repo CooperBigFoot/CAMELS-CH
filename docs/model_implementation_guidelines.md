@@ -117,7 +117,6 @@ The core model implements the model's architecture and computational logic, enca
   - Static features (when applicable)
   - Future forcing features (when applicable)
 - Document tensor shapes and dimensional assumptions in docstrings.
-- Implement reusable components that can be shared across models when appropriate.
 
 ### Standard Forward Method Signature
 
